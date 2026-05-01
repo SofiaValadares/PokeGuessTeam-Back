@@ -12,7 +12,7 @@ public class UserModel {
     @Column(name = "PK_USER_ID")
     private String idUser;
 
-    @Column(name = "USER_NAME", nullable = false, length = 100)
+    @Column(name = "USER_NAME", nullable = false, unique = true, length = 100)
     private String username;
 
     @Column(name = "USER_EMAIL", nullable = false, unique = true)
@@ -33,10 +33,6 @@ public class UserModel {
         return idUser;
     }
 
-    public void setIdUser(String idUser) {
-        this.idUser = idUser;
-    }
-
     public String getUsername() {
         return username;
     }
@@ -55,10 +51,6 @@ public class UserModel {
 
     public LocalDateTime getRegisterDate() {
         return registerDate;
-    }
-
-    public void setRegisterDate(LocalDateTime registerDate) {
-        this.registerDate = registerDate;
     }
 
     public String getPasswordHash() {

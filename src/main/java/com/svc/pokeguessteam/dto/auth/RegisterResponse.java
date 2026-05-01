@@ -1,4 +1,4 @@
-package com.svc.pokeguessteam.dto;
+package com.svc.pokeguessteam.dto.auth;
 
 import com.svc.pokeguessteam.model.UserModel;
 
