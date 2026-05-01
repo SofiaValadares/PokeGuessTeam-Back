@@ -13,6 +13,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -74,7 +75,7 @@ public class AuthController {
 
         // Autentica usuário
         UserModel user = authService.authenticate(
-                request.email(),
+                request.login(),
                 request.password()
         );
 
@@ -161,6 +162,7 @@ public class AuthController {
         boolean authenticated =
                 authentication != null &&
                         authentication.isAuthenticated() &&
+                        !(authentication instanceof AnonymousAuthenticationToken) &&
                         session != null &&
                         session.getAttribute(USER_ID_ATTR) != null;
 

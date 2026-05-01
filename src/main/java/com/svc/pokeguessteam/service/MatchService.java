@@ -1,6 +1,9 @@
 package com.svc.pokeguessteam.service;
 
 import com.svc.pokeguessteam.dto.CreateMatchRequest;
+import com.svc.pokeguessteam.exception.ApiBusinessException;
+import com.svc.pokeguessteam.exception.ErrorCodes;
+import com.svc.pokeguessteam.messages.MessageKeys;
 import com.svc.pokeguessteam.dto.GuessResultResponse;
 import com.svc.pokeguessteam.dto.MatchStateResponse;
 import com.svc.pokeguessteam.model.MatchGuessLogModel;
@@ -13,6 +16,7 @@ import com.svc.pokeguessteam.repository.MatchGuessLogRepository;
 import com.svc.pokeguessteam.repository.MatchRepository;
 import com.svc.pokeguessteam.repository.MatchTeamSlotRepository;
 import com.svc.pokeguessteam.repository.PokemonRepository;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,7 +48,11 @@ public class MatchService {
     @Transactional
     public MatchStateResponse createBotMatch(String userId, CreateMatchRequest request) {
         if (request.playerTeamPokemonIds().size() != 6) {
-            throw new RuntimeException("O time deve conter 6 pokemons.");
+            throw new ApiBusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    ErrorCodes.GAME_TEAM_SIZE,
+                    MessageKeys.GAME_TEAM_SIZE
+            );
         }
 
         List<PokemonModel> playerTeam = request.playerTeamPokemonIds().stream()
@@ -53,7 +61,11 @@ public class MatchService {
 
         List<PokemonModel> botTeam = pokemonRepository.findAll();
         if (botTeam.size() < 6) {
-            throw new RuntimeException("Pokedex insuficiente para iniciar partida.");
+            throw new ApiBusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    ErrorCodes.GAME_POKEDEX_INSUFFICIENT,
+                    MessageKeys.GAME_POKEDEX_INSUFFICIENT
+            );
         }
         Collections.shuffle(botTeam);
         botTeam = botTeam.stream().limit(6).toList();
@@ -74,12 +86,20 @@ public class MatchService {
     public GuessResultResponse makeGuess(String matchId, String userId, String guessedPokemonId) {
         MatchModel match = findMatch(matchId);
         if (match.getStatus() == MatchStatus.FINISHED) {
-            throw new RuntimeException("Partida finalizada.");
+            throw new ApiBusinessException(
+                    HttpStatus.CONFLICT,
+                    ErrorCodes.GAME_MATCH_FINISHED,
+                    MessageKeys.GAME_MATCH_FINISHED
+            );
         }
 
         String playerSide = resolveSide(match, userId);
         if (!match.getCurrentTurnSide().equals(playerSide)) {
-            throw new RuntimeException("Nao e seu turno.");
+            throw new ApiBusinessException(
+                    HttpStatus.CONFLICT,
+                    ErrorCodes.GAME_NOT_YOUR_TURN,
+                    MessageKeys.GAME_NOT_YOUR_TURN
+            );
         }
 
         String opponentSide = playerSide.equals("A") ? "B" : "A";
@@ -205,12 +225,21 @@ public class MatchService {
 
     private MatchModel findMatch(String matchId) {
         return matchRepository.findById(matchId)
-                .orElseThrow(() -> new RuntimeException("Partida nao encontrada."));
+                .orElseThrow(() -> new ApiBusinessException(
+                        HttpStatus.NOT_FOUND,
+                        ErrorCodes.GAME_MATCH_NOT_FOUND,
+                        MessageKeys.GAME_MATCH_NOT_FOUND
+                ));
     }
 
     private PokemonModel findPokemon(String id) {
         return pokemonRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Pokemon nao encontrado: " + id));
+                .orElseThrow(() -> new ApiBusinessException(
+                        HttpStatus.NOT_FOUND,
+                        ErrorCodes.GAME_POKEMON_NOT_FOUND,
+                        MessageKeys.GAME_POKEMON_NOT_FOUND,
+                        id
+                ));
     }
 
     private void saveTeam(MatchModel match, String side, List<PokemonModel> team) {
@@ -233,7 +262,11 @@ public class MatchService {
         if (match.getPlayerBUserId().equals(userId)) {
             return "B";
         }
-        throw new RuntimeException("Usuario nao participa da partida.");
+        throw new ApiBusinessException(
+                HttpStatus.FORBIDDEN,
+                ErrorCodes.GAME_USER_NOT_IN_MATCH,
+                MessageKeys.GAME_USER_NOT_IN_MATCH
+        );
     }
 
     private String join(List<Integer> values) {

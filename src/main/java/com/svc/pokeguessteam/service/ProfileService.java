@@ -1,5 +1,8 @@
 package com.svc.pokeguessteam.service;
 
+import com.svc.pokeguessteam.exception.ApiBusinessException;
+import com.svc.pokeguessteam.exception.ErrorCodes;
+import com.svc.pokeguessteam.messages.MessageKeys;
 import com.svc.pokeguessteam.model.PlayerPokemonModel;
 import com.svc.pokeguessteam.model.PokemonModel;
 import com.svc.pokeguessteam.model.ProfileModel;
@@ -8,6 +11,7 @@ import com.svc.pokeguessteam.repository.PlayerPokemonRepository;
 import com.svc.pokeguessteam.repository.PokemonRepository;
 import com.svc.pokeguessteam.repository.ProfileRepository;
 import com.svc.pokeguessteam.repository.UserRepository;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,7 +46,11 @@ public class ProfileService {
 
     private ProfileModel createProfile(String userId) {
         UserModel user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("Usuario nao encontrado."));
+                .orElseThrow(() -> new ApiBusinessException(
+                        HttpStatus.NOT_FOUND,
+                        ErrorCodes.PROFILE_USER_NOT_FOUND,
+                        MessageKeys.PROFILE_USER_NOT_FOUND
+                ));
         ProfileModel profile = new ProfileModel();
         profile.setUser(user);
         return profileRepository.save(profile);
@@ -71,7 +79,11 @@ public class ProfileService {
 
     public List<PlayerPokemonModel> getCollection(String userId) {
         ProfileModel profile = profileRepository.findByUser_IdUser(userId)
-                .orElseThrow(() -> new RuntimeException("Perfil nao encontrado."));
+                .orElseThrow(() -> new ApiBusinessException(
+                        HttpStatus.NOT_FOUND,
+                        ErrorCodes.PROFILE_NOT_FOUND,
+                        MessageKeys.PROFILE_NOT_FOUND
+                ));
         return playerPokemonRepository.findByProfile_Id(profile.getId());
     }
 }
