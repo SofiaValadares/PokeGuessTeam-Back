@@ -1,6 +1,4 @@
-package com.svc.pokeguessteam.dto;
-
-import com.svc.pokeguessteam.model.UserModel;
+package com.svc.pokeguessteam.dto.auth;
 
 public record RegisterResponse(
         String userId,

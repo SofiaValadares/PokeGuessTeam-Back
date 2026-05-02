@@ -8,5 +8,5 @@ import java.util.Optional;
 
 public interface PlayerPokemonRepository extends JpaRepository<PlayerPokemonModel, String> {
     List<PlayerPokemonModel> findByProfile_Id(String profileId);
-    Optional<PlayerPokemonModel> findByProfile_IdAndPokemon_Id(String profileId, String pokemonId);
+    Optional<PlayerPokemonModel> findByProfile_IdAndPokemon_PokedexNumber(String profileId, Integer pokedexNumber);
 }

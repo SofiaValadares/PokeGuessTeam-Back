@@ -21,6 +21,8 @@ public class WebConfig implements WebMvcConfigurer {
                 .excludePathPatterns(
                         "/auth/login",
                         "/auth/register",
+                        "/auth/session",
+                        "/auth/logout",
                         "/public/**",
                         "/error",
                         "/favicon.ico"

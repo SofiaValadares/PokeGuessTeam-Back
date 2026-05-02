@@ -24,7 +24,11 @@ public class PlayerPokemonModel {
     private ProfileModel profile;
 
     @ManyToOne(fetch = FetchType.EAGER, optional = false)
-    @JoinColumn(name = "FK_POKEMON_ID", nullable = false)
+    @JoinColumn(
+            name = "FK_POKEDEX_NUMBER",
+            referencedColumnName = "POKEDEX_NUMBER",
+            nullable = false
+    )
     private PokemonModel pokemon;
 
     @Column(name = "LEVEL", nullable = false)

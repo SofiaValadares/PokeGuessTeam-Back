@@ -51,7 +51,18 @@ API: `http://localhost:8080`
 
 ### `GET /api/me`
 
-Rota protegida por sessao.
+Rota protegida por sessão e session binding.
+
+Resposta JSON (ordem estável):
+
+| Campo | Significado |
+|-------|-------------|
+| `authenticatedAs` | Principal Spring Security (no login atual = **e-mail**) — mantido por compatibilidade |
+| `userId` | ID do utilizador na sessão |
+| `username` | Nome de utilizador (`TB_USERS`) para UI (“Conta”) |
+| `email` | E-mail do utilizador |
+
+Se o utilizador não existir na base de dados: **404** (`PROFILE_USER_NOT_FOUND`).
 
 ### `GET /api/pokedex`
 

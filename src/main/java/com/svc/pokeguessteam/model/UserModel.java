@@ -12,11 +12,14 @@ public class UserModel {
     @Column(name = "PK_USER_ID")
     private String idUser;
 
-    @Column(name = "USER_NAME", nullable = false, length = 100)
+    @Column(name = "USER_NAME", nullable = false, unique = true, length = 100)
     private String username;
 
     @Column(name = "USER_EMAIL", nullable = false, unique = true)
     private String email;
+
+    @Column(name = "USER_EMAIL_VERIFY", nullable = false)
+    private Boolean emailVerify;
 
     @Column(name = "USER_PASSWORD_HASH", nullable = false, length = 120)
     private String passwordHash;
@@ -27,14 +30,11 @@ public class UserModel {
     @PrePersist
     protected void onCreate() {
         this.registerDate = LocalDateTime.now();
+        this.emailVerify = false;
     }
 
     public String getIdUser() {
         return idUser;
-    }
-
-    public void setIdUser(String idUser) {
-        this.idUser = idUser;
     }
 
     public String getUsername() {
@@ -51,14 +51,19 @@ public class UserModel {
 
     public void setEmail(String email) {
         this.email = email;
+        this.emailVerify = false;
+    }
+
+    public Boolean getEmailVerify() {
+        return emailVerify;
+    }
+
+    public void setEmailVerifyTrue() {
+        this.emailVerify = true;
     }
 
     public LocalDateTime getRegisterDate() {
         return registerDate;
-    }
-
-    public void setRegisterDate(LocalDateTime registerDate) {
-        this.registerDate = registerDate;
     }
 
     public String getPasswordHash() {
