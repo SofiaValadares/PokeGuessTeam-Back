@@ -30,7 +30,11 @@ public class MatchGuessLogModel {
     private String guesserSide;
 
     @ManyToOne(fetch = FetchType.EAGER, optional = false)
-    @JoinColumn(name = "FK_GUESS_POKEMON_ID", nullable = false)
+    @JoinColumn(
+            name = "FK_GUESS_POKEDEX_NUMBER",
+            referencedColumnName = "POKEDEX_NUMBER",
+            nullable = false
+    )
     private PokemonModel guessedPokemon;
 
     @Column(name = "HIT_SLOT_COUNT", nullable = false)

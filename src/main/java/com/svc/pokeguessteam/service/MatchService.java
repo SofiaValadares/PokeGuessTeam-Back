@@ -12,6 +12,7 @@ import com.svc.pokeguessteam.model.MatchTeamSlotModel;
 import com.svc.pokeguessteam.model.PokemonModel;
 import com.svc.pokeguessteam.model.enums.MatchMode;
 import com.svc.pokeguessteam.model.enums.MatchStatus;
+import com.svc.pokeguessteam.model.enums.PokemonType;
 import com.svc.pokeguessteam.repository.MatchGuessLogRepository;
 import com.svc.pokeguessteam.repository.MatchRepository;
 import com.svc.pokeguessteam.repository.MatchTeamSlotRepository;
@@ -56,10 +57,10 @@ public class MatchService {
         }
 
         List<PokemonModel> playerTeam = request.playerTeamPokemonIds().stream()
-                .map(this::findPokemon)
+                .map(this::findPokemonByPokedexNumber)
                 .toList();
 
-        List<PokemonModel> botTeam = pokemonRepository.findAll();
+        List<PokemonModel> botTeam = pokemonRepository.findAllByOrderByPokedexNumberAsc();
         if (botTeam.size() < 6) {
             throw new ApiBusinessException(
                     HttpStatus.BAD_REQUEST,
@@ -103,7 +104,7 @@ public class MatchService {
         }
 
         String opponentSide = playerSide.equals("A") ? "B" : "A";
-        PokemonModel guessed = findPokemon(guessedPokemonId);
+        PokemonModel guessed = findPokemonByPokedexNumber(guessedPokemonId);
         List<MatchTeamSlotModel> opponentSlots = slotRepository
                 .findByMatch_IdAndOwnerSideOrderBySlotIndexAsc(match.getId(), opponentSide);
 
@@ -118,7 +119,7 @@ public class MatchService {
             PokemonModel target = slot.getPokemon();
             int index = slot.getSlotIndex();
 
-            if (target.getId().equals(guessed.getId())) {
+            if (target.getPokedexNumber().equals(guessed.getPokedexNumber())) {
                 exact.add(index);
                 if (!Boolean.TRUE.equals(slot.getDiscoveredByOpponent())) {
                     slot.setDiscoveredByOpponent(true);
@@ -131,13 +132,17 @@ public class MatchService {
             if (hasSharedType(target, guessed)) {
                 type.add(index);
             }
-            if (target.getColor().equalsIgnoreCase(guessed.getColor())) {
+            if (target.getColor() != null && target.getColor().equals(guessed.getColor())) {
                 color.add(index);
             }
-            if (Math.abs(target.getHeightDm() - guessed.getHeightDm()) <= 3) {
+            if (target.getHeightM() != null
+                    && guessed.getHeightM() != null
+                    && Math.abs(target.getHeightM() - guessed.getHeightM()) <= 0.3) {
                 height.add(index);
             }
-            if (Math.abs(target.getWeightHg() - guessed.getWeightHg()) <= 50) {
+            if (target.getWeightKg() != null
+                    && guessed.getWeightKg() != null
+                    && Math.abs(target.getWeightKg() - guessed.getWeightKg()) <= 5.0) {
                 weight.add(index);
             }
         }
@@ -166,7 +171,7 @@ public class MatchService {
 
         return new GuessResultResponse(
                 match.getId(),
-                guessed.getId(),
+                String.valueOf(guessed.getPokedexNumber()),
                 guessed.getName(),
                 exact,
                 gen,
@@ -199,13 +204,15 @@ public class MatchService {
                 scoreForSide(match, opponentSide),
                 playerSlots.stream().map(slot -> new MatchStateResponse.MatchSlotResponse(
                         slot.getSlotIndex(),
-                        slot.getPokemon().getId(),
+                        String.valueOf(slot.getPokemon().getPokedexNumber()),
                         slot.getPokemon().getName(),
                         true
                 )).toList(),
                 opponentSlots.stream().map(slot -> new MatchStateResponse.MatchSlotResponse(
                         slot.getSlotIndex(),
-                        Boolean.TRUE.equals(slot.getDiscoveredByOpponent()) ? slot.getPokemon().getId() : null,
+                        Boolean.TRUE.equals(slot.getDiscoveredByOpponent())
+                                ? String.valueOf(slot.getPokemon().getPokedexNumber())
+                                : null,
                         Boolean.TRUE.equals(slot.getDiscoveredByOpponent()) ? slot.getPokemon().getName() : "???",
                         slot.getDiscoveredByOpponent()
                 )).toList(),
@@ -232,13 +239,24 @@ public class MatchService {
                 ));
     }
 
-    private PokemonModel findPokemon(String id) {
-        return pokemonRepository.findById(id)
+    private PokemonModel findPokemonByPokedexNumber(String rawPokedexNumber) {
+        int dex;
+        try {
+            dex = Integer.parseInt(rawPokedexNumber.trim());
+        } catch (NumberFormatException ex) {
+            throw new ApiBusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    ErrorCodes.GAME_POKEMON_NOT_FOUND,
+                    MessageKeys.GAME_POKEMON_NOT_FOUND,
+                    rawPokedexNumber
+            );
+        }
+        return pokemonRepository.findByPokedexNumber(dex)
                 .orElseThrow(() -> new ApiBusinessException(
                         HttpStatus.NOT_FOUND,
                         ErrorCodes.GAME_POKEMON_NOT_FOUND,
                         MessageKeys.GAME_POKEMON_NOT_FOUND,
-                        id
+                        rawPokedexNumber
                 ));
     }
 
@@ -289,20 +307,20 @@ public class MatchService {
     }
 
     private boolean hasSharedType(PokemonModel a, PokemonModel b) {
-        if (a.getPrimaryType().equalsIgnoreCase(b.getPrimaryType())) {
+        if (a.getPrimaryType() == b.getPrimaryType()) {
             return true;
         }
-        if (a.getPrimaryType().equalsIgnoreCase(safe(b.getSecondaryType()))) {
+        if (a.getPrimaryType() == safe(b.getSecondaryType())) {
             return true;
         }
-        if (safe(a.getSecondaryType()).equalsIgnoreCase(b.getPrimaryType())) {
+        if (safe(a.getSecondaryType()) == b.getPrimaryType()) {
             return true;
         }
-        return safe(a.getSecondaryType()).equalsIgnoreCase(safe(b.getSecondaryType()));
+        return safe(a.getSecondaryType()) == safe(b.getSecondaryType());
     }
 
-    private String safe(String value) {
-        return value == null ? "" : value;
+    private PokemonType safe(PokemonType value) {
+        return value == null ? PokemonType.NONE : value;
     }
 
     private void checkFinish(MatchModel match, String currentSide, String opponentSide) {

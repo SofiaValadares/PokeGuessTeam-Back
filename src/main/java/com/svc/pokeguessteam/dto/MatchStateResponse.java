@@ -12,6 +12,9 @@ public record MatchStateResponse(
         List<MatchSlotResponse> opponentTeamVisible,
         List<GuessLogResponse> logs
 ) {
+    /**
+     * @param pokemonId número nacional da Pokédex em texto (ex.: {@code "25"}), quando visível.
+     */
     public record MatchSlotResponse(
             Integer slotIndex,
             String pokemonId,

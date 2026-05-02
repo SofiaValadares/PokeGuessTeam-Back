@@ -48,7 +48,7 @@ public class ProfileController {
         List<PlayerPokemonModel> collection = profileService.getCollection(userId);
         List<Map<String, Object>> payload = collection.stream().map(entry -> {
             Map<String, Object> map = new HashMap<>();
-            map.put("pokemonId", entry.getPokemon().getId());
+            map.put("pokemonId", String.valueOf(entry.getPokemon().getPokedexNumber()));
             map.put("name", entry.getPokemon().getName());
             map.put("rarity", entry.getPokemon().getRarity().name());
             map.put("level", entry.getLevel());

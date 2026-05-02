@@ -57,12 +57,14 @@ public class ProfileService {
     }
 
     private void grantStarterIfMissing(ProfileModel profile, Integer pokedexNumber) {
-        PokemonModel pokemon = pokemonRepository.findByPokedexNumber(pokedexNumber).orElse(null);
+        PokemonModel pokemon = pokemonRepository
+                .findByPokedexNumber(pokedexNumber)
+                .orElse(null);
         if (pokemon == null) {
             return;
         }
         boolean alreadyOwned = playerPokemonRepository
-                .findByProfile_IdAndPokemon_Id(profile.getId(), pokemon.getId())
+                .findByProfile_IdAndPokemon_PokedexNumber(profile.getId(), pokemon.getPokedexNumber())
                 .isPresent();
         if (alreadyOwned) {
             return;
