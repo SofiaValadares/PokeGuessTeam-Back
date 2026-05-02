@@ -43,6 +43,12 @@ public class ProfileModel {
     @OneToMany(mappedBy = "profile", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<UserPokemonInventoryModel> inventory = new ArrayList<>();
 
+    @OneToMany(mappedBy = "profile", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<UserPokedexModel> pokedexEntries = new ArrayList<>();
+
+    @OneToOne(mappedBy = "profile", cascade = CascadeType.ALL, orphanRemoval = true)
+    private TrainingTeamModel trainingTeam;
+
     @Column(name = "CREATED_AT", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -77,5 +83,21 @@ public class ProfileModel {
 
     public void setInventory(List<UserPokemonInventoryModel> inventory) {
         this.inventory = inventory != null ? inventory : new ArrayList<>();
+    }
+
+    public List<UserPokedexModel> getPokedexEntries() {
+        return pokedexEntries;
+    }
+
+    public void setPokedexEntries(List<UserPokedexModel> pokedexEntries) {
+        this.pokedexEntries = pokedexEntries != null ? pokedexEntries : new ArrayList<>();
+    }
+
+    public TrainingTeamModel getTrainingTeam() {
+        return trainingTeam;
+    }
+
+    public void setTrainingTeam(TrainingTeamModel trainingTeam) {
+        this.trainingTeam = trainingTeam;
     }
 }

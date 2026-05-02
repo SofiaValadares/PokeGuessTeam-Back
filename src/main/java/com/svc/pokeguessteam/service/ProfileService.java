@@ -6,17 +6,22 @@ import com.svc.pokeguessteam.messages.MessageKeys;
 import com.svc.pokeguessteam.model.pokemon.EvolutionLineModel;
 import com.svc.pokeguessteam.model.pokemon.PokemonModel;
 import com.svc.pokeguessteam.model.user.ProfileModel;
+import com.svc.pokeguessteam.model.user.TrainingTeamModel;
 import com.svc.pokeguessteam.model.user.UserModel;
 import com.svc.pokeguessteam.model.user.UserPokemonInventoryModel;
 import com.svc.pokeguessteam.repository.pokemon.PokemonRepository;
 import com.svc.pokeguessteam.repository.user.ProfileRepository;
 import com.svc.pokeguessteam.repository.user.UserPokemonInventoryRepository;
 import com.svc.pokeguessteam.repository.user.UserRepository;
+import com.svc.pokeguessteam.util.PokemonInventoryXp;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
 
 @Service
 public class ProfileService {
@@ -71,7 +76,26 @@ public class ProfileService {
         profile.setUser(user);
         ProfileModel saved = profileRepository.save(profile);
         pokemonRepository.findByPokedexNumber(1).ifPresent(saved::setFavoritePokemon);
+        assignRandomDefaultTrainingTeam(saved);
         return profileRepository.save(saved);
+    }
+
+    /**
+     * Time de treino inicial com 6 espécies aleatórias (com reposição se existirem menos de 6 na base).
+     */
+    private void assignRandomDefaultTrainingTeam(ProfileModel profile) {
+        List<PokemonModel> pool = pokemonRepository.findAllByOrderByPokedexNumberAsc();
+        if (pool.isEmpty()) {
+            return;
+        }
+        List<PokemonModel> shuffled = new ArrayList<>(pool);
+        Collections.shuffle(shuffled, ThreadLocalRandom.current());
+        TrainingTeamModel team = new TrainingTeamModel();
+        team.setProfile(profile);
+        for (int i = 0; i < TrainingTeamModel.TEAM_SIZE; i++) {
+            team.setSlot(i, shuffled.get(i % shuffled.size()));
+        }
+        profile.setTrainingTeam(team);
     }
 
     private void grantStarterLineIfMissing(ProfileModel profile, int pokedexNumber) {
@@ -87,9 +111,9 @@ public class ProfileService {
         UserPokemonInventoryModel row = new UserPokemonInventoryModel();
         row.setProfile(profile);
         row.setEvolutionLine(line);
-        row.setLevel(1);
         row.setTotalXp(0);
         row.setTimesObtained(1);
+        PokemonInventoryXp.syncLevelFromTotalXp(row);
         inventoryRepository.save(row);
     }
 

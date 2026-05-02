@@ -16,6 +16,9 @@ import jakarta.persistence.UniqueConstraint;
 /**
  * Inventário por <strong>linha evolutiva</strong>: progresso e obtenções agregados à cadeia,
  * não a uma entrada {@link PokemonModel} isolada.
+ * <p>
+ * Níveis e XP seguem {@link com.svc.pokeguessteam.util.PokemonInventoryXp}: cada subida de nível exige 50 XP a mais
+ * que o degrau anterior (1→2: 50 XP, 2→3: 100 XP, …), até nível máximo 100. O {@code level} deve estar alinhado com {@code totalXp}.
  */
 @Entity
 @Table(
