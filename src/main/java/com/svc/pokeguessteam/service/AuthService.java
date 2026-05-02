@@ -66,6 +66,76 @@ public class AuthService {
         return user;
     }
 
+    @Transactional
+    public void changePassword(String userId, String currentPassword, String newPassword) {
+        if (newPassword != null && currentPassword != null && newPassword.equals(currentPassword)) {
+            throw new ApiBusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    ErrorCodes.AUTH_NEW_PASSWORD_SAME,
+                    MessageKeys.AUTH_NEW_PASSWORD_SAME
+            );
+        }
+        UserModel user = userRepository.findById(userId)
+                .orElseThrow(() -> new ApiBusinessException(
+                        HttpStatus.NOT_FOUND,
+                        ErrorCodes.PROFILE_USER_NOT_FOUND,
+                        MessageKeys.PROFILE_USER_NOT_FOUND
+                ));
+        if (!passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
+            throw new ApiBusinessException(
+                    HttpStatus.UNAUTHORIZED,
+                    ErrorCodes.AUTH_CURRENT_PASSWORD_WRONG,
+                    MessageKeys.AUTH_CURRENT_PASSWORD_WRONG
+            );
+        }
+        if (passwordEncoder.matches(newPassword, user.getPasswordHash())) {
+            throw new ApiBusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    ErrorCodes.AUTH_NEW_PASSWORD_SAME,
+                    MessageKeys.AUTH_NEW_PASSWORD_SAME
+            );
+        }
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+    }
+
+    @Transactional
+    public void changeUsername(String userId, String newUsername, String password) {
+        String normalizedUsername = normalizeUsername(newUsername);
+        if (normalizedUsername.isEmpty()) {
+            throw new ApiBusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    ErrorCodes.VALIDATION_FAILED,
+                    MessageKeys.VALIDATION_REGISTER_USERNAME_REQUIRED
+            );
+        }
+        UserModel user = userRepository.findById(userId)
+                .orElseThrow(() -> new ApiBusinessException(
+                        HttpStatus.NOT_FOUND,
+                        ErrorCodes.PROFILE_USER_NOT_FOUND,
+                        MessageKeys.PROFILE_USER_NOT_FOUND
+                ));
+        if (!passwordEncoder.matches(password, user.getPasswordHash())) {
+            throw new ApiBusinessException(
+                    HttpStatus.UNAUTHORIZED,
+                    ErrorCodes.AUTH_CURRENT_PASSWORD_WRONG,
+                    MessageKeys.AUTH_CURRENT_PASSWORD_WRONG
+            );
+        }
+        if (normalizedUsername.equals(user.getUsername())) {
+            return;
+        }
+        if (userRepository.findByUsername(normalizedUsername).isPresent()) {
+            throw new ApiBusinessException(
+                    HttpStatus.CONFLICT,
+                    ErrorCodes.AUTH_USERNAME_ALREADY_TAKEN,
+                    MessageKeys.AUTH_USERNAME_ALREADY_TAKEN
+            );
+        }
+        user.setUsername(normalizedUsername);
+        userRepository.save(user);
+    }
+
     private ApiBusinessException invalidCredentials() {
         return new ApiBusinessException(
                 HttpStatus.UNAUTHORIZED,

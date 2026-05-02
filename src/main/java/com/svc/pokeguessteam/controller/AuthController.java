@@ -1,5 +1,7 @@
 package com.svc.pokeguessteam.controller;
 
+import com.svc.pokeguessteam.dto.auth.ChangePasswordRequest;
+import com.svc.pokeguessteam.dto.auth.ChangeUsernameRequest;
 import com.svc.pokeguessteam.dto.auth.LoginRequest;
 import com.svc.pokeguessteam.dto.auth.RegisterRequest;
 import com.svc.pokeguessteam.dto.auth.RegisterResponse;
@@ -8,6 +10,7 @@ import com.svc.pokeguessteam.model.UserModel;
 import com.svc.pokeguessteam.security.DeviceFingerprintUtil;
 import com.svc.pokeguessteam.security.SessionBindingInterceptor;
 import com.svc.pokeguessteam.service.AuthService;
+import com.svc.pokeguessteam.service.CurrentUserService;
 import com.svc.pokeguessteam.service.ProfileService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
@@ -23,7 +26,6 @@ import org.springframework.security.web.context.HttpSessionSecurityContextReposi
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 @RestController
@@ -34,10 +36,16 @@ public class AuthController {
 
     private final AuthService authService;
     private final ProfileService profileService;
+    private final CurrentUserService currentUserService;
 
-    public AuthController(AuthService authService, ProfileService profileService) {
+    public AuthController(
+            AuthService authService,
+            ProfileService profileService,
+            CurrentUserService currentUserService
+    ) {
         this.authService = authService;
         this.profileService = profileService;
+        this.currentUserService = currentUserService;
     }
 
     /**
@@ -65,6 +73,34 @@ public class AuthController {
     }
 
     /**
+     * Troca de senha (logado).
+     */
+    @PatchMapping("/password")
+    public ResponseEntity<Void> changePassword(
+            @RequestBody @Valid ChangePasswordRequest request,
+            HttpServletRequest httpRequest
+    ) {
+        HttpSession session = httpRequest.getSession(false);
+        String userId = currentUserService.requireUserId(session);
+        authService.changePassword(userId, request.currentPassword(), request.newPassword());
+        return ResponseEntity.ok().build();
+    }
+
+    /**
+     * Troca de nome de usuário (confirma com senha atual).
+     */
+    @PatchMapping("/username")
+    public ResponseEntity<Void> changeUsername(
+            @RequestBody @Valid ChangeUsernameRequest request,
+            HttpServletRequest httpRequest
+    ) {
+        HttpSession session = httpRequest.getSession(false);
+        String userId = currentUserService.requireUserId(session);
+        authService.changeUsername(userId, request.newUsername(), request.password());
+        return ResponseEntity.ok().build();
+    }
+
+    /**
      * LOGIN
      */
     @PostMapping("/login")
@@ -73,7 +109,6 @@ public class AuthController {
             HttpServletRequest httpRequest
     ) {
 
-        // Autentica usuário
         UserModel user = authService.authenticate(
                 request.login(),
                 request.password()
@@ -81,19 +116,15 @@ public class AuthController {
 
         profileService.ensureProfileWithStarters(user.getIdUser());
 
-        // Cria sessão
         HttpSession session = httpRequest.getSession(true);
 
-        // Salva ID
         session.setAttribute(USER_ID_ATTR, user.getIdUser());
 
-        // Salva fingerprint do dispositivo
         session.setAttribute(
                 SessionBindingInterceptor.DEVICE_ID_ATTR,
                 DeviceFingerprintUtil.generateDeviceId(httpRequest)
         );
 
-        // Cria autenticação
         UsernamePasswordAuthenticationToken authentication =
                 new UsernamePasswordAuthenticationToken(
                         user.getEmail(),
@@ -101,14 +132,12 @@ public class AuthController {
                         List.of(new SimpleGrantedAuthority("ROLE_USER"))
                 );
 
-        // Cria contexto
         SecurityContext securityContext =
                 SecurityContextHolder.createEmptyContext();
 
         securityContext.setAuthentication(authentication);
         SecurityContextHolder.setContext(securityContext);
 
-        // Persiste contexto
         session.setAttribute(
                 HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY,
                 securityContext
@@ -144,21 +173,11 @@ public class AuthController {
             HttpServletRequest request
     ) {
 
-        // Obtém autenticação atual do Spring Security
         Authentication authentication =
                 SecurityContextHolder.getContext().getAuthentication();
 
-        // Obtém sessão atual sem criar nova
         HttpSession session = request.getSession(false);
 
-        /**
-         * Regras para considerar usuário autenticado:
-         *
-         * 1. Authentication existe
-         * 2. Está autenticado
-         * 3. Sessão existe
-         * 4. USER_ID existe na sessão
-         */
         boolean authenticated =
                 authentication != null &&
                         authentication.isAuthenticated() &&
@@ -166,7 +185,6 @@ public class AuthController {
                         session != null &&
                         session.getAttribute(USER_ID_ATTR) != null;
 
-        // Caso não autenticado
         if (!authenticated) {
             return ResponseEntity.ok(
                     new SessionResponse(
@@ -176,10 +194,8 @@ public class AuthController {
             );
         }
 
-        // Obtém ID do usuário da sessão
         String userId = session.getAttribute(USER_ID_ATTR).toString();
 
-        // Retorna sessão válida
         return ResponseEntity.ok(
                 new SessionResponse(
                         true,

@@ -10,6 +10,8 @@ public final class ErrorCodes {
     public static final String AUTH_INVALID_CREDENTIALS = "AUTH_INVALID_CREDENTIALS";
     public static final String AUTH_EMAIL_ALREADY_REGISTERED = "AUTH_EMAIL_ALREADY_REGISTERED";
     public static final String AUTH_USERNAME_ALREADY_TAKEN = "AUTH_USERNAME_ALREADY_TAKEN";
+    public static final String AUTH_CURRENT_PASSWORD_WRONG = "AUTH_CURRENT_PASSWORD_WRONG";
+    public static final String AUTH_NEW_PASSWORD_SAME = "AUTH_NEW_PASSWORD_SAME";
     public static final String UNAUTHENTICATED = "UNAUTHENTICATED";
     public static final String SESSION_NOT_FOUND = "SESSION_NOT_FOUND";
     public static final String SESSION_BINDING_MISSING = "SESSION_BINDING_MISSING";
