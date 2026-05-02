@@ -14,6 +14,7 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.ColumnDefault;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -46,8 +47,18 @@ public class ProfileModel {
     @OneToMany(mappedBy = "profile", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<UserPokedexModel> pokedexEntries = new ArrayList<>();
 
+    @OneToMany(mappedBy = "profile", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<ProfileInventoryItemModel> inventoryItems = new ArrayList<>();
+
     @OneToOne(mappedBy = "profile", cascade = CascadeType.ALL, orphanRemoval = true)
     private TrainingTeamModel trainingTeam;
+
+    /**
+     * Fragmentos só da Poké Bola: a cada 10, converte-se numa Poké Bola (ver {@code ProfileService}).
+     */
+    @Column(name = "POKEBALL_FRAGMENTS", nullable = false)
+    @ColumnDefault("0")
+    private Integer pokeballFragments = 0;
 
     @Column(name = "CREATED_AT", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -55,6 +66,9 @@ public class ProfileModel {
     @PrePersist
     public void onCreate() {
         createdAt = LocalDateTime.now();
+        if (pokeballFragments == null) {
+            pokeballFragments = 0;
+        }
     }
 
     public String getId() {
@@ -93,11 +107,27 @@ public class ProfileModel {
         this.pokedexEntries = pokedexEntries != null ? pokedexEntries : new ArrayList<>();
     }
 
+    public List<ProfileInventoryItemModel> getInventoryItems() {
+        return inventoryItems;
+    }
+
+    public void setInventoryItems(List<ProfileInventoryItemModel> inventoryItems) {
+        this.inventoryItems = inventoryItems != null ? inventoryItems : new ArrayList<>();
+    }
+
     public TrainingTeamModel getTrainingTeam() {
         return trainingTeam;
     }
 
     public void setTrainingTeam(TrainingTeamModel trainingTeam) {
         this.trainingTeam = trainingTeam;
+    }
+
+    public Integer getPokeballFragments() {
+        return pokeballFragments;
+    }
+
+    public void setPokeballFragments(Integer pokeballFragments) {
+        this.pokeballFragments = pokeballFragments != null ? pokeballFragments : 0;
     }
 }

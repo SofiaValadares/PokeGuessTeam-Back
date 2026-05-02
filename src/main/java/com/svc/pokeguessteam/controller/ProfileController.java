@@ -1,10 +1,9 @@
 package com.svc.pokeguessteam.controller;
 
+import com.svc.pokeguessteam.model.user.ProfileInventoryItemModel;
 import com.svc.pokeguessteam.model.user.ProfileModel;
-import com.svc.pokeguessteam.model.user.UserPokemonInventoryModel;
 import com.svc.pokeguessteam.service.CurrentUserService;
 import com.svc.pokeguessteam.service.ProfileService;
-import com.svc.pokeguessteam.util.PokemonInventoryXp;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -46,24 +45,20 @@ public class ProfileController {
     }
 
     @GetMapping("/collection")
-    public ResponseEntity<List<Map<String, Object>>> collection(HttpSession session) {
+    public ResponseEntity<Map<String, Object>> collection(HttpSession session) {
         String userId = currentUserService.requireUserId(session);
-        profileService.ensureProfileWithStarters(userId);
-        List<UserPokemonInventoryModel> rows = profileService.getInventory(userId);
-        List<Map<String, Object>> payload = rows.stream().map(entry -> {
+        ProfileModel profile = profileService.ensureProfileWithStarters(userId);
+        List<ProfileInventoryItemModel> rows = profileService.getItemInventoryByProfileId(profile.getId());
+        List<Map<String, Object>> items = rows.stream().map(entry -> {
             Map<String, Object> map = new HashMap<>();
-            map.put("evolutionLineKey", entry.getEvolutionLine().getLineKey());
-            map.put("members", List.copyOf(entry.getEvolutionLine().getMemberPokedexNumbers()));
-            map.put("rarity", entry.getEvolutionLine().getRarity().name());
-            int totalXp = entry.getTotalXp() != null ? entry.getTotalXp() : 0;
-            int level = PokemonInventoryXp.levelFromTotalXp(totalXp);
-            map.put("level", level);
-            map.put("totalXp", totalXp);
-            map.put("xpToNextLevel", PokemonInventoryXp.xpRemainingToNextLevel(totalXp));
-            map.put("xpForCurrentStep", PokemonInventoryXp.xpForStepFromLevel(level));
-            map.put("timesObtained", entry.getTimesObtained());
+            map.put("pokeballType", entry.getPokeballType().name());
+            map.put("quantity", entry.getQuantity());
             return map;
         }).toList();
-        return ResponseEntity.ok(payload);
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("items", items);
+        body.put("pokeballFragments", profile.getPokeballFragments() != null ? profile.getPokeballFragments() : 0);
+        body.put("fragmentsPerPokeBall", ProfileService.FRAGMENTS_PER_POKE_BALL);
+        return ResponseEntity.ok(body);
     }
 }
