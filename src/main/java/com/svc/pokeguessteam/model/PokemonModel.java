@@ -29,8 +29,8 @@ public class PokemonModel {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
-    @Column(name = "PK_POKEMON_ID", nullable = false, updatable = false)
-    private Integer idPokemon;
+    @Column(name = "PK_POKEMON_ID", nullable = false, updatable = false, length = 36)
+    private String idPokemon;
 
     @Column(name = "POKEDEX_NUMBER", nullable = false)
     private Integer pokedexNumber;
