@@ -1,4 +1,4 @@
-package com.svc.pokeguessteam.model;
+package com.svc.pokeguessteam.model.pokemon;
 
 import com.svc.pokeguessteam.model.enums.PokemonRarity;
 import jakarta.persistence.CollectionTable;
@@ -36,7 +36,7 @@ public class EvolutionLineModel {
             name = "TB_EVOLUTION_LINE_MEMBERS",
             joinColumns = @JoinColumn(name = "FK_EVOLUTION_LINE_ID", referencedColumnName = "LINE_KEY")
     )
-    
+    @OrderColumn(name = "SORT_ORDER")
     @Column(name = "MEMBER_POKEDEX_NUMBER", nullable = false)
     private List<Integer> memberPokedexNumbers = new ArrayList<>();
 

@@ -3,8 +3,8 @@ package com.svc.pokeguessteam.service;
 import com.svc.pokeguessteam.exception.ApiBusinessException;
 import com.svc.pokeguessteam.exception.ErrorCodes;
 import com.svc.pokeguessteam.messages.MessageKeys;
-import com.svc.pokeguessteam.model.UserModel;
-import com.svc.pokeguessteam.repository.UserRepository;
+import com.svc.pokeguessteam.model.user.UserModel;
+import com.svc.pokeguessteam.repository.user.UserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -17,10 +17,16 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final ProfileService profileService;
 
-    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public AuthService(
+            UserRepository userRepository,
+            PasswordEncoder passwordEncoder,
+            ProfileService profileService
+    ) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.profileService = profileService;
     }
 
     @Transactional
@@ -48,7 +54,9 @@ public class AuthService {
         user.setUsername(normalizedUsername);
         user.setEmail(normalizedEmail);
         user.setPasswordHash(passwordEncoder.encode(rawPassword));
-        return userRepository.save(user);
+        UserModel saved = userRepository.save(user);
+        profileService.ensureProfileWithStarters(saved.getIdUser());
+        return saved;
     }
 
     public UserModel authenticate(String login, String rawPassword) {

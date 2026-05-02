@@ -28,12 +28,4 @@ public final class MessageKeys {
 
     public static final String PROFILE_USER_NOT_FOUND = "error.profile.user-not-found";
     public static final String PROFILE_NOT_FOUND = "error.profile.not-found";
-
-    public static final String GAME_TEAM_SIZE = "error.game.team-size";
-    public static final String GAME_POKEDEX_INSUFFICIENT = "error.game.pokedex-insufficient";
-    public static final String GAME_MATCH_FINISHED = "error.game.match-finished";
-    public static final String GAME_NOT_YOUR_TURN = "error.game.not-your-turn";
-    public static final String GAME_MATCH_NOT_FOUND = "error.game.match-not-found";
-    public static final String GAME_POKEMON_NOT_FOUND = "error.game.pokemon-not-found";
-    public static final String GAME_USER_NOT_IN_MATCH = "error.game.user-not-in-match";
 }

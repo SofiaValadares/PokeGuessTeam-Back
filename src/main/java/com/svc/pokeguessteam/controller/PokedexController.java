@@ -1,20 +1,24 @@
 package com.svc.pokeguessteam.controller;
 
-import com.svc.pokeguessteam.model.EvolutionLineModel;
-import com.svc.pokeguessteam.model.PokemonModel;
-import com.svc.pokeguessteam.repository.PokemonRepository;
+import com.svc.pokeguessteam.dto.pokemon.PokedexPageResponse;
+import com.svc.pokeguessteam.model.pokemon.PokemonModel;
+import com.svc.pokeguessteam.repository.pokemon.PokemonRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/pokedex")
 public class PokedexController {
+
+    static final int DEFAULT_PAGE_SIZE = 20;
+    private static final int MAX_PAGE_SIZE = 100;
 
     private final PokemonRepository pokemonRepository;
 
@@ -22,37 +26,19 @@ public class PokedexController {
         this.pokemonRepository = pokemonRepository;
     }
 
+    /**
+     * @param page índice baseado em zero (primeira página = {@code 0})
+     * @param size quantidade por página (padrão {@value #DEFAULT_PAGE_SIZE}, máximo 100)
+     */
     @GetMapping
-    public ResponseEntity<List<Map<String, Object>>> list() {
-        List<PokemonModel> all = pokemonRepository.findAllByOrderByPokedexNumberAsc();
-        List<Map<String, Object>> items = all.stream()
-                .map(pokemon -> {
-                    Map<String, Object> payload = new HashMap<>();
-                    payload.put("id", String.valueOf(pokemon.getPokedexNumber()));
-                    payload.put("number", pokemon.getPokedexNumber());
-                    payload.put("name", pokemon.getName());
-                    payload.put("primaryType", pokemon.getPrimaryType());
-                    payload.put("secondaryType", pokemon.getSecondaryType() == null ? "" : pokemon.getSecondaryType());
-                    payload.put("generation", pokemon.getGeneration());
-                    payload.put("color", pokemon.getColor() == null ? "" : pokemon.getColor().name());
-                    payload.put("heightM", pokemon.getHeightM());
-                    payload.put("weightKg", pokemon.getWeightKg());
-                    if (pokemon.getRarity() != null) {
-                        payload.put("rarity", pokemon.getRarity().name());
-                    }
-                    payload.put("evolutionStage", pokemon.getEvolutionStage());
-                    payload.put("evolutionLevel", pokemon.getEvolutionLevel());
-                    EvolutionLineModel line = pokemon.getEvolutionLine();
-                    if (line != null) {
-                        Map<String, Object> linePayload = new HashMap<>();
-                        linePayload.put("key", line.getLineKey());
-                        linePayload.put("rarity", line.getRarity().name());
-                        linePayload.put("members", List.copyOf(line.getMemberPokedexNumbers()));
-                        payload.put("evolutionLine", linePayload);
-                    }
-                    return payload;
-                })
-                .toList();
-        return ResponseEntity.ok(items);
+    public ResponseEntity<PokedexPageResponse> list(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "" + DEFAULT_PAGE_SIZE) int size
+    ) {
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
+        Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.ASC, "pokedexNumber"));
+        Page<PokemonModel> result = pokemonRepository.findAll(pageable);
+        return ResponseEntity.ok(PokedexPageResponse.from(result));
     }
 }

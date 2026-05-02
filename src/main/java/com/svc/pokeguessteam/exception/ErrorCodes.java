@@ -20,12 +20,4 @@ public final class ErrorCodes {
 
     public static final String PROFILE_USER_NOT_FOUND = "PROFILE_USER_NOT_FOUND";
     public static final String PROFILE_NOT_FOUND = "PROFILE_NOT_FOUND";
-
-    public static final String GAME_TEAM_SIZE = "GAME_TEAM_SIZE";
-    public static final String GAME_POKEDEX_INSUFFICIENT = "GAME_POKEDEX_INSUFFICIENT";
-    public static final String GAME_MATCH_FINISHED = "GAME_MATCH_FINISHED";
-    public static final String GAME_NOT_YOUR_TURN = "GAME_NOT_YOUR_TURN";
-    public static final String GAME_MATCH_NOT_FOUND = "GAME_MATCH_NOT_FOUND";
-    public static final String GAME_POKEMON_NOT_FOUND = "GAME_POKEMON_NOT_FOUND";
-    public static final String GAME_USER_NOT_IN_MATCH = "GAME_USER_NOT_IN_MATCH";
 }

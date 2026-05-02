@@ -251,7 +251,7 @@ import java.util.List;
 
 /**
  * Linhas evolutivas por caminho na API PokeAPI.
- * Membros: {@code pokedexNumber} (número nacional), alinhado a {@link com.svc.pokeguessteam.model.PokemonModel#getPokedexNumber()}.
+ * Membros: {@code pokedexNumber} (número nacional), alinhado a {@link com.svc.pokeguessteam.model.pokemon.PokemonModel#getPokedexNumber()}.
  */
 public final class EvolutionLinesSeed {
 

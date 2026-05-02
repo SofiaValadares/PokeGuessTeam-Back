@@ -10,7 +10,6 @@ Projeto Spring Boot 3 (Java 17 + Maven) com autenticacao tradicional por e-mail/
 - Session binding por dispositivo (`User-Agent + IP`)
 - Persistencia com PostgreSQL (Spring Data JPA)
 - Pokedex seedada para testes
-- Motor de partida com logica de turno, dicas por atributos e log de palpites
 
 ## Como rodar
 
@@ -66,41 +65,15 @@ Se o utilizador não existir na base de dados: **404** (`PROFILE_USER_NOT_FOUND`
 
 ### `GET /api/pokedex`
 
-Lista os pokemons disponiveis para montar time e palpitar.
+Lista os Pokémon da Pokédex (número nacional).
 
 ### `GET /api/profile/me`
 
-Retorna dados do perfil e recursos (pokebolas/fragmentos).
+Retorna `profileId`, `userId`, favorito (`favoritePokemonId` / `favoritePokemonName`).
 
 ### `GET /api/profile/collection`
 
-Retorna inventario do jogador com niveis e raridade.
-
-### `POST /api/game/matches/bot`
-
-Cria partida contra bot.
-
-```json
-{
-  "playerTeamPokemonIds": [
-    "id1","id2","id3","id4","id5","id6"
-  ]
-}
-```
-
-### `POST /api/game/matches/{matchId}/guess`
-
-Executa palpite do turno atual.
-
-```json
-{
-  "guessedPokemonId": "id-do-pokemon"
-}
-```
-
-### `GET /api/game/matches/{matchId}`
-
-Retorna estado atual da partida (placar, time visivel e historico de palpites).
+Retorna o inventário por linha evolutiva (`evolutionLineKey`, `members`, `rarity`, `level`, `totalXp`, `timesObtained`).
 
 ## Session Binding
 
@@ -121,9 +94,4 @@ Ordem de execucao (minimo):
 3. `API - Me (rota protegida)` (esperado `200`)
 4. `API - Me (simula outro dispositivo)` (esperado `401`)
 
-Para testar a jogatina:
-
-1. `GET /api/pokedex` e copie 6 ids
-2. `POST /api/game/matches/bot` com os 6 ids
-3. `POST /api/game/matches/{matchId}/guess`
-4. `GET /api/game/matches/{matchId}` para acompanhar o log
+Opcional: `Profile - Me` e `Profile - Collection` após o login.

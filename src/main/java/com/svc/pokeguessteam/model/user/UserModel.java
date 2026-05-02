@@ -1,4 +1,4 @@
-package com.svc.pokeguessteam.model;
+package com.svc.pokeguessteam.model.user;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;

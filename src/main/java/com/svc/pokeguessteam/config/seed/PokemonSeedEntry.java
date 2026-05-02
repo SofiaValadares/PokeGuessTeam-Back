@@ -1,7 +1,7 @@
 package com.svc.pokeguessteam.config.seed;
 
-import com.svc.pokeguessteam.model.EvolutionLineModel;
-import com.svc.pokeguessteam.model.PokemonModel;
+import com.svc.pokeguessteam.model.pokemon.EvolutionLineModel;
+import com.svc.pokeguessteam.model.pokemon.PokemonModel;
 import com.svc.pokeguessteam.model.enums.EvolutionStage;
 import com.svc.pokeguessteam.model.enums.PokedexColor;
 import com.svc.pokeguessteam.model.enums.PokemonType;

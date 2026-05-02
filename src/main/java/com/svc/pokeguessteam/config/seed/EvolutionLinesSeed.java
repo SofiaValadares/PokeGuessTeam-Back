@@ -1,12 +1,13 @@
 package com.svc.pokeguessteam.config.seed;
 
 import com.svc.pokeguessteam.model.enums.PokemonRarity;
+import com.svc.pokeguessteam.model.pokemon.PokemonModel;
 
 import java.util.List;
 
 /**
  * Linhas evolutivas por caminho na API PokeAPI.
- * Membros: {@code pokedexNumber} (número nacional), alinhado a {@link com.svc.pokeguessteam.model.PokemonModel#getPokedexNumber()}.
+ * Membros: {@code pokedexNumber} (número nacional), alinhado a {@link PokemonModel#getPokedexNumber()}.
  */
 public final class EvolutionLinesSeed {
 

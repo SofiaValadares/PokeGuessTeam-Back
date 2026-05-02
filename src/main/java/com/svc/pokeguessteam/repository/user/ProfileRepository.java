@@ -1,6 +1,6 @@
-package com.svc.pokeguessteam.repository;
+package com.svc.pokeguessteam.repository.user;
 
-import com.svc.pokeguessteam.model.ProfileModel;
+import com.svc.pokeguessteam.model.user.ProfileModel;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;

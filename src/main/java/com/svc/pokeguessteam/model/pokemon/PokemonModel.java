@@ -1,9 +1,10 @@
-package com.svc.pokeguessteam.model;
+package com.svc.pokeguessteam.model.pokemon;
 
 import com.svc.pokeguessteam.model.enums.EvolutionStage;
 import com.svc.pokeguessteam.model.enums.PokedexColor;
 import com.svc.pokeguessteam.model.enums.PokemonRarity;
 import com.svc.pokeguessteam.model.enums.PokemonType;
+import com.svc.pokeguessteam.model.pokemon.EvolutionLineModel;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
