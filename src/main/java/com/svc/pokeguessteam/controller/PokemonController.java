@@ -27,8 +27,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/pokemon")
 public class PokemonController {
 
-    static final int PC_DEFAULT_PAGE_SIZE = 50;
-    private static final int PC_MAX_PAGE_SIZE = 50;
+    static final int PC_DEFAULT_PAGE_SIZE = ProfileService.PokemonPcConstants.DEFAULT_PAGE_SIZE;
+    private static final int PC_MAX_PAGE_SIZE = ProfileService.PokemonPcConstants.MAX_PAGE_SIZE;
 
     private final ProfileService profileService;
     private final PokemonRepository pokemonRepository;
@@ -48,7 +48,7 @@ public class PokemonController {
     }
 
     /**
-     * PC do jogador: inventário por linha evolutiva (capturas / XP), 50 linhas por página por defeito.
+     * PC do jogador: inventário por linha evolutiva (capturas / XP), paginado (default 20, máx. 100).
      */
     @GetMapping("/pc")
     public ResponseEntity<PcPageResponse> pc(
@@ -62,9 +62,6 @@ public class PokemonController {
         return ResponseEntity.ok(profileService.getPokemonPcPage(userId, page, safeSize));
     }
 
-    /**
-     * Detalhe de uma espécie pelo número nacional da Pokédex (referência para palpites / UI).
-     */
     /**
      * Consome uma Pokébola do inventário, sorteia raridade conforme o tipo e adiciona ao PC (linha evolutiva).
      */

@@ -59,17 +59,20 @@ public class ProfileService {
     private final PokemonRepository pokemonRepository;
     private final UserPokemonInventoryRepository inventoryRepository;
     private final ProfileInventoryItemRepository profileInventoryItemRepository;
+    private final UserPokedexService userPokedexService;
 
     public ProfileService(ProfileRepository profileRepository,
                           UserRepository userRepository,
                           PokemonRepository pokemonRepository,
                           UserPokemonInventoryRepository inventoryRepository,
-                          ProfileInventoryItemRepository profileInventoryItemRepository) {
+                          ProfileInventoryItemRepository profileInventoryItemRepository,
+                          UserPokedexService userPokedexService) {
         this.profileRepository = profileRepository;
         this.userRepository = userRepository;
         this.pokemonRepository = pokemonRepository;
         this.inventoryRepository = inventoryRepository;
         this.profileInventoryItemRepository = profileInventoryItemRepository;
+        this.userPokedexService = userPokedexService;
     }
 
     @Transactional
@@ -79,7 +82,9 @@ public class ProfileService {
             grantStarterLineIfMissing(profile, dex);
         }
         ensurePokeballInventoryIfMissing(profile);
-        return profile;
+        userPokedexService.registerStarterSpecies(profile, STARTER_POKEDEX_NUMBERS);
+        userPokedexService.syncFromOwnership(profile);
+        return profileRepository.findById(profile.getId()).orElse(profile);
     }
 
     private ProfileModel createProfile(String userId) {
@@ -114,6 +119,12 @@ public class ProfileService {
             team.setSlot(i, shuffled.get(i % shuffled.size()));
         }
         profile.setTrainingTeam(team);
+        for (int i = 0; i < TrainingTeamModel.TEAM_SIZE; i++) {
+            PokemonModel slot = team.getSlot(i);
+            if (slot != null) {
+                userPokedexService.registerSpeciesIfPresent(profile, slot.getPokedexNumber());
+            }
+        }
     }
 
     /**
@@ -175,8 +186,13 @@ public class ProfileService {
             return;
         }
         EvolutionLineModel line = pokemon.getEvolutionLine();
-        if (inventoryRepository.findByProfile_IdAndEvolutionLine_LineKey(profile.getId(), line.getLineKey())
-                .isPresent()) {
+        var existing = inventoryRepository.findByProfile_IdAndEvolutionLine_LineKey(
+                profile.getId(),
+                line.getLineKey()
+        );
+        if (existing.isPresent()) {
+            userPokedexService.registerUnlockedSpeciesForInventoryLine(profile, existing.get());
+            userPokedexService.registerSpeciesIfPresent(profile, pokedexNumber);
             return;
         }
         UserPokemonInventoryModel row = new UserPokemonInventoryModel();
@@ -186,6 +202,8 @@ public class ProfileService {
         row.setTimesObtained(1);
         PokemonInventoryXp.syncLevelFromTotalXp(row);
         inventoryRepository.save(row);
+        userPokedexService.registerSpeciesIfPresent(profile, pokedexNumber);
+        userPokedexService.registerUnlockedSpeciesForInventoryLine(profile, row);
     }
 
     @Transactional(readOnly = true)
@@ -245,8 +263,8 @@ public class ProfileService {
 
     /** Constantes partilhadas com {@link com.svc.pokeguessteam.controller.PokemonController} (PC). */
     public static final class PokemonPcConstants {
-        public static final int DEFAULT_PAGE_SIZE = 50;
-        public static final int MAX_PAGE_SIZE = 50;
+        public static final int DEFAULT_PAGE_SIZE = 20;
+        public static final int MAX_PAGE_SIZE = 100;
 
         private PokemonPcConstants() {
         }

@@ -31,19 +31,22 @@ public class PokeballDrawService {
     private final PokemonRepository pokemonRepository;
     private final ProfileInventoryItemRepository profileInventoryItemRepository;
     private final UserPokemonInventoryRepository userPokemonInventoryRepository;
+    private final UserPokedexService userPokedexService;
 
     public PokeballDrawService(
             ProfileRepository profileRepository,
             ProfileService profileService,
             PokemonRepository pokemonRepository,
             ProfileInventoryItemRepository profileInventoryItemRepository,
-            UserPokemonInventoryRepository userPokemonInventoryRepository
+            UserPokemonInventoryRepository userPokemonInventoryRepository,
+            UserPokedexService userPokedexService
     ) {
         this.profileRepository = profileRepository;
         this.profileService = profileService;
         this.pokemonRepository = pokemonRepository;
         this.profileInventoryItemRepository = profileInventoryItemRepository;
         this.userPokemonInventoryRepository = userPokemonInventoryRepository;
+        this.userPokedexService = userPokedexService;
     }
 
     @Transactional
@@ -60,6 +63,10 @@ public class PokeballDrawService {
         PokemonRarity rolledRarity = rollRarity(pokeballType);
         PokemonModel pokemon = pickRandomPokemon(rolledRarity);
         GrantResult grant = grantOrIncrementLine(profile, pokemon);
+        userPokedexService.registerSpecies(profile, pokemon.getPokedexNumber());
+        userPokemonInventoryRepository
+                .findByProfile_IdAndEvolutionLine_LineKey(profile.getId(), pokemon.getEvolutionLine().getLineKey())
+                .ifPresent(row -> userPokedexService.registerUnlockedSpeciesForInventoryLine(profile, row));
 
         return new PokeballDrawResponse(
                 pokeballType,

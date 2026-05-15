@@ -14,5 +14,7 @@ public interface PokemonRepository extends JpaRepository<PokemonModel, String> {
 
     List<PokemonModel> findByEvolutionLine_Rarity(PokemonRarity rarity);
 
+    List<PokemonModel> findByEvolutionLine_LineKey(Integer lineKey);
+
     Optional<PokemonModel> findByNameIgnoreCase(String name);
 }

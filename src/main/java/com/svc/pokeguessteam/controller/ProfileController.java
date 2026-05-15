@@ -1,5 +1,6 @@
 package com.svc.pokeguessteam.controller;
 
+import com.svc.pokeguessteam.dto.pokemon.PcPageResponse;
 import com.svc.pokeguessteam.dto.profile.TrainingTeamResponse;
 import com.svc.pokeguessteam.model.user.ProfileInventoryItemModel;
 import com.svc.pokeguessteam.model.user.ProfileModel;
@@ -9,6 +10,7 @@ import jakarta.servlet.http.HttpSession;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.HashMap;
@@ -55,6 +57,27 @@ public class ProfileController {
         return ResponseEntity.ok(profileService.getTrainingTeam(userId));
     }
 
+    /**
+     * Inventário de Pokémon do jogador (linhas evolutivas), paginado.
+     */
+    @GetMapping("/pokemon")
+    public ResponseEntity<PcPageResponse> pokemonInventory(
+            HttpSession session,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "" + ProfileService.PokemonPcConstants.DEFAULT_PAGE_SIZE) int size
+    ) {
+        String userId = currentUserService.requireUserId(session);
+        profileService.ensureProfileWithStarters(userId);
+        int safeSize = Math.min(
+                Math.max(size, 1),
+                ProfileService.PokemonPcConstants.MAX_PAGE_SIZE
+        );
+        return ResponseEntity.ok(profileService.getPokemonPcPage(userId, page, safeSize));
+    }
+
+    /**
+     * Inventário de Pokébolas e fragmentos.
+     */
     @GetMapping("/collection")
     public ResponseEntity<Map<String, Object>> collection(HttpSession session) {
         String userId = currentUserService.requireUserId(session);

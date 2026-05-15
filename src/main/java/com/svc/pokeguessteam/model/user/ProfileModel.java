@@ -44,7 +44,8 @@ public class ProfileModel {
     @OneToMany(mappedBy = "profile", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<UserPokemonInventoryModel> inventory = new ArrayList<>();
 
-    @OneToMany(mappedBy = "profile", cascade = CascadeType.ALL, orphanRemoval = true)
+    /** Apenas leitura JPA; persistência via {@link com.svc.pokeguessteam.repository.user.UserPokedexRepository}. */
+    @OneToMany(mappedBy = "profile")
     private List<UserPokedexModel> pokedexEntries = new ArrayList<>();
 
     @OneToMany(mappedBy = "profile", cascade = CascadeType.ALL, orphanRemoval = true)
@@ -105,6 +106,16 @@ public class ProfileModel {
 
     public void setPokedexEntries(List<UserPokedexModel> pokedexEntries) {
         this.pokedexEntries = pokedexEntries != null ? pokedexEntries : new ArrayList<>();
+    }
+
+    public void addPokedexEntry(UserPokedexModel entry) {
+        if (entry == null) {
+            return;
+        }
+        entry.setProfile(this);
+        if (!pokedexEntries.contains(entry)) {
+            pokedexEntries.add(entry);
+        }
     }
 
     public List<ProfileInventoryItemModel> getInventoryItems() {

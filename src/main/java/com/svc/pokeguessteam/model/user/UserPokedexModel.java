@@ -44,7 +44,7 @@ public class UserPokedexModel {
 
     /** Espécie registada na Pokédex pessoal. */
     @Column(name = "REGISTERED", nullable = false)
-    private boolean registered;
+    private boolean registered = true;
 
     public String getId() {
         return id;

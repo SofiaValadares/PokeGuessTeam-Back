@@ -39,7 +39,7 @@ public class PokedexController {
     public ResponseEntity<List<PokedexEntryDto>> listAll(HttpSession session) {
         String userId = currentUserService.requireUserId(session);
         profileService.ensureProfileWithStarters(userId);
-        return ResponseEntity.ok(pokedexService.listAllForUser(userId));
+        return ResponseEntity.ok(pokedexService.listAllForUser(userId)); // sync incluído no serviço
     }
 
     /**

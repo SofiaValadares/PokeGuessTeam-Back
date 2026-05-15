@@ -22,7 +22,9 @@ public class GameMetaController {
                 + "com pistas por tipagem, geração, cor, altura e peso.");
         body.put("pokedexDefaultPageSize", PokedexService.DEFAULT_PAGE_SIZE);
         body.put("pokedexMaxPageSize", PokedexService.MAX_PAGE_SIZE);
-        body.put("pcPageSize", PokemonController.PC_DEFAULT_PAGE_SIZE);
+        body.put("pokemonInventoryDefaultPageSize", ProfileService.PokemonPcConstants.DEFAULT_PAGE_SIZE);
+        body.put("pokemonInventoryMaxPageSize", ProfileService.PokemonPcConstants.MAX_PAGE_SIZE);
+        body.put("pcPageSize", ProfileService.PokemonPcConstants.DEFAULT_PAGE_SIZE);
         body.put("pcMaxPageSize", ProfileService.PokemonPcConstants.MAX_PAGE_SIZE);
         body.put("fragmentsPerPokeBall", ProfileService.FRAGMENTS_PER_POKE_BALL);
         return ResponseEntity.ok(body);
