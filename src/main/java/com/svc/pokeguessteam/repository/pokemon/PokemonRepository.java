@@ -1,5 +1,6 @@
 package com.svc.pokeguessteam.repository.pokemon;
 
+import com.svc.pokeguessteam.model.enums.PokemonRarity;
 import com.svc.pokeguessteam.model.pokemon.PokemonModel;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -10,6 +11,8 @@ public interface PokemonRepository extends JpaRepository<PokemonModel, String> {
     Optional<PokemonModel> findByPokedexNumber(int pokedexNumber);
 
     List<PokemonModel> findAllByOrderByPokedexNumberAsc();
+
+    List<PokemonModel> findByEvolutionLine_Rarity(PokemonRarity rarity);
 
     Optional<PokemonModel> findByNameIgnoreCase(String name);
 }

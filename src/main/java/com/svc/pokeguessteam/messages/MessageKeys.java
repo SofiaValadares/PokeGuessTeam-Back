@@ -28,4 +28,8 @@ public final class MessageKeys {
 
     public static final String PROFILE_USER_NOT_FOUND = "error.profile.user-not-found";
     public static final String PROFILE_NOT_FOUND = "error.profile.not-found";
+
+    public static final String POKEMON_SPECIES_NOT_FOUND = "error.pokemon.species-not-found";
+    public static final String POKEBALL_INSUFFICIENT = "error.pokemon.pokeball-insufficient";
+    public static final String POKEMON_POOL_EMPTY_FOR_RARITY = "error.pokemon.pool-empty-for-rarity";
 }

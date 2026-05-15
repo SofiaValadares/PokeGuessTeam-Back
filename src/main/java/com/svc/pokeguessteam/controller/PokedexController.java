@@ -1,44 +1,62 @@
 package com.svc.pokeguessteam.controller;
 
-import com.svc.pokeguessteam.dto.pokemon.PokedexPageResponse;
-import com.svc.pokeguessteam.model.pokemon.PokemonModel;
-import com.svc.pokeguessteam.repository.pokemon.PokemonRepository;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
+import com.svc.pokeguessteam.dto.pokemon.PokedexEntryDto;
+import com.svc.pokeguessteam.dto.pokemon.PokedexEntryPageResponse;
+import com.svc.pokeguessteam.service.CurrentUserService;
+import com.svc.pokeguessteam.service.PokedexService;
+import com.svc.pokeguessteam.service.ProfileService;
+import jakarta.servlet.http.HttpSession;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/pokedex")
 public class PokedexController {
 
-    static final int DEFAULT_PAGE_SIZE = 20;
-    private static final int MAX_PAGE_SIZE = 100;
+    private final PokedexService pokedexService;
+    private final CurrentUserService currentUserService;
+    private final ProfileService profileService;
 
-    private final PokemonRepository pokemonRepository;
-
-    public PokedexController(PokemonRepository pokemonRepository) {
-        this.pokemonRepository = pokemonRepository;
+    public PokedexController(
+            PokedexService pokedexService,
+            CurrentUserService currentUserService,
+            ProfileService profileService
+    ) {
+        this.pokedexService = pokedexService;
+        this.currentUserService = currentUserService;
+        this.profileService = profileService;
     }
 
     /**
+     * Lista completa da Pokédex nacional com flag de registo na Pokédex pessoal.
+     */
+    @GetMapping("/all")
+    public ResponseEntity<List<PokedexEntryDto>> listAll(HttpSession session) {
+        String userId = currentUserService.requireUserId(session);
+        profileService.ensureProfileWithStarters(userId);
+        return ResponseEntity.ok(pokedexService.listAllForUser(userId));
+    }
+
+    /**
+     * Pokédex paginada com flag de registo na Pokédex pessoal.
+     *
      * @param page índice baseado em zero (primeira página = {@code 0})
-     * @param size quantidade por página (padrão {@value #DEFAULT_PAGE_SIZE}, máximo 100)
+     * @param size quantidade por página (padrão {@value com.svc.pokeguessteam.service.PokedexService#DEFAULT_PAGE_SIZE},
+     *             máximo {@value com.svc.pokeguessteam.service.PokedexService#MAX_PAGE_SIZE})
      */
     @GetMapping
-    public ResponseEntity<PokedexPageResponse> list(
+    public ResponseEntity<PokedexEntryPageResponse> listPage(
+            HttpSession session,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "" + DEFAULT_PAGE_SIZE) int size
+            @RequestParam(defaultValue = "" + PokedexService.DEFAULT_PAGE_SIZE) int size
     ) {
-        int safePage = Math.max(page, 0);
-        int safeSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
-        Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.ASC, "pokedexNumber"));
-        Page<PokemonModel> result = pokemonRepository.findAll(pageable);
-        return ResponseEntity.ok(PokedexPageResponse.from(result));
+        String userId = currentUserService.requireUserId(session);
+        profileService.ensureProfileWithStarters(userId);
+        return ResponseEntity.ok(pokedexService.listPageForUser(userId, page, size));
     }
 }

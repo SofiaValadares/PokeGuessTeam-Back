@@ -1,5 +1,6 @@
 package com.svc.pokeguessteam.controller;
 
+import com.svc.pokeguessteam.dto.profile.TrainingTeamResponse;
 import com.svc.pokeguessteam.model.user.ProfileInventoryItemModel;
 import com.svc.pokeguessteam.model.user.ProfileModel;
 import com.svc.pokeguessteam.service.CurrentUserService;
@@ -42,6 +43,16 @@ public class ProfileController {
             body.put("favoritePokemonName", null);
         }
         return ResponseEntity.ok(body);
+    }
+
+    /**
+     * Time de treino ativo (6 posições): foco de XP / evolução no menu; não restringe uso nas partidas.
+     */
+    @GetMapping("/training-team")
+    public ResponseEntity<TrainingTeamResponse> trainingTeam(HttpSession session) {
+        String userId = currentUserService.requireUserId(session);
+        profileService.ensureProfileWithStarters(userId);
+        return ResponseEntity.ok(profileService.getTrainingTeam(userId));
     }
 
     @GetMapping("/collection")

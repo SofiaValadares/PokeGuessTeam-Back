@@ -5,6 +5,8 @@ import com.svc.pokeguessteam.exception.ErrorCodes;
 import com.svc.pokeguessteam.messages.MessageKeys;
 import com.svc.pokeguessteam.model.pokemon.EvolutionLineModel;
 import com.svc.pokeguessteam.model.pokemon.PokemonModel;
+import com.svc.pokeguessteam.dto.pokemon.PcPageResponse;
+import com.svc.pokeguessteam.dto.profile.TrainingTeamResponse;
 import com.svc.pokeguessteam.model.enums.PokeballType;
 import com.svc.pokeguessteam.model.user.ProfileInventoryItemModel;
 import com.svc.pokeguessteam.model.user.ProfileModel;
@@ -17,6 +19,10 @@ import com.svc.pokeguessteam.repository.user.ProfileRepository;
 import com.svc.pokeguessteam.repository.user.UserPokemonInventoryRepository;
 import com.svc.pokeguessteam.repository.user.UserRepository;
 import com.svc.pokeguessteam.util.PokemonInventoryXp;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -202,6 +208,48 @@ public class ProfileService {
         return profileInventoryItemRepository.findByProfile_Id(profileId).stream()
                 .sorted(Comparator.comparingInt(a -> a.getPokeballType().ordinal()))
                 .toList();
+    }
+
+    /**
+     * PC do jogador: linhas evolutivas do inventário, paginadas (ordenadas por linha evolutiva).
+     */
+    @Transactional(readOnly = true)
+    public PcPageResponse getPokemonPcPage(String userId, int page, int size) {
+        ProfileModel profile = profileRepository.findByUser_IdUser(userId)
+                .orElseThrow(() -> new ApiBusinessException(
+                        HttpStatus.NOT_FOUND,
+                        ErrorCodes.PROFILE_NOT_FOUND,
+                        MessageKeys.PROFILE_NOT_FOUND
+                ));
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.min(Math.max(size, 1), PokemonPcConstants.MAX_PAGE_SIZE);
+        Pageable pageable = PageRequest.of(
+                safePage,
+                safeSize,
+                Sort.by(Sort.Direction.ASC, "evolutionLine.lineKey")
+        );
+        Page<UserPokemonInventoryModel> result = inventoryRepository.findByProfile_Id(profile.getId(), pageable);
+        return PcPageResponse.from(result);
+    }
+
+    @Transactional(readOnly = true)
+    public TrainingTeamResponse getTrainingTeam(String userId) {
+        ProfileModel profile = profileRepository.findByUser_IdUser(userId)
+                .orElseThrow(() -> new ApiBusinessException(
+                        HttpStatus.NOT_FOUND,
+                        ErrorCodes.PROFILE_NOT_FOUND,
+                        MessageKeys.PROFILE_NOT_FOUND
+                ));
+        return TrainingTeamResponse.from(profile.getTrainingTeam());
+    }
+
+    /** Constantes partilhadas com {@link com.svc.pokeguessteam.controller.PokemonController} (PC). */
+    public static final class PokemonPcConstants {
+        public static final int DEFAULT_PAGE_SIZE = 50;
+        public static final int MAX_PAGE_SIZE = 50;
+
+        private PokemonPcConstants() {
+        }
     }
 }
   

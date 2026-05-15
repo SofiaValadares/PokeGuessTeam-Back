@@ -20,4 +20,8 @@ public final class ErrorCodes {
 
     public static final String PROFILE_USER_NOT_FOUND = "PROFILE_USER_NOT_FOUND";
     public static final String PROFILE_NOT_FOUND = "PROFILE_NOT_FOUND";
+
+    public static final String POKEMON_SPECIES_NOT_FOUND = "POKEMON_SPECIES_NOT_FOUND";
+    public static final String POKEBALL_INSUFFICIENT = "POKEBALL_INSUFFICIENT";
+    public static final String POKEMON_POOL_EMPTY_FOR_RARITY = "POKEMON_POOL_EMPTY_FOR_RARITY";
 }
