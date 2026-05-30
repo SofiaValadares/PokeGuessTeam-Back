@@ -24,4 +24,26 @@ public final class ErrorCodes {
     public static final String POKEMON_SPECIES_NOT_FOUND = "POKEMON_SPECIES_NOT_FOUND";
     public static final String POKEBALL_INSUFFICIENT = "POKEBALL_INSUFFICIENT";
     public static final String POKEMON_POOL_EMPTY_FOR_RARITY = "POKEMON_POOL_EMPTY_FOR_RARITY";
+
+    public static final String GAME_OPPONENT_NAME_REQUIRED = "GAME_OPPONENT_NAME_REQUIRED";
+    public static final String GAME_OPPONENT_USER_ID_REQUIRED = "GAME_OPPONENT_USER_ID_REQUIRED";
+    public static final String GAME_CANNOT_PLAY_SELF = "GAME_CANNOT_PLAY_SELF";
+    public static final String GAME_OPPONENT_NOT_FOUND = "GAME_OPPONENT_NOT_FOUND";
+    public static final String GAME_RESULT_INCONSISTENT = "GAME_RESULT_INCONSISTENT";
+    public static final String GAME_RESULT_REQUIRED = "GAME_RESULT_REQUIRED";
+    public static final String GAME_CORRECT_GUESSES_INVALID = "GAME_CORRECT_GUESSES_INVALID";
+    public static final String GAME_OPPONENT_NAME_INVALID = "GAME_OPPONENT_NAME_INVALID";
+    public static final String GAME_MATCH_NOT_FOUND = "GAME_MATCH_NOT_FOUND";
+    public static final String GAME_MATCH_NOT_ACTIVE = "GAME_MATCH_NOT_ACTIVE";
+    public static final String GAME_MATCH_WRONG_TURN = "GAME_MATCH_WRONG_TURN";
+    public static final String GAME_MATCH_INVALID_PHASE = "GAME_MATCH_INVALID_PHASE";
+    public static final String GAME_MATCH_INVALID_ACTION = "GAME_MATCH_INVALID_ACTION";
+    public static final String GAME_TEAM_INVALID = "GAME_TEAM_INVALID";
+    public static final String GAME_GUESS_ALREADY_USED = "GAME_GUESS_ALREADY_USED";
+    public static final String GAME_FRIEND_MATCH_NOT_FOUND = "GAME_FRIEND_MATCH_NOT_FOUND";
+    public static final String GAME_JOIN_CODE_NOT_FOUND = "GAME_JOIN_CODE_NOT_FOUND";
+    public static final String GAME_JOIN_CODE_INVALID = "GAME_JOIN_CODE_INVALID";
+    public static final String GAME_MATCH_FULL = "GAME_MATCH_FULL";
+    public static final String GAME_MATCH_GUEST_REQUIRED = "GAME_MATCH_GUEST_REQUIRED";
+    public static final String GAME_LOCAL_MATCH_NOT_FOUND = "GAME_LOCAL_MATCH_NOT_FOUND";
 }
