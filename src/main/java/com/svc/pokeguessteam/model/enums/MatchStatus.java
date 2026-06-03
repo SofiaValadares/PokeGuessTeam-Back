@@ -1,6 +1,7 @@
 package com.svc.pokeguessteam.model.enums;
 
 public enum MatchStatus {
-    IN_PROGRESS,
+    SETUP,
+    ACTIVE,
     FINISHED
 }

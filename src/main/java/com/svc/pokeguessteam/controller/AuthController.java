@@ -6,7 +6,7 @@ import com.svc.pokeguessteam.dto.auth.LoginRequest;
 import com.svc.pokeguessteam.dto.auth.RegisterRequest;
 import com.svc.pokeguessteam.dto.auth.RegisterResponse;
 import com.svc.pokeguessteam.dto.auth.SessionResponse;
-import com.svc.pokeguessteam.model.UserModel;
+import com.svc.pokeguessteam.model.user.UserModel;
 import com.svc.pokeguessteam.security.DeviceFingerprintUtil;
 import com.svc.pokeguessteam.security.SessionBindingInterceptor;
 import com.svc.pokeguessteam.service.AuthService;

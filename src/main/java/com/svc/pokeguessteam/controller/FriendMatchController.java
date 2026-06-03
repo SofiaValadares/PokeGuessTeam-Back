@@ -1,0 +1,88 @@
+package com.svc.pokeguessteam.controller;
+
+import com.svc.pokeguessteam.dto.game.BotMatchGuessRequest;
+import com.svc.pokeguessteam.dto.game.BotMatchTeamRequest;
+import com.svc.pokeguessteam.dto.game.FriendMatchActionResponse;
+import com.svc.pokeguessteam.dto.game.FriendMatchJoinRequest;
+import com.svc.pokeguessteam.dto.game.FriendMatchStateDto;
+import com.svc.pokeguessteam.service.CurrentUserService;
+import com.svc.pokeguessteam.service.FriendMatchService;
+import jakarta.servlet.http.HttpSession;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+/**
+ * Partida vs amigo remoto: anfitrião gera código; convidado entra com o código.
+ */
+@RestController
+@RequestMapping("/api/game/friend/match")
+public class FriendMatchController {
+
+    private final FriendMatchService friendMatchService;
+    private final CurrentUserService currentUserService;
+
+    public FriendMatchController(FriendMatchService friendMatchService, CurrentUserService currentUserService) {
+        this.friendMatchService = friendMatchService;
+        this.currentUserService = currentUserService;
+    }
+
+    @PostMapping
+    public ResponseEntity<FriendMatchStateDto> start(HttpSession session) {
+        String userId = currentUserService.requireUserId(session);
+        return ResponseEntity.status(HttpStatus.CREATED).body(friendMatchService.startMatch(userId));
+    }
+
+    @PostMapping("/join")
+    public ResponseEntity<FriendMatchStateDto> join(
+            HttpSession session,
+            @Valid @RequestBody FriendMatchJoinRequest request
+    ) {
+        String userId = currentUserService.requireUserId(session);
+        return ResponseEntity.ok(friendMatchService.joinMatch(userId, request));
+    }
+
+    @GetMapping
+    public ResponseEntity<FriendMatchStateDto> active(HttpSession session) {
+        String userId = currentUserService.requireUserId(session);
+        return ResponseEntity.ok(friendMatchService.getActiveMatch(userId));
+    }
+
+    @PutMapping("/team")
+    public ResponseEntity<FriendMatchActionResponse> submitTeam(
+            HttpSession session,
+            @Valid @RequestBody BotMatchTeamRequest request
+    ) {
+        String userId = currentUserService.requireUserId(session);
+        return ResponseEntity.ok(friendMatchService.submitTeam(userId, request));
+    }
+
+    @PostMapping("/guess")
+    public ResponseEntity<FriendMatchActionResponse> guess(
+            HttpSession session,
+            @Valid @RequestBody BotMatchGuessRequest request
+    ) {
+        String userId = currentUserService.requireUserId(session);
+        return ResponseEntity.ok(friendMatchService.submitGuess(userId, request));
+    }
+
+    @PostMapping("/surrender")
+    public ResponseEntity<FriendMatchActionResponse> surrender(HttpSession session) {
+        String userId = currentUserService.requireUserId(session);
+        return ResponseEntity.ok(friendMatchService.surrender(userId));
+    }
+
+    @DeleteMapping
+    public ResponseEntity<Void> abandon(HttpSession session) {
+        String userId = currentUserService.requireUserId(session);
+        friendMatchService.abandonMatch(userId);
+        return ResponseEntity.noContent().build();
+    }
+}

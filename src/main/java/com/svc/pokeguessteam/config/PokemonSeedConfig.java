@@ -12,11 +12,11 @@ import com.svc.pokeguessteam.config.seed.Generation7Seed;
 import com.svc.pokeguessteam.config.seed.Generation8Seed;
 import com.svc.pokeguessteam.config.seed.Generation9Seed;
 import com.svc.pokeguessteam.config.seed.PokemonSeedEntry;
-import com.svc.pokeguessteam.model.EvolutionLineModel;
-import com.svc.pokeguessteam.model.PokemonModel;
+import com.svc.pokeguessteam.model.pokemon.EvolutionLineModel;
+import com.svc.pokeguessteam.model.pokemon.PokemonModel;
 import com.svc.pokeguessteam.model.enums.EvolutionStage;
-import com.svc.pokeguessteam.repository.EvolutionLineRepository;
-import com.svc.pokeguessteam.repository.PokemonRepository;
+import com.svc.pokeguessteam.repository.pokemon.EvolutionLineRepository;
+import com.svc.pokeguessteam.repository.pokemon.PokemonRepository;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 

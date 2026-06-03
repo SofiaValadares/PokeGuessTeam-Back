@@ -1,6 +1,6 @@
 package com.svc.pokeguessteam.config.seed;
 
-import com.svc.pokeguessteam.model.EvolutionLineModel;
+import com.svc.pokeguessteam.model.pokemon.EvolutionLineModel;
 import com.svc.pokeguessteam.model.enums.PokemonRarity;
 
 import java.util.List;
