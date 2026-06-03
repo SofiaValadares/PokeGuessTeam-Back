@@ -42,17 +42,20 @@ public class LocalMatchService {
     private final PokemonRepository pokemonRepository;
     private final ProfileService profileService;
     private final GameHistoryService gameHistoryService;
+    private final MatchRewardService matchRewardService;
 
     public LocalMatchService(
             ActiveMatchRepository activeMatchRepository,
             PokemonRepository pokemonRepository,
             ProfileService profileService,
-            GameHistoryService gameHistoryService
+            GameHistoryService gameHistoryService,
+            MatchRewardService matchRewardService
     ) {
         this.activeMatchRepository = activeMatchRepository;
         this.pokemonRepository = pokemonRepository;
         this.profileService = profileService;
         this.gameHistoryService = gameHistoryService;
+        this.matchRewardService = matchRewardService;
     }
 
     @Transactional
@@ -139,7 +142,9 @@ public class LocalMatchService {
         GameHistoryEntryDto history = finalizeIfFinished(match, null);
 
         List<BotMatchGuessFeedbackDto> feedbacks = List.of(toFeedback(result, pokemonByDex));
-        return new LocalMatchActionResponse(toStateDto(match, history), feedbacks);
+        LocalMatchStateDto state = toStateDto(match, history);
+        completeIfFinished(match, null);
+        return new LocalMatchActionResponse(state, feedbacks);
     }
 
     @Transactional
@@ -158,7 +163,9 @@ public class LocalMatchService {
         activeMatchRepository.save(match);
         GameHistoryEntryDto history = finalizeIfFinished(match, surrenderSide);
 
-        return new LocalMatchActionResponse(toStateDto(match, history), List.of());
+        LocalMatchStateDto state = toStateDto(match, history);
+        completeIfFinished(match, surrenderSide);
+        return new LocalMatchActionResponse(state, List.of());
     }
 
     @Transactional
@@ -176,6 +183,13 @@ public class LocalMatchService {
             return null;
         }
         return gameHistoryService.saveLocalGameFromActiveMatch(match, surrenderSide);
+    }
+
+    private void completeIfFinished(ActiveMatchModel match, MatchPlayerSide surrenderSide) {
+        if (match.getStatus() != MatchStatus.FINISHED) {
+            return;
+        }
+        matchRewardService.grantAndRemoveActiveMatch(match, surrenderSide);
     }
 
     private LocalMatchStateDto toStateDto(ActiveMatchModel match, GameHistoryEntryDto history) {

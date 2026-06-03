@@ -43,17 +43,20 @@ public class BotMatchService {
     private final PokemonRepository pokemonRepository;
     private final ProfileService profileService;
     private final GameHistoryService gameHistoryService;
+    private final MatchRewardService matchRewardService;
 
     public BotMatchService(
             ActiveMatchRepository activeMatchRepository,
             PokemonRepository pokemonRepository,
             ProfileService profileService,
-            GameHistoryService gameHistoryService
+            GameHistoryService gameHistoryService,
+            MatchRewardService matchRewardService
     ) {
         this.activeMatchRepository = activeMatchRepository;
         this.pokemonRepository = pokemonRepository;
         this.profileService = profileService;
         this.gameHistoryService = gameHistoryService;
+        this.matchRewardService = matchRewardService;
     }
 
     @Transactional
@@ -115,7 +118,9 @@ public class BotMatchService {
         List<BotMatchGuessFeedbackDto> botFeedbacks = runBotTurnsIfNeeded(match, allPokemon);
         GameHistoryEntryDto history = finalizeIfFinished(match, false);
 
-        return new BotMatchActionResponse(toStateDto(match, history), botFeedbacks);
+        BotMatchStateDto state = toStateDto(match, history);
+        completeIfFinished(match, false);
+        return new BotMatchActionResponse(state, botFeedbacks);
     }
 
     @Transactional
@@ -151,7 +156,9 @@ public class BotMatchService {
         activeMatchRepository.save(match);
         GameHistoryEntryDto history = finalizeIfFinished(match, false);
 
-        return new BotMatchActionResponse(toStateDto(match, history), feedbacks);
+        BotMatchStateDto state = toStateDto(match, history);
+        completeIfFinished(match, false);
+        return new BotMatchActionResponse(state, feedbacks);
     }
 
     @Transactional
@@ -169,7 +176,9 @@ public class BotMatchService {
         activeMatchRepository.save(match);
         GameHistoryEntryDto history = finalizeIfFinished(match, true);
 
-        return new BotMatchActionResponse(toStateDto(match, history), List.of());
+        BotMatchStateDto state = toStateDto(match, history);
+        completeIfFinished(match, true);
+        return new BotMatchActionResponse(state, List.of());
     }
 
     @Transactional
@@ -187,6 +196,14 @@ public class BotMatchService {
             return null;
         }
         return gameHistoryService.saveBotGameFromActiveMatch(match, userSurrendered);
+    }
+
+    private void completeIfFinished(ActiveMatchModel match, boolean userSurrendered) {
+        if (match.getStatus() != MatchStatus.FINISHED) {
+            return;
+        }
+        MatchPlayerSide surrenderSide = userSurrendered ? MatchPlayerSide.USER : null;
+        matchRewardService.grantAndRemoveActiveMatch(match, surrenderSide);
     }
 
     private List<BotMatchGuessFeedbackDto> runBotTurnsIfNeeded(

@@ -5,6 +5,7 @@ import com.svc.pokeguessteam.service.GameHistoryService;
 import com.svc.pokeguessteam.service.PokedexService;
 import com.svc.pokeguessteam.service.ProfileService;
 import com.svc.pokeguessteam.util.GameConstants;
+import com.svc.pokeguessteam.util.GameMatchRewards;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -37,6 +38,21 @@ public class GameMetaController {
         body.put("gameResults", Arrays.stream(com.svc.pokeguessteam.model.enums.GameResults.values()).map(Enum::name).toList());
         body.put("gameHistoryDefaultPageSize", GameHistoryService.DEFAULT_PAGE_SIZE);
         body.put("gameHistoryMaxPageSize", GameHistoryService.MAX_PAGE_SIZE);
+        body.put("friendJoinCodeLength", GameConstants.FRIEND_JOIN_CODE_LENGTH);
+        body.put("matchStatuses", Arrays.stream(com.svc.pokeguessteam.model.enums.MatchStatus.values()).map(Enum::name).toList());
+        body.put("matchPlayerSides", Arrays.stream(com.svc.pokeguessteam.model.enums.MatchPlayerSide.values()).map(Enum::name).toList());
+        body.put("guessOutcomes", Arrays.stream(com.svc.pokeguessteam.model.enums.GuessOutcome.values()).map(Enum::name).toList());
+        body.put("matchRewards", Map.of(
+                "winXp", GameMatchRewards.xpForResult(com.svc.pokeguessteam.model.enums.GameResults.WIN),
+                "drawXp", GameMatchRewards.xpForResult(com.svc.pokeguessteam.model.enums.GameResults.DRAW),
+                "loseXp", GameMatchRewards.xpForResult(com.svc.pokeguessteam.model.enums.GameResults.LOSE),
+                "desistenceXp", GameMatchRewards.xpForResult(com.svc.pokeguessteam.model.enums.GameResults.DESISTENCE)
+        ));
+        body.put("activeMatchApi", Map.of(
+                "bot", "/api/game/bot/match",
+                "local", "/api/game/local/match",
+                "friend", "/api/game/friend/match"
+        ));
         return ResponseEntity.ok(body);
     }
 }

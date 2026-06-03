@@ -13,6 +13,7 @@ import com.svc.pokeguessteam.service.PokeballDrawService;
 import com.svc.pokeguessteam.service.ProfileService;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,6 +23,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/pokemon")
@@ -84,5 +87,26 @@ public class PokemonController {
                         ErrorCodes.POKEMON_SPECIES_NOT_FOUND,
                         MessageKeys.POKEMON_SPECIES_NOT_FOUND
                 ));
+    }
+
+    /**
+     * Pesquisa por nome para o campo de palpite (autocomplete na partida).
+     */
+    @GetMapping("/search")
+    public ResponseEntity<List<PokemonDto>> search(
+            @RequestParam("q") String query,
+            @RequestParam(defaultValue = "30") int limit
+    ) {
+        String trimmed = query != null ? query.trim() : "";
+        if (trimmed.isEmpty()) {
+            return ResponseEntity.ok(List.of());
+        }
+        int safeLimit = Math.min(Math.max(limit, 1), 50);
+        List<PokemonDto> results = pokemonRepository
+                .findByNameContainingIgnoreCaseOrderByPokedexNumberAsc(trimmed, PageRequest.of(0, safeLimit))
+                .stream()
+                .map(PokemonDto::from)
+                .toList();
+        return ResponseEntity.ok(results);
     }
 }

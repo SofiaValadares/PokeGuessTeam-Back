@@ -43,17 +43,20 @@ public class FriendMatchService {
     private final PokemonRepository pokemonRepository;
     private final ProfileService profileService;
     private final GameHistoryService gameHistoryService;
+    private final MatchRewardService matchRewardService;
 
     public FriendMatchService(
             ActiveMatchRepository activeMatchRepository,
             PokemonRepository pokemonRepository,
             ProfileService profileService,
-            GameHistoryService gameHistoryService
+            GameHistoryService gameHistoryService,
+            MatchRewardService matchRewardService
     ) {
         this.activeMatchRepository = activeMatchRepository;
         this.pokemonRepository = pokemonRepository;
         this.profileService = profileService;
         this.gameHistoryService = gameHistoryService;
+        this.matchRewardService = matchRewardService;
     }
 
     @Transactional
@@ -207,7 +210,9 @@ public class FriendMatchService {
         GameHistoryEntryDto history = finalizeIfFinished(match, null);
 
         List<BotMatchGuessFeedbackDto> feedbacks = List.of(toFeedback(result, pokemonByDex));
-        return new FriendMatchActionResponse(toStateDto(match, profile, history), feedbacks);
+        FriendMatchStateDto state = toStateDto(match, profile, history);
+        completeIfFinished(match, null);
+        return new FriendMatchActionResponse(state, feedbacks);
     }
 
     @Transactional
@@ -229,7 +234,9 @@ public class FriendMatchService {
         activeMatchRepository.save(match);
         GameHistoryEntryDto history = finalizeIfFinished(match, side);
 
-        return new FriendMatchActionResponse(toStateDto(match, profile, history), List.of());
+        FriendMatchStateDto state = toStateDto(match, profile, history);
+        completeIfFinished(match, side);
+        return new FriendMatchActionResponse(state, List.of());
     }
 
     @Transactional
@@ -265,6 +272,13 @@ public class FriendMatchService {
             return null;
         }
         return gameHistoryService.saveFriendGameFromActiveMatch(match, surrenderSide);
+    }
+
+    private void completeIfFinished(ActiveMatchModel match, MatchPlayerSide surrenderSide) {
+        if (match.getStatus() != MatchStatus.FINISHED) {
+            return;
+        }
+        matchRewardService.grantAndRemoveActiveMatch(match, surrenderSide);
     }
 
     private FriendMatchStateDto toStateDto(

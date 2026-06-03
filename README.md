@@ -1,97 +1,115 @@
-# Pokeguessteam - Login Tradicional com Session Binding
+# PokeTeamGuess — Backend (Spring Boot)
 
-Projeto Spring Boot 3 (Java 17 + Maven) com autenticacao tradicional por e-mail/senha.
+API REST do **PokeTeamGuess** ([GDD](https://github.com/SofiaValadares/PokeGuessTeam)): dedução de equipas secretas de 6 Pokémon, inventário, gacha e partidas com **regras no servidor** (requisito AV2 de Frontend).
 
-## Recursos
+Frontend de referência (AV1): [PokeGuessTeam](https://github.com/SofiaValadares/PokeGuessTeam) — [produção](https://poke-guess-team.vercel.app/).
 
-- Cadastro de usuario com hash de senha (`BCrypt`)
-- Login stateful com `HttpSession` (`JSESSIONID`)
-- Cookie com `HttpOnly` e `SameSite=Lax`
-- Session binding por dispositivo (`User-Agent + IP`)
-- Persistencia com PostgreSQL (Spring Data JPA)
-- Pokedex seedada para testes
+## Stack
+
+- Java 17, Spring Boot 3, Maven
+- PostgreSQL + JPA
+- Sessão HTTP (`JSESSIONID`) + session binding (`User-Agent` + IP)
+- CORS para dev: `localhost:5173`, `3000`, `5500`
 
 ## Como rodar
 
-1. Suba o banco:
-
 ```bash
 docker compose up -d db
-```
-
-2. Suba a API:
-
-```bash
 ./mvnw spring-boot:run
 ```
 
 API: `http://localhost:8080`
 
-## Endpoints
+## Autenticação
 
-### `POST /auth/register`
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| POST | `/auth/register` | Cadastro |
+| POST | `/auth/login` | Login (cookie de sessão) |
+| GET | `/auth/session` | Sessão atual |
+| POST | `/auth/logout` | Logout |
+| GET | `/api/me` | Utilizador autenticado |
 
-```json
-{
-  "username": "user",
-  "email": "user@example.com",
-  "password": "123456"
-}
-```
+## Meta e Pokédex
 
-### `POST /auth/login`
+| GET | `/api/meta` | Regras globais (tamanho de equipa, modos, resultados) — **público** |
+| GET | `/api/pokedex` | Pokédex nacional (paginada ou completa) |
+| GET | `/api/pokemon/search?q=` | Autocomplete de espécies para palpites |
+| GET | `/api/pokemon/species/{dex}` | Detalhe de uma espécie |
 
-```json
-{
-  "email": "user@example.com",
-  "password": "123456"
-}
-```
+## Perfil e progressão
 
-### `GET /api/me`
+| GET | `/api/profile/me` | Perfil |
+| GET | `/api/profile/training-team` | Time de treino (6 slots, foco de XP) |
+| GET | `/api/profile/pokemon` | PC / inventário por linha evolutiva |
+| GET | `/api/profile/collection` | Pokébolas e fragmentos |
+| POST | `/api/pokemon/draw` | Gacha (consome Pokébola) |
 
-Rota protegida por sessão e session binding.
+## Partidas (motor no servidor)
 
-Resposta JSON (ordem estável):
+Alinhado ao GDD e à [beta](https://poke-guess-team.vercel.app/): turnos, pistas (tipo, geração, cor, altura, peso), jogada extra, rodada de empate, histórico automático e **recompensas** (XP no time de treino + Pokébolas).
 
-| Campo | Significado |
-|-------|-------------|
-| `authenticatedAs` | Principal Spring Security (no login atual = **e-mail**) — mantido por compatibilidade |
-| `userId` | ID do utilizador na sessão |
-| `username` | Nome de utilizador (`TB_USERS`) para UI (“Conta”) |
-| `email` | E-mail do utilizador |
+### Bot
 
-Se o utilizador não existir na base de dados: **404** (`PROFILE_USER_NOT_FOUND`).
+| Método | Rota |
+|--------|------|
+| POST | `/api/game/bot/match` |
+| GET | `/api/game/bot/match` |
+| PUT | `/api/game/bot/match/team` |
+| POST | `/api/game/bot/match/guess` |
+| POST | `/api/game/bot/match/surrender` |
+| DELETE | `/api/game/bot/match` |
 
-### `GET /api/pokedex`
+### Local (pass-and-play)
 
-Lista os Pokémon da Pokédex (número nacional).
+| Método | Rota |
+|--------|------|
+| POST | `/api/game/local/match` — body: `{ "opponentName": "Ash" }` |
+| PUT | `/api/game/local/match/team` — `{ "playerSide": "USER"|"BOT", "team": [6 dex] }` |
+| POST | `/api/game/local/match/guess` |
+| POST | `/api/game/local/match/surrender` |
 
-### `GET /api/profile/me`
+### Amigo remoto
 
-Retorna `profileId`, `userId`, favorito (`favoritePokemonId` / `favoritePokemonName`).
+| Método | Rota |
+|--------|------|
+| POST | `/api/game/friend/match` — gera `joinCode` (6 caracteres) |
+| POST | `/api/game/friend/match/join` — `{ "joinCode": "ABC123" }` |
+| PUT | `/api/game/friend/match/team` |
+| POST | `/api/game/friend/match/guess` |
 
-### `GET /api/profile/collection`
+### Histórico
 
-Retorna o inventário por linha evolutiva (`evolutionLineKey`, `members`, `rarity`, `level`, `totalXp`, `timesObtained`).
+| GET | `/api/game/history?page=0&size=20` |
 
-## Session Binding
+### Utilitários
 
-Ao logar, a API grava na sessao um `DEVICE_ID` com hash de `User-Agent + IP`.
-Em toda chamada de `/api/**`, o interceptor compara o `DEVICE_ID` atual com o da sessao.
-Se divergir, a sessao e invalidada e a API responde `401`.
+| GET | `/api/users/search?q=` | Pesquisar treinadores (mín. 2 caracteres) |
 
-## Colecao Postman/Insomnia
+## Recompensas pós-partida (GDD)
 
-Arquivo:
+Após terminar uma partida ativa:
 
-- `postman/pokeguessteam-passwordless.postman_collection.json`
+| Resultado | XP (time de treino) | Pokébolas |
+|-----------|---------------------|-----------|
+| WIN | 40 | 2 |
+| DRAW | 20 | 1 |
+| LOSE | 12 | 0 |
+| DESISTENCE | 5 | 0 |
 
-Ordem de execucao (minimo):
+Modo amigo: **ambos** os jogadores recebem recompensas na sua perspetiva.
 
-1. `Auth - Register`
-2. `Auth - Login`
-3. `API - Me (rota protegida)` (esperado `200`)
-4. `API - Me (simula outro dispositivo)` (esperado `401`)
+## Postman
 
-Opcional: `Profile - Me` e `Profile - Collection` após o login.
+`postman/pokeguessteam-passwordless.postman_collection.json` — fluxos Auth, Bot, Local, Friend e histórico.
+
+## Integração React (AV2)
+
+1. `credentials: 'include'` em todos os pedidos à API.
+2. Substituir `localStorage` / `MatchState` do cliente pelos endpoints `/api/game/*/match`.
+3. Polling ou refresh em `GET .../match` no modo amigo enquanto espera o adversário.
+4. Usar `GET /api/pokemon/search` no campo de palpite.
+
+## Endpoints legados (finish manual)
+
+Ainda disponíveis para migração gradual: `POST /api/game/local`, `/bot`, `/friend` (cliente envia placar). Preferir os fluxos `/match` acima.

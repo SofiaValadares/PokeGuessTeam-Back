@@ -261,6 +261,71 @@ public class ProfileService {
         return TrainingTeamResponse.from(profile.getTrainingTeam());
     }
 
+    @Transactional
+    public void addPokeballs(String userId, PokeballType type, int amount) {
+        if (amount <= 0) {
+            return;
+        }
+        ProfileModel profile = profileRepository.findByUser_IdUser(userId)
+                .orElseThrow(() -> new ApiBusinessException(
+                        HttpStatus.NOT_FOUND,
+                        ErrorCodes.PROFILE_NOT_FOUND,
+                        MessageKeys.PROFILE_NOT_FOUND
+                ));
+        ensurePokeballInventoryIfMissing(profile);
+        ProfileInventoryItemModel row = profileInventoryItemRepository
+                .findByProfile_IdAndPokeballType(profile.getId(), type)
+                .orElseThrow();
+        int qty = row.getQuantity() != null ? row.getQuantity() : 0;
+        row.setQuantity(qty + amount);
+        profileInventoryItemRepository.save(row);
+    }
+
+    /**
+     * Distribui XP de partida pelas espécies presentes no time de treino (linhas já no inventário).
+     */
+    @Transactional
+    public void grantTrainingTeamMatchXp(String userId, int totalXp) {
+        if (totalXp <= 0) {
+            return;
+        }
+        ProfileModel profile = ensureProfileWithStarters(userId);
+        TrainingTeamModel team = profile.getTrainingTeam();
+        if (team == null) {
+            return;
+        }
+        List<PokemonModel> occupied = new ArrayList<>();
+        for (int i = 0; i < TrainingTeamModel.TEAM_SIZE; i++) {
+            PokemonModel slot = team.getSlot(i);
+            if (slot != null) {
+                occupied.add(slot);
+            }
+        }
+        if (occupied.isEmpty()) {
+            return;
+        }
+        int perSlot = totalXp / occupied.size();
+        int remainder = totalXp % occupied.size();
+        for (int i = 0; i < occupied.size(); i++) {
+            int grant = perSlot + (i == 0 ? remainder : 0);
+            addXpToInventoryLine(profile, occupied.get(i), grant);
+        }
+    }
+
+    private void addXpToInventoryLine(ProfileModel profile, PokemonModel pokemon, int xp) {
+        if (xp <= 0 || pokemon.getEvolutionLine() == null) {
+            return;
+        }
+        inventoryRepository.findByProfile_IdAndEvolutionLine_LineKey(
+                profile.getId(),
+                pokemon.getEvolutionLine().getLineKey()
+        ).ifPresent(row -> {
+            PokemonInventoryXp.addXpAndSyncLevel(row, xp);
+            inventoryRepository.save(row);
+            userPokedexService.registerUnlockedSpeciesForInventoryLine(profile, row);
+        });
+    }
+
     /** Constantes partilhadas com {@link com.svc.pokeguessteam.controller.PokemonController} (PC). */
     public static final class PokemonPcConstants {
         public static final int DEFAULT_PAGE_SIZE = 20;
