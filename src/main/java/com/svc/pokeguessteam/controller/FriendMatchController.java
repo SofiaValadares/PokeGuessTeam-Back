@@ -4,6 +4,7 @@ import com.svc.pokeguessteam.dto.game.BotMatchGuessRequest;
 import com.svc.pokeguessteam.dto.game.BotMatchTeamRequest;
 import com.svc.pokeguessteam.dto.game.FriendMatchActionResponse;
 import com.svc.pokeguessteam.dto.game.FriendMatchJoinRequest;
+import com.svc.pokeguessteam.dto.game.OpponentTeamKnowledgeResponse;
 import com.svc.pokeguessteam.dto.game.FriendMatchStateDto;
 import com.svc.pokeguessteam.service.CurrentUserService;
 import com.svc.pokeguessteam.service.FriendMatchService;
@@ -11,7 +12,6 @@ import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -55,6 +55,12 @@ public class FriendMatchController {
         return ResponseEntity.ok(friendMatchService.getActiveMatch(userId));
     }
 
+    @GetMapping("/opponent-knowledge")
+    public ResponseEntity<OpponentTeamKnowledgeResponse> opponentKnowledge(HttpSession session) {
+        String userId = currentUserService.requireUserId(session);
+        return ResponseEntity.ok(friendMatchService.getOpponentKnowledge(userId));
+    }
+
     @PutMapping("/team")
     public ResponseEntity<FriendMatchActionResponse> submitTeam(
             HttpSession session,
@@ -77,12 +83,5 @@ public class FriendMatchController {
     public ResponseEntity<FriendMatchActionResponse> surrender(HttpSession session) {
         String userId = currentUserService.requireUserId(session);
         return ResponseEntity.ok(friendMatchService.surrender(userId));
-    }
-
-    @DeleteMapping
-    public ResponseEntity<Void> abandon(HttpSession session) {
-        String userId = currentUserService.requireUserId(session);
-        friendMatchService.abandonMatch(userId);
-        return ResponseEntity.noContent().build();
     }
 }

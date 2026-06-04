@@ -2,13 +2,9 @@ package com.svc.pokeguessteam.service;
 
 import com.svc.pokeguessteam.dto.game.GameBotFinishRequest;
 import com.svc.pokeguessteam.dto.game.GameFinishRequest;
-import com.svc.pokeguessteam.dto.game.GameFriendFinishRequest;
 import com.svc.pokeguessteam.dto.game.GameHistoryEntryDto;
 import com.svc.pokeguessteam.dto.game.GameHistoryPageResponse;
 import com.svc.pokeguessteam.dto.game.GameLocalFinishRequest;
-import com.svc.pokeguessteam.exception.ApiBusinessException;
-import com.svc.pokeguessteam.exception.ErrorCodes;
-import com.svc.pokeguessteam.messages.MessageKeys;
 import com.svc.pokeguessteam.model.enums.GameModes;
 import com.svc.pokeguessteam.model.enums.GameResults;
 import com.svc.pokeguessteam.model.enums.MatchPlayerSide;
@@ -17,14 +13,11 @@ import com.svc.pokeguessteam.model.game.HistoryGameModel;
 import com.svc.pokeguessteam.model.game.HistoryGamePlayerModel;
 import com.svc.pokeguessteam.model.user.ProfileModel;
 import com.svc.pokeguessteam.repository.game.HistoryGameRepository;
-import com.svc.pokeguessteam.repository.user.ProfileRepository;
-import com.svc.pokeguessteam.repository.user.UserRepository;
 import com.svc.pokeguessteam.util.GameFinishValidation;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,40 +31,14 @@ public class GameHistoryService {
     private static final int OPPONENT_SLOT = 2;
 
     private final HistoryGameRepository historyGameRepository;
-    private final ProfileRepository profileRepository;
     private final ProfileService profileService;
-    private final UserRepository userRepository;
 
     public GameHistoryService(
             HistoryGameRepository historyGameRepository,
-            ProfileRepository profileRepository,
-            ProfileService profileService,
-            UserRepository userRepository
+            ProfileService profileService
     ) {
         this.historyGameRepository = historyGameRepository;
-        this.profileRepository = profileRepository;
         this.profileService = profileService;
-        this.userRepository = userRepository;
-    }
-
-    /**
-     * Modo local (pass-and-play): adversário identificado por nome, sem perfil.
-     */
-    @Transactional
-    public GameHistoryEntryDto saveLocalGame(String userId, GameLocalFinishRequest request) {
-        String opponentName = GameFinishValidation.normalizeOpponentName(request.opponentName());
-        GameFinishValidation.validateLocalOpponentName(opponentName);
-        validateFinishRequest(request);
-
-        ProfileModel userProfile = profileService.ensureProfileWithStarters(userId);
-        HistoryGameModel game = buildFinishedGame(
-                GameModes.LOCAL,
-                opponentName,
-                userProfile,
-                null,
-                request
-        );
-        return GameHistoryEntryDto.from(historyGameRepository.save(game));
     }
 
     /**
@@ -82,8 +49,8 @@ public class GameHistoryService {
             ActiveMatchModel match,
             MatchPlayerSide surrenderSide
     ) {
-        int userHits = match.getUserPlayer().getHits().size();
-        int opponentHits = match.getBotPlayer().getHits().size();
+        int userHits = match.getHostPlayer().getHits().size();
+        int opponentHits = match.getOpponentPlayer().getHits().size();
         GameResults userResult = resolveLocalUserResult(match, surrenderSide);
 
         GameFinishValidation.validateScores(userHits, opponentHits);
@@ -106,16 +73,16 @@ public class GameHistoryService {
     }
 
     private static GameResults resolveLocalUserResult(ActiveMatchModel match, MatchPlayerSide surrenderSide) {
-        if (surrenderSide == MatchPlayerSide.USER) {
+        if (surrenderSide == MatchPlayerSide.HOST) {
             return GameResults.DESISTENCE;
         }
-        if (surrenderSide == MatchPlayerSide.BOT) {
+        if (surrenderSide == MatchPlayerSide.OPPONENT) {
             return GameResults.WIN;
         }
         if (match.getWinner() == null) {
             return GameResults.DRAW;
         }
-        return match.getWinner() == MatchPlayerSide.USER ? GameResults.WIN : GameResults.LOSE;
+        return match.getWinner() == MatchPlayerSide.HOST ? GameResults.WIN : GameResults.LOSE;
     }
 
     private static void validateLocalActiveResult(
@@ -124,10 +91,10 @@ public class GameHistoryService {
             GameResults userResult,
             MatchPlayerSide surrenderSide
     ) {
-        if (surrenderSide == MatchPlayerSide.USER || userResult == GameResults.DESISTENCE) {
+        if (surrenderSide == MatchPlayerSide.HOST || userResult == GameResults.DESISTENCE) {
             return;
         }
-        if (surrenderSide == MatchPlayerSide.BOT) {
+        if (surrenderSide == MatchPlayerSide.OPPONENT) {
             if (userResult != GameResults.WIN) {
                 throw new IllegalStateException("Resultado inconsistente após desistência do adversário local.");
             }
@@ -137,32 +104,14 @@ public class GameHistoryService {
     }
 
     /**
-     * Modo bot: adversário artificial (slot 2 sem perfil).
-     */
-    @Transactional
-    public GameHistoryEntryDto saveBotGame(String userId, GameBotFinishRequest request) {
-        validateFinishRequest(request);
-
-        ProfileModel userProfile = profileService.ensureProfileWithStarters(userId);
-        HistoryGameModel game = buildFinishedGame(
-                GameModes.BOT,
-                null,
-                userProfile,
-                null,
-                request
-        );
-        return GameHistoryEntryDto.from(historyGameRepository.save(game));
-    }
-
-    /**
      * Persiste histórico a partir de partida ativa vs bot (motor no servidor).
      */
     @Transactional
     public GameHistoryEntryDto saveBotGameFromActiveMatch(ActiveMatchModel match, boolean userSurrendered) {
         GameResults userResult = resolveUserResult(match, userSurrendered);
         GameBotFinishRequest request = new GameBotFinishRequest(
-                match.getUserPlayer().getHits().size(),
-                match.getBotPlayer().getHits().size(),
+                match.getHostPlayer().getHits().size(),
+                match.getOpponentPlayer().getHits().size(),
                 userResult
         );
         validateFinishRequest(request);
@@ -183,7 +132,7 @@ public class GameHistoryService {
         if (match.getWinner() == null) {
             return GameResults.DRAW;
         }
-        return match.getWinner() == MatchPlayerSide.USER ? GameResults.WIN : GameResults.LOSE;
+        return match.getWinner() == MatchPlayerSide.HOST ? GameResults.WIN : GameResults.LOSE;
     }
 
     /**
@@ -199,18 +148,18 @@ public class GameHistoryService {
             throw new IllegalStateException("Partida amigo sem convidado.");
         }
 
-        int hostHits = match.getUserPlayer().getHits().size();
-        int guestHits = match.getBotPlayer().getHits().size();
-        GameResults hostResult = resolveParticipantResult(match, MatchPlayerSide.USER, surrenderSide);
-        GameResults guestResult = resolveParticipantResult(match, MatchPlayerSide.BOT, surrenderSide);
+        int hostHits = match.getHostPlayer().getHits().size();
+        int guestHits = match.getOpponentPlayer().getHits().size();
+        GameResults hostResult = resolveParticipantResult(match, MatchPlayerSide.HOST, surrenderSide);
+        GameResults guestResult = resolveParticipantResult(match, MatchPlayerSide.OPPONENT, surrenderSide);
 
         GameFinishValidation.validateScores(hostHits, guestHits);
         validateFriendResults(hostHits, guestHits, hostResult, guestResult);
 
         HistoryGameModel game = new HistoryGameModel();
         game.setGameMode(GameModes.FRIEND);
-        addProfilePlayer(game, match.getProfile(), USER_SLOT, hostHits, hostResult);
-        addProfilePlayer(game, guest, OPPONENT_SLOT, guestHits, guestResult);
+        addProfilePlayer(game, match.getProfile(), USER_SLOT, hostHits, hostResult, match.getHostPlayer().getTurnTimeoutPenalties());
+        addProfilePlayer(game, guest, OPPONENT_SLOT, guestHits, guestResult, match.getOpponentPlayer().getTurnTimeoutPenalties());
         return GameHistoryEntryDto.from(historyGameRepository.save(game));
     }
 
@@ -219,7 +168,7 @@ public class GameHistoryService {
             MatchPlayerSide side,
             MatchPlayerSide surrenderSide
     ) {
-        if (surrenderSide == side) {
+        if (surrenderSide == side || match.getBotReplacementSide() == side) {
             return GameResults.DESISTENCE;
         }
         if (match.getWinner() == null) {
@@ -250,43 +199,6 @@ public class GameHistoryService {
         if (guestResult != GameFinishValidation.opponentResult(hostResult)) {
             throw new IllegalStateException("Resultados dos jogadores inconsistentes.");
         }
-    }
-
-    /**
-     * Modo amigo: dois perfis registados; um único registo visível nos históricos de ambos.
-     */
-    @Transactional
-    public GameHistoryEntryDto saveFriendGame(String userId, GameFriendFinishRequest request) {
-        if (userId.equals(request.opponentUserId())) {
-            throw new ApiBusinessException(
-                    HttpStatus.BAD_REQUEST,
-                    ErrorCodes.GAME_CANNOT_PLAY_SELF,
-                    MessageKeys.GAME_CANNOT_PLAY_SELF
-            );
-        }
-        validateFinishRequest(request);
-
-        ProfileModel userProfile = profileService.ensureProfileWithStarters(userId);
-        ProfileModel opponentProfile = profileRepository.findByUser_IdUser(request.opponentUserId())
-                .orElseGet(() -> {
-                    if (!userRepository.existsById(request.opponentUserId())) {
-                        throw new ApiBusinessException(
-                                HttpStatus.NOT_FOUND,
-                                ErrorCodes.GAME_OPPONENT_NOT_FOUND,
-                                MessageKeys.GAME_OPPONENT_NOT_FOUND
-                        );
-                    }
-                    return profileService.ensureProfileWithStarters(request.opponentUserId());
-                });
-
-        HistoryGameModel game = buildFinishedGame(
-                GameModes.FRIEND,
-                null,
-                userProfile,
-                opponentProfile,
-                request
-        );
-        return GameHistoryEntryDto.from(historyGameRepository.save(game));
     }
 
     @Transactional(readOnly = true)
@@ -350,14 +262,26 @@ public class GameHistoryService {
             ProfileModel profile,
             int slot,
             int correctGuesses,
-            GameResults result
+            GameResults result,
+            int turnTimeoutPenalties
     ) {
         HistoryGamePlayerModel player = new HistoryGamePlayerModel();
         player.setSlot(slot);
         player.setProfile(profile);
         player.setCorrectGuesses(correctGuesses);
         player.setResult(result);
+        player.setTurnTimeoutPenalties(turnTimeoutPenalties);
         game.addPlayer(player);
+    }
+
+    private void addProfilePlayer(
+            HistoryGameModel game,
+            ProfileModel profile,
+            int slot,
+            int correctGuesses,
+            GameResults result
+    ) {
+        addProfilePlayer(game, profile, slot, correctGuesses, result, 0);
     }
 
     private void addGuestPlayer(

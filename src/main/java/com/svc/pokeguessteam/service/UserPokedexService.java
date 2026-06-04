@@ -3,6 +3,7 @@ package com.svc.pokeguessteam.service;
 import com.svc.pokeguessteam.exception.ApiBusinessException;
 import com.svc.pokeguessteam.exception.ErrorCodes;
 import com.svc.pokeguessteam.messages.MessageKeys;
+import com.svc.pokeguessteam.model.pokemon.EvolutionLineModel;
 import com.svc.pokeguessteam.model.pokemon.PokemonModel;
 import com.svc.pokeguessteam.model.user.ProfileModel;
 import com.svc.pokeguessteam.model.user.TrainingTeamModel;
@@ -111,9 +112,11 @@ public class UserPokedexService {
         TrainingTeamModel team = profile.getTrainingTeam();
         if (team != null) {
             for (int i = 0; i < TrainingTeamModel.TEAM_SIZE; i++) {
-                PokemonModel slot = team.getSlot(i);
+                EvolutionLineModel slot = team.getSlot(i);
                 if (slot != null) {
-                    registerSpeciesIfPresent(profile, slot.getPokedexNumber());
+                    userPokemonInventoryRepository
+                            .findByProfile_IdAndEvolutionLine_LineKey(profile.getId(), slot.getLineKey())
+                            .ifPresent(row -> registerUnlockedSpeciesForInventoryLine(profile, row));
                 }
             }
         }

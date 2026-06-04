@@ -31,10 +31,12 @@ public class MatchRewardService {
         MatchRewardDto reward = switch (match.getGameMode()) {
             case BOT -> grantForProfile(
                     match.getProfile(),
-                    resolveBotResult(match, surrenderSide == MatchPlayerSide.USER)
+                    match.getGameMode(),
+                    resolveBotResult(match, surrenderSide == MatchPlayerSide.HOST)
             );
             case LOCAL -> grantForProfile(
                     match.getProfile(),
+                    match.getGameMode(),
                     resolveLocalResult(match, surrenderSide)
             );
             case FRIEND -> grantFriendMatch(match, surrenderSide);
@@ -44,24 +46,30 @@ public class MatchRewardService {
     }
 
     private MatchRewardDto grantFriendMatch(ActiveMatchModel match, MatchPlayerSide surrenderSide) {
-        GameResults hostResult = resolveParticipantResult(match, MatchPlayerSide.USER, surrenderSide);
-        MatchRewardDto hostReward = grantForProfile(match.getProfile(), hostResult);
+        GameResults hostResult = resolveParticipantResult(match, MatchPlayerSide.HOST, surrenderSide);
+        MatchRewardDto hostReward = grantForProfile(match.getProfile(), GameModes.FRIEND, hostResult);
         if (match.getGuestProfile() != null) {
-            GameResults guestResult = resolveParticipantResult(match, MatchPlayerSide.BOT, surrenderSide);
-            grantForProfile(match.getGuestProfile(), guestResult);
+            GameResults guestResult = resolveParticipantResult(match, MatchPlayerSide.OPPONENT, surrenderSide);
+            grantForProfile(match.getGuestProfile(), GameModes.FRIEND, guestResult);
         }
         return hostReward;
     }
 
-    private MatchRewardDto grantForProfile(ProfileModel profile, GameResults result) {
+    private MatchRewardDto grantForProfile(ProfileModel profile, GameModes mode, GameResults result) {
         String userId = profile.getUser().getIdUser();
-        int xp = GameMatchRewards.xpForResult(result);
-        int balls = GameMatchRewards.pokeBallsForResult(result);
-        profileService.grantTrainingTeamMatchXp(userId, xp);
-        if (balls > 0) {
-            profileService.addPokeballs(userId, PokeballType.POKE_BALL, balls);
+        GameMatchRewards.MatchRewardPayout payout = GameMatchRewards.payout(mode, result);
+        profileService.grantTrainingTeamMatchXp(userId, payout.trainingTeamXp());
+        if (payout.pokeBalls() > 0) {
+            profileService.addPokeballs(userId, PokeballType.POKE_BALL, payout.pokeBalls());
         }
-        return new MatchRewardDto(xp, balls);
+        if (payout.pokeballFragments() > 0) {
+            profileService.addPokeballFragments(userId, payout.pokeballFragments());
+        }
+        return new MatchRewardDto(
+                payout.trainingTeamXp(),
+                payout.pokeBalls(),
+                payout.pokeballFragments()
+        );
     }
 
     private static GameResults resolveBotResult(ActiveMatchModel match, boolean userSurrendered) {
@@ -71,20 +79,20 @@ public class MatchRewardService {
         if (match.getWinner() == null) {
             return GameResults.DRAW;
         }
-        return match.getWinner() == MatchPlayerSide.USER ? GameResults.WIN : GameResults.LOSE;
+        return match.getWinner() == MatchPlayerSide.HOST ? GameResults.WIN : GameResults.LOSE;
     }
 
     private static GameResults resolveLocalResult(ActiveMatchModel match, MatchPlayerSide surrenderSide) {
-        if (surrenderSide == MatchPlayerSide.USER) {
+        if (surrenderSide == MatchPlayerSide.HOST) {
             return GameResults.DESISTENCE;
         }
-        if (surrenderSide == MatchPlayerSide.BOT) {
+        if (surrenderSide == MatchPlayerSide.OPPONENT) {
             return GameResults.WIN;
         }
         if (match.getWinner() == null) {
             return GameResults.DRAW;
         }
-        return match.getWinner() == MatchPlayerSide.USER ? GameResults.WIN : GameResults.LOSE;
+        return match.getWinner() == MatchPlayerSide.HOST ? GameResults.WIN : GameResults.LOSE;
     }
 
     private static GameResults resolveParticipantResult(

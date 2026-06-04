@@ -28,6 +28,9 @@ public final class MessageKeys {
 
     public static final String PROFILE_USER_NOT_FOUND = "error.profile.user-not-found";
     public static final String PROFILE_NOT_FOUND = "error.profile.not-found";
+    public static final String TRAINING_TEAM_LINE_NOT_IN_INVENTORY = "error.profile.training-team.not-in-inventory";
+    public static final String TRAINING_TEAM_LINE_NOT_FOUND = "error.profile.training-team.line-not-found";
+    public static final String TRAINING_TEAM_DUPLICATE = "error.profile.training-team.duplicate";
 
     public static final String POKEMON_SPECIES_NOT_FOUND = "error.pokemon.species-not-found";
     public static final String POKEBALL_INSUFFICIENT = "error.pokemon.pokeball-insufficient";
@@ -42,6 +45,7 @@ public final class MessageKeys {
     public static final String GAME_RESULT_REQUIRED = "error.game.result.required";
     public static final String GAME_RESULT_INCONSISTENT = "error.game.result-inconsistent";
     public static final String GAME_OPPONENT_NAME_SIZE = "error.game.opponent-name.size";
+    public static final String GAME_MATCH_ALREADY_IN_PROGRESS = "error.game.match-already-in-progress";
     public static final String GAME_MATCH_NOT_FOUND = "error.game.match-not-found";
     public static final String GAME_MATCH_NOT_ACTIVE = "error.game.match-not-active";
     public static final String GAME_MATCH_WRONG_TURN = "error.game.match-wrong-turn";
@@ -51,6 +55,7 @@ public final class MessageKeys {
     public static final String GAME_TEAM_DUPLICATE = "error.game.team-duplicate";
     public static final String GAME_GUESS_ALREADY_USED = "error.game.guess-already-used";
     public static final String GAME_FRIEND_MATCH_NOT_FOUND = "error.game.friend-match-not-found";
+    public static final String GAME_FRIEND_ONLINE_BANNED = "error.game.friend-online-banned";
     public static final String GAME_JOIN_CODE_NOT_FOUND = "error.game.join-code-not-found";
     public static final String GAME_JOIN_CODE_INVALID = "error.game.join-code.invalid";
     public static final String GAME_JOIN_CODE_REQUIRED = "error.game.join-code.required";

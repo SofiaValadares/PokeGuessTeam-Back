@@ -61,6 +61,9 @@ public class ProfileModel {
     @ColumnDefault("0")
     private Integer pokeballFragments = 0;
 
+    @Column(name = "FRIEND_ONLINE_BANNED_UNTIL")
+    private LocalDateTime friendOnlineBannedUntil;
+
     @Column(name = "CREATED_AT", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -140,5 +143,17 @@ public class ProfileModel {
 
     public void setPokeballFragments(Integer pokeballFragments) {
         this.pokeballFragments = pokeballFragments != null ? pokeballFragments : 0;
+    }
+
+    public LocalDateTime getFriendOnlineBannedUntil() {
+        return friendOnlineBannedUntil;
+    }
+
+    public void setFriendOnlineBannedUntil(LocalDateTime friendOnlineBannedUntil) {
+        this.friendOnlineBannedUntil = friendOnlineBannedUntil;
+    }
+
+    public boolean isFriendOnlineBanned() {
+        return friendOnlineBannedUntil != null && friendOnlineBannedUntil.isAfter(LocalDateTime.now());
     }
 }

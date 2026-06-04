@@ -20,6 +20,9 @@ public final class ErrorCodes {
 
     public static final String PROFILE_USER_NOT_FOUND = "PROFILE_USER_NOT_FOUND";
     public static final String PROFILE_NOT_FOUND = "PROFILE_NOT_FOUND";
+    public static final String TRAINING_TEAM_LINE_NOT_IN_INVENTORY = "TRAINING_TEAM_LINE_NOT_IN_INVENTORY";
+    public static final String TRAINING_TEAM_LINE_NOT_FOUND = "TRAINING_TEAM_LINE_NOT_FOUND";
+    public static final String TRAINING_TEAM_DUPLICATE = "TRAINING_TEAM_DUPLICATE";
 
     public static final String POKEMON_SPECIES_NOT_FOUND = "POKEMON_SPECIES_NOT_FOUND";
     public static final String POKEBALL_INSUFFICIENT = "POKEBALL_INSUFFICIENT";
@@ -33,6 +36,7 @@ public final class ErrorCodes {
     public static final String GAME_RESULT_REQUIRED = "GAME_RESULT_REQUIRED";
     public static final String GAME_CORRECT_GUESSES_INVALID = "GAME_CORRECT_GUESSES_INVALID";
     public static final String GAME_OPPONENT_NAME_INVALID = "GAME_OPPONENT_NAME_INVALID";
+    public static final String GAME_MATCH_ALREADY_IN_PROGRESS = "GAME_MATCH_ALREADY_IN_PROGRESS";
     public static final String GAME_MATCH_NOT_FOUND = "GAME_MATCH_NOT_FOUND";
     public static final String GAME_MATCH_NOT_ACTIVE = "GAME_MATCH_NOT_ACTIVE";
     public static final String GAME_MATCH_WRONG_TURN = "GAME_MATCH_WRONG_TURN";
@@ -41,6 +45,7 @@ public final class ErrorCodes {
     public static final String GAME_TEAM_INVALID = "GAME_TEAM_INVALID";
     public static final String GAME_GUESS_ALREADY_USED = "GAME_GUESS_ALREADY_USED";
     public static final String GAME_FRIEND_MATCH_NOT_FOUND = "GAME_FRIEND_MATCH_NOT_FOUND";
+    public static final String GAME_FRIEND_ONLINE_BANNED = "GAME_FRIEND_ONLINE_BANNED";
     public static final String GAME_JOIN_CODE_NOT_FOUND = "GAME_JOIN_CODE_NOT_FOUND";
     public static final String GAME_JOIN_CODE_INVALID = "GAME_JOIN_CODE_INVALID";
     public static final String GAME_MATCH_FULL = "GAME_MATCH_FULL";

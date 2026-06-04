@@ -8,19 +8,25 @@ import com.svc.pokeguessteam.util.GameConstants;
 import java.time.LocalDateTime;
 import java.util.List;
 
+/**
+ * Estado da partida local (pass-and-play): dois jogadores no mesmo dispositivo.
+ * {@link MatchPlayerSide#HOST} = conta logada; {@link MatchPlayerSide#OPPONENT} = 2.º jogador ({@code localOpponentName}).
+ */
 public record LocalMatchStateDto(
         String matchId,
-        String opponentName,
+        String hostDisplayName,
+        String localOpponentName,
         MatchStatus status,
         MatchPlayerSide currentTurn,
         MatchPlayerSide startingPlayer,
         MatchPlayerSide finalResponseFor,
-        boolean playerTeamReady,
+        boolean hostTeamReady,
         boolean opponentTeamReady,
-        List<Integer> playerTeam,
-        int playerCorrectGuesses,
+        List<Integer> hostTeam,
+        List<Integer> opponentTeam,
+        int hostCorrectGuesses,
         int opponentCorrectGuesses,
-        List<OpponentKnowledgeSlotDto> opponentKnowledge,
+        List<OpponentSlotKnowledgeDto> opponentKnowledge,
         List<BotMatchGuessFeedbackDto> recentGuesses,
         MatchPlayerSide winner,
         LocalDateTime startedAt,
@@ -29,22 +35,27 @@ public record LocalMatchStateDto(
 ) {
     public static LocalMatchStateDto from(
             ActiveMatchModel match,
-            List<OpponentKnowledgeSlotDto> opponentKnowledge,
+            List<OpponentSlotKnowledgeDto> opponentKnowledge,
             List<BotMatchGuessFeedbackDto> recentGuesses,
             GameHistoryEntryDto historyEntry
     ) {
+        String hostName = match.getProfile() != null && match.getProfile().getUser() != null
+                ? match.getProfile().getUser().getUsername()
+                : null;
         return new LocalMatchStateDto(
                 match.getId(),
+                hostName,
                 match.getOpponentName(),
                 match.getStatus(),
                 match.getCurrentTurn(),
                 match.getStartingPlayer(),
                 match.getFinalResponseFor(),
-                match.getUserPlayer().getTeam().size() >= GameConstants.TEAM_SIZE,
-                match.getBotPlayer().getTeam().size() >= GameConstants.TEAM_SIZE,
-                List.copyOf(match.getUserPlayer().getTeam()),
-                match.getUserPlayer().getHits().size(),
-                match.getBotPlayer().getHits().size(),
+                match.getHostPlayer().getTeam().size() >= GameConstants.TEAM_SIZE,
+                match.getOpponentPlayer().getTeam().size() >= GameConstants.TEAM_SIZE,
+                List.copyOf(match.getHostPlayer().getTeam()),
+                List.copyOf(match.getOpponentPlayer().getTeam()),
+                match.getHostPlayer().getHits().size(),
+                match.getOpponentPlayer().getHits().size(),
                 opponentKnowledge,
                 recentGuesses,
                 match.getWinner(),

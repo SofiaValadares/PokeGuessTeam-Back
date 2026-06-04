@@ -1,6 +1,6 @@
 package com.svc.pokeguessteam.model.user;
 
-import com.svc.pokeguessteam.model.pokemon.PokemonModel;
+import com.svc.pokeguessteam.model.pokemon.EvolutionLineModel;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -14,8 +14,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
 /**
- * Equipa de treino do jogador: <strong>seis posições</strong> fixas (slots 1–6), cada uma referindo uma espécie
- * ({@link PokemonModel} por número nacional). Na criação do perfil são escolhidas 6 espécies aleatórias por defeito.
+ * Equipa de treino: 6 slots, cada um com uma {@link EvolutionLineModel} do inventário do jogador (PC).
  */
 @Entity
 @Table(
@@ -39,28 +38,28 @@ public class TrainingTeamModel {
     private ProfileModel profile;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "FK_SLOT_1_POKEDEX_NUMBER", referencedColumnName = "POKEDEX_NUMBER")
-    private PokemonModel slot1;
+    @JoinColumn(name = "FK_SLOT_1_LINE_KEY", referencedColumnName = "LINE_KEY")
+    private EvolutionLineModel slot1;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "FK_SLOT_2_POKEDEX_NUMBER", referencedColumnName = "POKEDEX_NUMBER")
-    private PokemonModel slot2;
+    @JoinColumn(name = "FK_SLOT_2_LINE_KEY", referencedColumnName = "LINE_KEY")
+    private EvolutionLineModel slot2;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "FK_SLOT_3_POKEDEX_NUMBER", referencedColumnName = "POKEDEX_NUMBER")
-    private PokemonModel slot3;
+    @JoinColumn(name = "FK_SLOT_3_LINE_KEY", referencedColumnName = "LINE_KEY")
+    private EvolutionLineModel slot3;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "FK_SLOT_4_POKEDEX_NUMBER", referencedColumnName = "POKEDEX_NUMBER")
-    private PokemonModel slot4;
+    @JoinColumn(name = "FK_SLOT_4_LINE_KEY", referencedColumnName = "LINE_KEY")
+    private EvolutionLineModel slot4;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "FK_SLOT_5_POKEDEX_NUMBER", referencedColumnName = "POKEDEX_NUMBER")
-    private PokemonModel slot5;
+    @JoinColumn(name = "FK_SLOT_5_LINE_KEY", referencedColumnName = "LINE_KEY")
+    private EvolutionLineModel slot5;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "FK_SLOT_6_POKEDEX_NUMBER", referencedColumnName = "POKEDEX_NUMBER")
-    private PokemonModel slot6;
+    @JoinColumn(name = "FK_SLOT_6_LINE_KEY", referencedColumnName = "LINE_KEY")
+    private EvolutionLineModel slot6;
 
     public String getId() {
         return id;
@@ -74,56 +73,56 @@ public class TrainingTeamModel {
         this.profile = profile;
     }
 
-    public PokemonModel getSlot1() {
+    public EvolutionLineModel getSlot1() {
         return slot1;
     }
 
-    public void setSlot1(PokemonModel slot1) {
+    public void setSlot1(EvolutionLineModel slot1) {
         this.slot1 = slot1;
     }
 
-    public PokemonModel getSlot2() {
+    public EvolutionLineModel getSlot2() {
         return slot2;
     }
 
-    public void setSlot2(PokemonModel slot2) {
+    public void setSlot2(EvolutionLineModel slot2) {
         this.slot2 = slot2;
     }
 
-    public PokemonModel getSlot3() {
+    public EvolutionLineModel getSlot3() {
         return slot3;
     }
 
-    public void setSlot3(PokemonModel slot3) {
+    public void setSlot3(EvolutionLineModel slot3) {
         this.slot3 = slot3;
     }
 
-    public PokemonModel getSlot4() {
+    public EvolutionLineModel getSlot4() {
         return slot4;
     }
 
-    public void setSlot4(PokemonModel slot4) {
+    public void setSlot4(EvolutionLineModel slot4) {
         this.slot4 = slot4;
     }
 
-    public PokemonModel getSlot5() {
+    public EvolutionLineModel getSlot5() {
         return slot5;
     }
 
-    public void setSlot5(PokemonModel slot5) {
+    public void setSlot5(EvolutionLineModel slot5) {
         this.slot5 = slot5;
     }
 
-    public PokemonModel getSlot6() {
+    public EvolutionLineModel getSlot6() {
         return slot6;
     }
 
-    public void setSlot6(PokemonModel slot6) {
+    public void setSlot6(EvolutionLineModel slot6) {
         this.slot6 = slot6;
     }
 
     /** Índice 0–5 corresponde ao slot 1–6. */
-    public PokemonModel getSlot(int indexZeroBased) {
+    public EvolutionLineModel getSlot(int indexZeroBased) {
         return switch (indexZeroBased) {
             case 0 -> slot1;
             case 1 -> slot2;
@@ -136,14 +135,14 @@ public class TrainingTeamModel {
     }
 
     /** Índice 0–5 corresponde ao slot 1–6. */
-    public void setSlot(int indexZeroBased, PokemonModel pokemon) {
+    public void setSlot(int indexZeroBased, EvolutionLineModel line) {
         switch (indexZeroBased) {
-            case 0 -> setSlot1(pokemon);
-            case 1 -> setSlot2(pokemon);
-            case 2 -> setSlot3(pokemon);
-            case 3 -> setSlot4(pokemon);
-            case 4 -> setSlot5(pokemon);
-            case 5 -> setSlot6(pokemon);
+            case 0 -> setSlot1(line);
+            case 1 -> setSlot2(line);
+            case 2 -> setSlot3(line);
+            case 3 -> setSlot4(line);
+            case 4 -> setSlot5(line);
+            case 5 -> setSlot6(line);
             default -> throw new IllegalArgumentException("Slot index must be 0..5");
         }
     }

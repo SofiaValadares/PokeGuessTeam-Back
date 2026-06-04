@@ -40,6 +40,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/auth/session").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/meta").permitAll()
                         .requestMatchers("/public/**").permitAll()
+                        .requestMatchers("/ws/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(ex -> ex

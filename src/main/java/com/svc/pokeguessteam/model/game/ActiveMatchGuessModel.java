@@ -1,12 +1,12 @@
 package com.svc.pokeguessteam.model.game;
 
 import com.svc.pokeguessteam.model.enums.MatchPlayerSide;
+import com.svc.pokeguessteam.model.enums.MatchPlayerSideConverter;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -34,7 +34,7 @@ public class ActiveMatchGuessModel {
     @JoinColumn(name = "FK_ACTIVE_MATCH_ID", nullable = false)
     private ActiveMatchModel match;
 
-    @Enumerated(EnumType.STRING)
+    @Convert(converter = MatchPlayerSideConverter.class)
     @Column(name = "PLAYER_SIDE", nullable = false, length = 10)
     private MatchPlayerSide playerSide;
 
@@ -43,6 +43,12 @@ public class ActiveMatchGuessModel {
 
     @Column(name = "IS_EXACT_MATCH", nullable = false)
     private boolean exactMatch;
+
+    @Column(name = "IS_TIMED_OUT", nullable = false)
+    private boolean timedOut;
+
+    @Column(name = "IS_AUTO_SELECTED", nullable = false)
+    private boolean autoSelected;
 
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(
@@ -111,5 +117,21 @@ public class ActiveMatchGuessModel {
 
     public LocalDateTime getCreatedAt() {
         return createdAt;
+    }
+
+    public boolean isTimedOut() {
+        return timedOut;
+    }
+
+    public void setTimedOut(boolean timedOut) {
+        this.timedOut = timedOut;
+    }
+
+    public boolean isAutoSelected() {
+        return autoSelected;
+    }
+
+    public void setAutoSelected(boolean autoSelected) {
+        this.autoSelected = autoSelected;
     }
 }

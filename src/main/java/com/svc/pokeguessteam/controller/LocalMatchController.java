@@ -5,13 +5,13 @@ import com.svc.pokeguessteam.dto.game.LocalMatchActionResponse;
 import com.svc.pokeguessteam.dto.game.LocalMatchStartRequest;
 import com.svc.pokeguessteam.dto.game.LocalMatchStateDto;
 import com.svc.pokeguessteam.dto.game.LocalMatchTeamRequest;
+import com.svc.pokeguessteam.dto.game.OpponentTeamKnowledgeResponse;
 import com.svc.pokeguessteam.service.CurrentUserService;
 import com.svc.pokeguessteam.service.LocalMatchService;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -49,6 +49,12 @@ public class LocalMatchController {
         return ResponseEntity.ok(localMatchService.getActiveMatch(userId));
     }
 
+    @GetMapping("/opponent-knowledge")
+    public ResponseEntity<OpponentTeamKnowledgeResponse> opponentKnowledge(HttpSession session) {
+        String userId = currentUserService.requireUserId(session);
+        return ResponseEntity.ok(localMatchService.getOpponentKnowledge(userId));
+    }
+
     @PutMapping("/team")
     public ResponseEntity<LocalMatchActionResponse> submitTeam(
             HttpSession session,
@@ -71,12 +77,5 @@ public class LocalMatchController {
     public ResponseEntity<LocalMatchActionResponse> surrender(HttpSession session) {
         String userId = currentUserService.requireUserId(session);
         return ResponseEntity.ok(localMatchService.surrender(userId));
-    }
-
-    @DeleteMapping
-    public ResponseEntity<Void> abandon(HttpSession session) {
-        String userId = currentUserService.requireUserId(session);
-        localMatchService.abandonMatch(userId);
-        return ResponseEntity.noContent().build();
     }
 }

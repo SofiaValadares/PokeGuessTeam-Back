@@ -16,7 +16,9 @@ public record BotMatchGuessFeedbackDto(
         List<Integer> matchedPokedexNumbers,
         GuessOutcome outcome,
         String message,
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        boolean timedOut,
+        boolean autoSelected
 ) {
     public static BotMatchGuessFeedbackDto from(
             ActiveMatchGuessModel guess,
@@ -33,7 +35,9 @@ public record BotMatchGuessFeedbackDto(
                 List.copyOf(guess.getMatchedPokedexNumbers()),
                 outcome,
                 message,
-                guess.getCreatedAt()
+                guess.getCreatedAt(),
+                guess.isTimedOut(),
+                guess.isAutoSelected()
         );
     }
 }

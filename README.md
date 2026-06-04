@@ -40,7 +40,8 @@ API: `http://localhost:8080`
 ## Perfil e progressão
 
 | GET | `/api/profile/me` | Perfil |
-| GET | `/api/profile/training-team` | Time de treino (6 slots, foco de XP) |
+| GET | `/api/profile/training-team` | Time de treino (6 linhas evolutivas do PC) |
+| PUT ou POST | `/api/profile/training-team` | Atualizar time (`slots`: 6 `evolutionLineKey` ou `null`) |
 | GET | `/api/profile/pokemon` | PC / inventário por linha evolutiva |
 | GET | `/api/profile/collection` | Pokébolas e fragmentos |
 | POST | `/api/pokemon/draw` | Gacha (consome Pokébola) |
@@ -57,16 +58,41 @@ Alinhado ao GDD e à [beta](https://poke-guess-team.vercel.app/): turnos, pistas
 | GET | `/api/game/bot/match` |
 | PUT | `/api/game/bot/match/team` |
 | POST | `/api/game/bot/match/guess` |
-| POST | `/api/game/bot/match/surrender` |
-| DELETE | `/api/game/bot/match` |
+| POST | `/api/game/bot/match/surrender` — também em fase `SETUP` (desistência) |
+
+**Uma partida por conta:** com qualquer partida não terminada (`SETUP` ou `ACTIVE`, em bot/local/amigo), não é possível iniciar outra em nenhum modo até vitória, derrota, empate ou desistência (`409 GAME_MATCH_ALREADY_IN_PROGRESS`). Não existe abandonar partida — só `POST .../surrender`.
+
+### WebSocket (STOMP) — bot e amigo
+
+- Endpoint SockJS: `http://localhost:8080/ws` (mesmo cookie `JSESSIONID` do login)
+- Enviar palpite: `SEND /app/match/bot/guess` ou `/app/match/friend/guess` — body `{ "pokedexNumber": 25 }`
+- Subscrever **bot:** `/topic/match/bot/{matchId}`
+- Subscrever **amigo:** `/topic/match/friend/{matchId}/user/{userId}`
+
+Eventos (`MatchRealtimeMessage.type`):
+
+| Tipo | Uso |
+|------|-----|
+| `PLAYER_GUESS` | Teu palpite + estado atualizado |
+| `BOT_TURN_START` | Bloquear UI — vez do bot |
+| `BOT_GUESS` | Um palpite do bot (pode repetir se acertar e jogar de novo) |
+| `MATCH_STATE` / `MATCH_FINISHED` | Estado final do turno ou partida |
+| `TURN_TIMER` | Prazo de 50s (amigo) |
+| `TIMEOUT_PENALTY` | Palpite automático + penalidade no histórico |
+| `OPPONENT_REPLACED_BY_BOT` | 3 penalidades → adversário vira bot |
+
+**Amigo:** 50s por turno; timeout = palpite aleatório + penalidade (`turnTimeoutPenalties` no histórico). 3 penalidades na mesma partida = desistência desse jogador; o outro termina vs IA. 5 penalidades na última hora = ban de 3 dias do modo amigo (`403 GAME_FRIEND_ONLINE_BANNED`). Penalidades ficam no perfil por 7 dias (`TB_FRIEND_ONLINE_PENALTIES`).
+
+O `POST /api/game/*/match/guess` HTTP continua válido; em **bot** o palpite do utilizador vem na resposta e os palpites do bot só por WebSocket.
 
 ### Local (pass-and-play)
 
 | Método | Rota |
 |--------|------|
 | POST | `/api/game/local/match` — body: `{ "opponentName": "Ash" }` |
-| PUT | `/api/game/local/match/team` — `{ "playerSide": "USER"|"BOT", "team": [6 dex] }` |
+| PUT | `/api/game/local/match/team` — `{ "playerSide": "HOST"|"OPPONENT", "team": [6 dex] }` (aliases `USER`/`BOT`) |
 | POST | `/api/game/local/match/guess` |
+| GET | `/api/game/*/match/opponent-knowledge` | Início de turno: 6 slots com pistas acumuladas |
 | POST | `/api/game/local/match/surrender` |
 
 ### Amigo remoto

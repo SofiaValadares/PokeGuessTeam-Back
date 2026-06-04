@@ -2,10 +2,12 @@ package com.svc.pokeguessteam.model.game;
 
 import com.svc.pokeguessteam.model.enums.GameModes;
 import com.svc.pokeguessteam.model.enums.MatchPlayerSide;
+import com.svc.pokeguessteam.model.enums.MatchPlayerSideConverter;
 import com.svc.pokeguessteam.model.enums.MatchStatus;
 import com.svc.pokeguessteam.model.user.ProfileModel;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -55,23 +57,23 @@ public class ActiveMatchModel {
     @Column(name = "MATCH_STATUS", nullable = false, length = 20)
     private MatchStatus status;
 
-    @Enumerated(EnumType.STRING)
+    @Convert(converter = MatchPlayerSideConverter.class)
     @Column(name = "CURRENT_TURN", length = 10)
     private MatchPlayerSide currentTurn;
 
-    @Enumerated(EnumType.STRING)
+    @Convert(converter = MatchPlayerSideConverter.class)
     @Column(name = "STARTING_PLAYER", length = 10)
     private MatchPlayerSide startingPlayer;
 
-    @Enumerated(EnumType.STRING)
+    @Convert(converter = MatchPlayerSideConverter.class)
     @Column(name = "FINAL_RESPONSE_FOR", length = 10)
     private MatchPlayerSide finalResponseFor;
 
-    @Enumerated(EnumType.STRING)
+    @Convert(converter = MatchPlayerSideConverter.class)
     @Column(name = "LAST_COMPLETING_PLAYER", length = 10)
     private MatchPlayerSide lastCompletingPlayer;
 
-    @Enumerated(EnumType.STRING)
+    @Convert(converter = MatchPlayerSideConverter.class)
     @Column(name = "WINNER", length = 10)
     private MatchPlayerSide winner;
 
@@ -80,6 +82,17 @@ public class ActiveMatchModel {
 
     @Column(name = "FINISHED_AT")
     private LocalDateTime finishedAt;
+
+    @Column(name = "TURN_DEADLINE_AT")
+    private LocalDateTime turnDeadlineAt;
+
+    @Column(name = "TURN_SEQUENCE", nullable = false)
+    private long turnSequence;
+
+    /** Lado substituído por IA após 3 timeouts (modo amigo). */
+    @Convert(converter = MatchPlayerSideConverter.class)
+    @Column(name = "BOT_REPLACEMENT_SIDE", length = 10)
+    private MatchPlayerSide botReplacementSide;
 
     @Column(name = "CREATED_AT", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -98,6 +111,14 @@ public class ActiveMatchModel {
         if (createdAt == null) {
             createdAt = LocalDateTime.now();
         }
+    }
+
+    public boolean isSideControlledByBot(MatchPlayerSide side) {
+        return botReplacementSide != null && botReplacementSide == side;
+    }
+
+    public boolean isHumanTurn(MatchPlayerSide side) {
+        return !isSideControlledByBot(side);
     }
 
     public String getId() {
@@ -208,29 +229,55 @@ public class ActiveMatchModel {
         this.finishedAt = finishedAt;
     }
 
+    public LocalDateTime getTurnDeadlineAt() {
+        return turnDeadlineAt;
+    }
+
+    public void setTurnDeadlineAt(LocalDateTime turnDeadlineAt) {
+        this.turnDeadlineAt = turnDeadlineAt;
+    }
+
+    public long getTurnSequence() {
+        return turnSequence;
+    }
+
+    public void setTurnSequence(long turnSequence) {
+        this.turnSequence = turnSequence;
+    }
+
+    public MatchPlayerSide getBotReplacementSide() {
+        return botReplacementSide;
+    }
+
+    public void setBotReplacementSide(MatchPlayerSide botReplacementSide) {
+        this.botReplacementSide = botReplacementSide;
+    }
+
     public LocalDateTime getCreatedAt() {
         return createdAt;
     }
 
-    public ActiveMatchPlayerModel getUserPlayer() {
+    /** Jogador {@link MatchPlayerSide#HOST} (conta / anfitrião). */
+    public ActiveMatchPlayerModel getHostPlayer() {
         return userPlayer;
     }
 
-    public void setUserPlayer(ActiveMatchPlayerModel userPlayer) {
-        this.userPlayer = userPlayer;
-        if (userPlayer != null) {
-            userPlayer.setMatch(this);
+    public void setHostPlayer(ActiveMatchPlayerModel hostPlayer) {
+        this.userPlayer = hostPlayer;
+        if (hostPlayer != null) {
+            hostPlayer.setMatch(this);
         }
     }
 
-    public ActiveMatchPlayerModel getBotPlayer() {
+    /** Jogador {@link MatchPlayerSide#OPPONENT} (IA, 2.º humano local ou convidado). */
+    public ActiveMatchPlayerModel getOpponentPlayer() {
         return botPlayer;
     }
 
-    public void setBotPlayer(ActiveMatchPlayerModel botPlayer) {
-        this.botPlayer = botPlayer;
-        if (botPlayer != null) {
-            botPlayer.setMatch(this);
+    public void setOpponentPlayer(ActiveMatchPlayerModel opponentPlayer) {
+        this.botPlayer = opponentPlayer;
+        if (opponentPlayer != null) {
+            opponentPlayer.setMatch(this);
         }
     }
 
@@ -239,15 +286,15 @@ public class ActiveMatchModel {
     }
 
     public ActiveMatchPlayerModel getPlayer(MatchPlayerSide side) {
-        return side == MatchPlayerSide.USER ? userPlayer : botPlayer;
+        return side == MatchPlayerSide.HOST ? userPlayer : botPlayer;
     }
 
     public ActiveMatchPlayerModel getOpponent(MatchPlayerSide side) {
-        return side == MatchPlayerSide.USER ? botPlayer : userPlayer;
+        return side == MatchPlayerSide.HOST ? botPlayer : userPlayer;
     }
 
     public MatchPlayerSide getOpponentSide(MatchPlayerSide side) {
-        return side == MatchPlayerSide.USER ? MatchPlayerSide.BOT : MatchPlayerSide.USER;
+        return side == MatchPlayerSide.HOST ? MatchPlayerSide.OPPONENT : MatchPlayerSide.HOST;
     }
 
     public void addGuess(ActiveMatchGuessModel guess) {

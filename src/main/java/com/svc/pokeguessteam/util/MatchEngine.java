@@ -137,7 +137,7 @@ public final class MatchEngine {
     }
 
     public static void startActiveMatch(ActiveMatchModel match) {
-        MatchPlayerSide starter = Math.random() > 0.5 ? MatchPlayerSide.USER : MatchPlayerSide.BOT;
+        MatchPlayerSide starter = Math.random() > 0.5 ? MatchPlayerSide.HOST : MatchPlayerSide.OPPONENT;
         match.setStatus(MatchStatus.ACTIVE);
         match.setStartingPlayer(starter);
         match.setCurrentTurn(starter);
@@ -151,8 +151,8 @@ public final class MatchEngine {
         if (match.getStatus() != MatchStatus.SETUP) {
             return false;
         }
-        if (match.getUserPlayer().getTeam().size() != teamSize
-                || match.getBotPlayer().getTeam().size() != teamSize) {
+        if (match.getHostPlayer().getTeam().size() != teamSize
+                || match.getOpponentPlayer().getTeam().size() != teamSize) {
             return false;
         }
         startActiveMatch(match);

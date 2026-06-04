@@ -26,17 +26,17 @@ class MatchEngineTest {
     void setUp() {
         match = new ActiveMatchModel();
         match.setStatus(MatchStatus.ACTIVE);
-        match.setCurrentTurn(MatchPlayerSide.USER);
+        match.setCurrentTurn(MatchPlayerSide.HOST);
 
         ActiveMatchPlayerModel user = new ActiveMatchPlayerModel();
-        user.setSide(MatchPlayerSide.USER);
+        user.setSide(MatchPlayerSide.HOST);
         user.setTeam(List.of(1, 4, 7, 25, 133, 150));
-        match.setUserPlayer(user);
+        match.setHostPlayer(user);
 
         ActiveMatchPlayerModel bot = new ActiveMatchPlayerModel();
-        bot.setSide(MatchPlayerSide.BOT);
+        bot.setSide(MatchPlayerSide.OPPONENT);
         bot.setTeam(List.of(2, 5, 8, 26, 134, 151));
-        match.setBotPlayer(bot);
+        match.setOpponentPlayer(bot);
 
         byDex = Map.of(
                 25, species(25, "Pikachu"),
@@ -47,18 +47,18 @@ class MatchEngineTest {
 
     @Test
     void correctGuessKeepsTurn() {
-        var result = MatchEngine.applyGuess(match, MatchPlayerSide.USER, byDex.get(26), byDex);
+        var result = MatchEngine.applyGuess(match, MatchPlayerSide.HOST, byDex.get(26), byDex);
         assertTrue(result.guess().isExactMatch());
         assertEquals(GuessOutcome.KEEP_TURN, result.outcome());
-        assertEquals(MatchPlayerSide.USER, match.getCurrentTurn());
-        assertEquals(1, match.getUserPlayer().getHits().size());
+        assertEquals(MatchPlayerSide.HOST, match.getCurrentTurn());
+        assertEquals(1, match.getHostPlayer().getHits().size());
     }
 
     @Test
     void wrongGuessSwitchesTurn() {
-        var result = MatchEngine.applyGuess(match, MatchPlayerSide.USER, byDex.get(25), byDex);
+        var result = MatchEngine.applyGuess(match, MatchPlayerSide.HOST, byDex.get(25), byDex);
         assertEquals(GuessOutcome.SWITCH_TURN, result.outcome());
-        assertEquals(MatchPlayerSide.BOT, match.getCurrentTurn());
+        assertEquals(MatchPlayerSide.OPPONENT, match.getCurrentTurn());
     }
 
     private static PokemonModel species(int dex, String name) {

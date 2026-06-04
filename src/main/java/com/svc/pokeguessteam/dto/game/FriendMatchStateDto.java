@@ -25,26 +25,29 @@ public record FriendMatchStateDto(
         int opponentCorrectGuesses,
         FriendMatchParticipantDto host,
         FriendMatchParticipantDto guest,
-        List<OpponentKnowledgeSlotDto> opponentKnowledge,
+        List<OpponentSlotKnowledgeDto> opponentKnowledge,
         List<BotMatchGuessFeedbackDto> recentGuesses,
         MatchPlayerSide winner,
         LocalDateTime startedAt,
         LocalDateTime finishedAt,
+        LocalDateTime turnDeadlineAt,
+        int yourTimeoutPenalties,
+        boolean opponentReplacedByBot,
         GameHistoryEntryDto historyEntry
 ) {
     public static FriendMatchStateDto from(
             ActiveMatchModel match,
             MatchPlayerSide viewerSide,
-            List<OpponentKnowledgeSlotDto> opponentKnowledge,
+            List<OpponentSlotKnowledgeDto> opponentKnowledge,
             List<BotMatchGuessFeedbackDto> recentGuesses,
             GameHistoryEntryDto historyEntry
     ) {
-        ActiveMatchPlayerModel yours = viewerSide == MatchPlayerSide.USER
-                ? match.getUserPlayer()
-                : match.getBotPlayer();
-        ActiveMatchPlayerModel opponent = viewerSide == MatchPlayerSide.USER
-                ? match.getBotPlayer()
-                : match.getUserPlayer();
+        ActiveMatchPlayerModel yours = viewerSide == MatchPlayerSide.HOST
+                ? match.getHostPlayer()
+                : match.getOpponentPlayer();
+        ActiveMatchPlayerModel opponent = viewerSide == MatchPlayerSide.HOST
+                ? match.getOpponentPlayer()
+                : match.getHostPlayer();
         return new FriendMatchStateDto(
                 match.getId(),
                 match.getJoinCode(),
@@ -58,33 +61,38 @@ public record FriendMatchStateDto(
                 List.copyOf(yours.getHits()),
                 yours.getHits().size(),
                 opponent.getHits().size(),
-                participant(match.getProfile(), match.getUserPlayer().getTeam().size()),
+                participant(match.getProfile(), match.getHostPlayer().getTeam().size(), match.getHostPlayer().getTurnTimeoutPenalties()),
                 guestParticipant(match),
                 opponentKnowledge,
                 recentGuesses,
                 match.getWinner(),
                 match.getStartedAt(),
                 match.getFinishedAt(),
+                match.getTurnDeadlineAt(),
+                yours.getTurnTimeoutPenalties(),
+                match.getBotReplacementSide() != null && match.getBotReplacementSide() != viewerSide,
                 historyEntry
         );
     }
 
     private static FriendMatchParticipantDto participant(
             ProfileModel profile,
-            int teamSize
+            int teamSize,
+            int timeoutPenalties
     ) {
         return new FriendMatchParticipantDto(
                 profile.getUser().getIdUser(),
                 profile.getUser().getUsername(),
-                teamSize >= GameConstants.TEAM_SIZE
+                teamSize >= GameConstants.TEAM_SIZE,
+                timeoutPenalties
         );
     }
 
     private static FriendMatchParticipantDto guestParticipant(ActiveMatchModel match) {
         ProfileModel guest = match.getGuestProfile();
         if (guest == null) {
-            return new FriendMatchParticipantDto(null, null, false);
+            return new FriendMatchParticipantDto(null, null, false, 0);
         }
-        return participant(guest, match.getBotPlayer().getTeam().size());
+        return participant(guest, match.getOpponentPlayer().getTeam().size(), match.getOpponentPlayer().getTurnTimeoutPenalties());
     }
 }

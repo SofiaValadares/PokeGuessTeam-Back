@@ -2,13 +2,18 @@ package com.svc.pokeguessteam.controller;
 
 import com.svc.pokeguessteam.dto.pokemon.PcPageResponse;
 import com.svc.pokeguessteam.dto.profile.TrainingTeamResponse;
+import com.svc.pokeguessteam.dto.profile.UpdateTrainingTeamRequest;
 import com.svc.pokeguessteam.model.user.ProfileInventoryItemModel;
 import com.svc.pokeguessteam.model.user.ProfileModel;
 import com.svc.pokeguessteam.service.CurrentUserService;
 import com.svc.pokeguessteam.service.ProfileService;
 import jakarta.servlet.http.HttpSession;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -48,13 +53,37 @@ public class ProfileController {
     }
 
     /**
-     * Time de treino ativo (6 posições): foco de XP / evolução no menu; não restringe uso nas partidas.
+     * Time de treino (6 slots): cada um é uma linha evolutiva do inventário (PC).
      */
     @GetMapping("/training-team")
     public ResponseEntity<TrainingTeamResponse> trainingTeam(HttpSession session) {
         String userId = currentUserService.requireUserId(session);
-        profileService.ensureProfileWithStarters(userId);
         return ResponseEntity.ok(profileService.getTrainingTeam(userId));
+    }
+
+    @PutMapping("/training-team")
+    public ResponseEntity<TrainingTeamResponse> updateTrainingTeamPut(
+            HttpSession session,
+            @Valid @RequestBody UpdateTrainingTeamRequest request
+    ) {
+        return updateTrainingTeam(session, request);
+    }
+
+    /** Alias para clientes que enviam POST em vez de PUT. */
+    @PostMapping("/training-team")
+    public ResponseEntity<TrainingTeamResponse> updateTrainingTeamPost(
+            HttpSession session,
+            @Valid @RequestBody UpdateTrainingTeamRequest request
+    ) {
+        return updateTrainingTeam(session, request);
+    }
+
+    private ResponseEntity<TrainingTeamResponse> updateTrainingTeam(
+            HttpSession session,
+            UpdateTrainingTeamRequest request
+    ) {
+        String userId = currentUserService.requireUserId(session);
+        return ResponseEntity.ok(profileService.updateTrainingTeam(userId, request));
     }
 
     /**

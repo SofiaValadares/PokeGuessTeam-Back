@@ -1,12 +1,12 @@
 package com.svc.pokeguessteam.model.game;
 
 import com.svc.pokeguessteam.model.enums.MatchPlayerSide;
+import com.svc.pokeguessteam.model.enums.MatchPlayerSideConverter;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -39,7 +39,7 @@ public class ActiveMatchPlayerModel {
     @JoinColumn(name = "FK_ACTIVE_MATCH_ID", nullable = false)
     private ActiveMatchModel match;
 
-    @Enumerated(EnumType.STRING)
+    @Convert(converter = MatchPlayerSideConverter.class)
     @Column(name = "PLAYER_SIDE", nullable = false, length = 10)
     private MatchPlayerSide side;
 
@@ -63,6 +63,10 @@ public class ActiveMatchPlayerModel {
 
     @Column(name = "SKIP_TURNS", nullable = false)
     private int skipTurns;
+
+    /** Penalidades por timeout de turno (modo amigo). */
+    @Column(name = "TURN_TIMEOUT_PENALTIES", nullable = false)
+    private int turnTimeoutPenalties;
 
     public String getId() {
         return id;
@@ -106,5 +110,13 @@ public class ActiveMatchPlayerModel {
 
     public void setSkipTurns(int skipTurns) {
         this.skipTurns = skipTurns;
+    }
+
+    public int getTurnTimeoutPenalties() {
+        return turnTimeoutPenalties;
+    }
+
+    public void setTurnTimeoutPenalties(int turnTimeoutPenalties) {
+        this.turnTimeoutPenalties = turnTimeoutPenalties;
     }
 }

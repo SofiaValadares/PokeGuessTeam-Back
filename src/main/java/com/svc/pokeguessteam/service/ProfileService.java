@@ -7,6 +7,9 @@ import com.svc.pokeguessteam.model.pokemon.EvolutionLineModel;
 import com.svc.pokeguessteam.model.pokemon.PokemonModel;
 import com.svc.pokeguessteam.dto.pokemon.PcPageResponse;
 import com.svc.pokeguessteam.dto.profile.TrainingTeamResponse;
+import com.svc.pokeguessteam.dto.profile.UpdateTrainingTeamRequest;
+import com.svc.pokeguessteam.model.pokemon.EvolutionLineModel;
+import com.svc.pokeguessteam.repository.pokemon.EvolutionLineRepository;
 import com.svc.pokeguessteam.model.enums.PokeballType;
 import com.svc.pokeguessteam.model.user.ProfileInventoryItemModel;
 import com.svc.pokeguessteam.model.user.ProfileModel;
@@ -18,6 +21,7 @@ import com.svc.pokeguessteam.repository.user.ProfileInventoryItemRepository;
 import com.svc.pokeguessteam.repository.user.ProfileRepository;
 import com.svc.pokeguessteam.repository.user.UserPokemonInventoryRepository;
 import com.svc.pokeguessteam.repository.user.UserRepository;
+import com.svc.pokeguessteam.util.PokemonEvolutionRewards;
 import com.svc.pokeguessteam.util.PokemonInventoryXp;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -30,7 +34,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 
 @Service
@@ -60,19 +68,22 @@ public class ProfileService {
     private final UserPokemonInventoryRepository inventoryRepository;
     private final ProfileInventoryItemRepository profileInventoryItemRepository;
     private final UserPokedexService userPokedexService;
+    private final EvolutionLineRepository evolutionLineRepository;
 
     public ProfileService(ProfileRepository profileRepository,
                           UserRepository userRepository,
                           PokemonRepository pokemonRepository,
                           UserPokemonInventoryRepository inventoryRepository,
                           ProfileInventoryItemRepository profileInventoryItemRepository,
-                          UserPokedexService userPokedexService) {
+                          UserPokedexService userPokedexService,
+                          EvolutionLineRepository evolutionLineRepository) {
         this.profileRepository = profileRepository;
         this.userRepository = userRepository;
         this.pokemonRepository = pokemonRepository;
         this.inventoryRepository = inventoryRepository;
         this.profileInventoryItemRepository = profileInventoryItemRepository;
         this.userPokedexService = userPokedexService;
+        this.evolutionLineRepository = evolutionLineRepository;
     }
 
     @Transactional
@@ -84,6 +95,7 @@ public class ProfileService {
         ensurePokeballInventoryIfMissing(profile);
         userPokedexService.registerStarterSpecies(profile, STARTER_POKEDEX_NUMBERS);
         userPokedexService.syncFromOwnership(profile);
+        ensureTrainingTeamFromInventory(profile);
         return profileRepository.findById(profile.getId()).orElse(profile);
     }
 
@@ -99,32 +111,89 @@ public class ProfileService {
         profile.setPokeballFragments(0);
         ProfileModel saved = profileRepository.save(profile);
         pokemonRepository.findByPokedexNumber(1).ifPresent(saved::setFavoritePokemon);
-        assignRandomDefaultTrainingTeam(saved);
         return profileRepository.save(saved);
     }
 
     /**
-     * Time de treino inicial com 6 espécies aleatórias (com reposição se existirem menos de 6 na base).
+     * Garante time de treino só com linhas evolutivas do inventário; cria ou corrige slots inválidos.
      */
-    private void assignRandomDefaultTrainingTeam(ProfileModel profile) {
-        List<PokemonModel> pool = pokemonRepository.findAllByOrderByPokedexNumberAsc();
-        if (pool.isEmpty()) {
+    private void ensureTrainingTeamFromInventory(ProfileModel profile) {
+        TrainingTeamModel team = profile.getTrainingTeam();
+        if (team == null) {
+            team = new TrainingTeamModel();
+            team.setProfile(profile);
+            profile.setTrainingTeam(team);
+            assignDefaultTrainingTeamFromInventory(profile, team);
+            profileRepository.save(profile);
             return;
         }
-        List<PokemonModel> shuffled = new ArrayList<>(pool);
-        Collections.shuffle(shuffled, ThreadLocalRandom.current());
-        TrainingTeamModel team = new TrainingTeamModel();
-        team.setProfile(profile);
-        for (int i = 0; i < TrainingTeamModel.TEAM_SIZE; i++) {
-            team.setSlot(i, shuffled.get(i % shuffled.size()));
+        boolean changed = sanitizeTrainingTeamSlots(profile, team);
+        if (changed) {
+            profileRepository.save(profile);
         }
-        profile.setTrainingTeam(team);
+    }
+
+    /**
+     * Preenche até 6 slots com linhas evolutivas aleatórias do inventário.
+     */
+    private void assignDefaultTrainingTeamFromInventory(ProfileModel profile, TrainingTeamModel team) {
+        List<UserPokemonInventoryModel> lines = inventoryRepository
+                .findByProfile_IdOrderByEvolutionLine_LineKeyAsc(profile.getId());
+        if (lines.isEmpty()) {
+            for (int i = 0; i < TrainingTeamModel.TEAM_SIZE; i++) {
+                team.setSlot(i, null);
+            }
+            return;
+        }
+        List<UserPokemonInventoryModel> shuffled = new ArrayList<>(lines);
+        Collections.shuffle(shuffled, ThreadLocalRandom.current());
         for (int i = 0; i < TrainingTeamModel.TEAM_SIZE; i++) {
-            PokemonModel slot = team.getSlot(i);
-            if (slot != null) {
-                userPokedexService.registerSpeciesIfPresent(profile, slot.getPokedexNumber());
+            if (i < shuffled.size()) {
+                team.setSlot(i, shuffled.get(i).getEvolutionLine());
+            } else {
+                team.setSlot(i, null);
             }
         }
+    }
+
+    /** Remove slots cuja linha não está mais no inventário do jogador. */
+    private boolean sanitizeTrainingTeamSlots(ProfileModel profile, TrainingTeamModel team) {
+        boolean changed = false;
+        for (int i = 0; i < TrainingTeamModel.TEAM_SIZE; i++) {
+            EvolutionLineModel slot = team.getSlot(i);
+            if (slot != null && !isLineInInventory(profile.getId(), slot.getLineKey())) {
+                team.setSlot(i, null);
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
+    private boolean isLineInInventory(String profileId, Integer lineKey) {
+        if (lineKey == null) {
+            return false;
+        }
+        return inventoryRepository.findByProfile_IdAndEvolutionLine_LineKey(profileId, lineKey).isPresent();
+    }
+
+    private void requireLineInInventory(ProfileModel profile, Integer lineKey) {
+        if (!isLineInInventory(profile.getId(), lineKey)) {
+            throw new ApiBusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    ErrorCodes.TRAINING_TEAM_LINE_NOT_IN_INVENTORY,
+                    MessageKeys.TRAINING_TEAM_LINE_NOT_IN_INVENTORY
+            );
+        }
+    }
+
+    private Map<Integer, UserPokemonInventoryModel> inventoryByLineKey(String profileId) {
+        Map<Integer, UserPokemonInventoryModel> map = new HashMap<>();
+        for (UserPokemonInventoryModel row : inventoryRepository.findByProfile_IdOrderByEvolutionLine_LineKeyAsc(profileId)) {
+            if (row.getEvolutionLine() != null) {
+                map.put(row.getEvolutionLine().getLineKey(), row);
+            }
+        }
+        return map;
     }
 
     /**
@@ -252,13 +321,54 @@ public class ProfileService {
 
     @Transactional(readOnly = true)
     public TrainingTeamResponse getTrainingTeam(String userId) {
-        ProfileModel profile = profileRepository.findByUser_IdUser(userId)
-                .orElseThrow(() -> new ApiBusinessException(
-                        HttpStatus.NOT_FOUND,
-                        ErrorCodes.PROFILE_NOT_FOUND,
-                        MessageKeys.PROFILE_NOT_FOUND
-                ));
-        return TrainingTeamResponse.from(profile.getTrainingTeam());
+        ProfileModel profile = ensureProfileWithStarters(userId);
+        return TrainingTeamResponse.from(
+                profile.getTrainingTeam(),
+                inventoryByLineKey(profile.getId())
+        );
+    }
+
+    /**
+     * Atualiza o time de treino; cada slot é um {@code evolutionLineKey} do inventário (PC).
+     */
+    @Transactional
+    public TrainingTeamResponse updateTrainingTeam(String userId, UpdateTrainingTeamRequest request) {
+        ProfileModel profile = ensureProfileWithStarters(userId);
+        TrainingTeamModel team = profile.getTrainingTeam();
+        if (team == null) {
+            team = new TrainingTeamModel();
+            team.setProfile(profile);
+            profile.setTrainingTeam(team);
+        }
+
+        List<Integer> slots = request.slots();
+        Set<Integer> usedLineKeys = new HashSet<>();
+        for (int i = 0; i < TrainingTeamModel.TEAM_SIZE; i++) {
+            Integer lineKey = slots.get(i);
+            if (lineKey == null) {
+                team.setSlot(i, null);
+                continue;
+            }
+            if (!usedLineKeys.add(lineKey)) {
+                throw new ApiBusinessException(
+                        HttpStatus.BAD_REQUEST,
+                        ErrorCodes.TRAINING_TEAM_DUPLICATE,
+                        MessageKeys.TRAINING_TEAM_DUPLICATE
+                );
+            }
+            requireLineInInventory(profile, lineKey);
+            EvolutionLineModel line = evolutionLineRepository.findById(lineKey)
+                    .orElseThrow(() -> new ApiBusinessException(
+                            HttpStatus.NOT_FOUND,
+                            ErrorCodes.TRAINING_TEAM_LINE_NOT_FOUND,
+                            MessageKeys.TRAINING_TEAM_LINE_NOT_FOUND
+                    ));
+            team.setSlot(i, line);
+        }
+
+        profileRepository.save(profile);
+        userPokedexService.syncFromOwnership(profile);
+        return TrainingTeamResponse.from(team, inventoryByLineKey(profile.getId()));
     }
 
     @Transactional
@@ -282,7 +392,7 @@ public class ProfileService {
     }
 
     /**
-     * Distribui XP de partida pelas espécies presentes no time de treino (linhas já no inventário).
+     * Distribui XP de partida pelas linhas evolutivas do time de treino.
      */
     @Transactional
     public void grantTrainingTeamMatchXp(String userId, int totalXp) {
@@ -294,36 +404,48 @@ public class ProfileService {
         if (team == null) {
             return;
         }
-        List<PokemonModel> occupied = new ArrayList<>();
+        List<Integer> lineKeys = new ArrayList<>();
         for (int i = 0; i < TrainingTeamModel.TEAM_SIZE; i++) {
-            PokemonModel slot = team.getSlot(i);
+            EvolutionLineModel slot = team.getSlot(i);
             if (slot != null) {
-                occupied.add(slot);
+                lineKeys.add(slot.getLineKey());
             }
         }
-        if (occupied.isEmpty()) {
+        if (lineKeys.isEmpty()) {
             return;
         }
-        int perSlot = totalXp / occupied.size();
-        int remainder = totalXp % occupied.size();
-        for (int i = 0; i < occupied.size(); i++) {
+        int perSlot = totalXp / lineKeys.size();
+        int remainder = totalXp % lineKeys.size();
+        for (int i = 0; i < lineKeys.size(); i++) {
             int grant = perSlot + (i == 0 ? remainder : 0);
-            addXpToInventoryLine(profile, occupied.get(i), grant);
+            addXpToInventoryLine(profile, lineKeys.get(i), grant);
         }
     }
 
-    private void addXpToInventoryLine(ProfileModel profile, PokemonModel pokemon, int xp) {
-        if (xp <= 0 || pokemon.getEvolutionLine() == null) {
+    private void addXpToInventoryLine(ProfileModel profile, Integer lineKey, int xp) {
+        if (xp <= 0 || lineKey == null) {
             return;
         }
-        inventoryRepository.findByProfile_IdAndEvolutionLine_LineKey(
-                profile.getId(),
-                pokemon.getEvolutionLine().getLineKey()
-        ).ifPresent(row -> {
-            PokemonInventoryXp.addXpAndSyncLevel(row, xp);
-            inventoryRepository.save(row);
-            userPokedexService.registerUnlockedSpeciesForInventoryLine(profile, row);
-        });
+        inventoryRepository.findByProfile_IdAndEvolutionLine_LineKey(profile.getId(), lineKey)
+                .ifPresent(row -> {
+                    int oldLevel = row.getLevel() != null
+                            ? row.getLevel()
+                            : PokemonInventoryXp.levelFromTotalXp(row.getTotalXp() != null ? row.getTotalXp() : 0);
+                    PokemonInventoryXp.addXpAndSyncLevel(row, xp);
+                    int newLevel = row.getLevel() != null ? row.getLevel() : oldLevel;
+                    grantEvolutionMilestoneBalls(profile.getUser().getIdUser(), oldLevel, newLevel);
+                    inventoryRepository.save(row);
+                    userPokedexService.registerUnlockedSpeciesForInventoryLine(profile, row);
+                });
+    }
+
+    private void grantEvolutionMilestoneBalls(String userId, int oldLevel, int newLevel) {
+        if (newLevel <= oldLevel) {
+            return;
+        }
+        for (var entry : PokemonEvolutionRewards.ballsForLevelCrossing(oldLevel, newLevel).entrySet()) {
+            addPokeballs(userId, entry.getKey(), entry.getValue());
+        }
     }
 
     /** Constantes partilhadas com {@link com.svc.pokeguessteam.controller.PokemonController} (PC). */

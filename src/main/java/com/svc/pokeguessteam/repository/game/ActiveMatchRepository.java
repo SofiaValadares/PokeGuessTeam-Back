@@ -50,4 +50,19 @@ public interface ActiveMatchRepository extends JpaRepository<ActiveMatchModel, S
     );
 
     List<ActiveMatchModel> findByProfile_IdAndStatusNot(String profileId, MatchStatus status);
+
+    @EntityGraph(attributePaths = {"userPlayer", "botPlayer", "guesses", "profile", "profile.user", "guestProfile", "guestProfile.user"})
+    @Query("SELECT m FROM ActiveMatchModel m WHERE m.id = :matchId")
+    Optional<ActiveMatchModel> findDetailedById(@Param("matchId") String matchId);
+
+    @EntityGraph(attributePaths = {"userPlayer", "botPlayer", "guesses", "profile", "profile.user", "guestProfile", "guestProfile.user"})
+    @Query("""
+            SELECT m FROM ActiveMatchModel m
+            WHERE m.status <> :finished
+              AND (m.profile.id = :profileId OR m.guestProfile.id = :profileId)
+            """)
+    Optional<ActiveMatchModel> findUnfinishedForProfile(
+            @Param("profileId") String profileId,
+            @Param("finished") MatchStatus finished
+    );
 }

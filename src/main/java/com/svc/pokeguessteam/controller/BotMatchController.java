@@ -4,13 +4,13 @@ import com.svc.pokeguessteam.dto.game.BotMatchActionResponse;
 import com.svc.pokeguessteam.dto.game.BotMatchGuessRequest;
 import com.svc.pokeguessteam.dto.game.BotMatchStateDto;
 import com.svc.pokeguessteam.dto.game.BotMatchTeamRequest;
+import com.svc.pokeguessteam.dto.game.OpponentTeamKnowledgeResponse;
 import com.svc.pokeguessteam.service.BotMatchService;
 import com.svc.pokeguessteam.service.CurrentUserService;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -45,6 +45,15 @@ public class BotMatchController {
         return ResponseEntity.ok(botMatchService.getActiveMatch(userId));
     }
 
+    /**
+     * Início de turno: 6 slots do adversário com pistas acumuladas (só quando é a tua vez).
+     */
+    @GetMapping("/opponent-knowledge")
+    public ResponseEntity<OpponentTeamKnowledgeResponse> opponentKnowledge(HttpSession session) {
+        String userId = currentUserService.requireUserId(session);
+        return ResponseEntity.ok(botMatchService.getOpponentKnowledge(userId));
+    }
+
     @PutMapping("/team")
     public ResponseEntity<BotMatchActionResponse> submitTeam(
             HttpSession session,
@@ -67,12 +76,5 @@ public class BotMatchController {
     public ResponseEntity<BotMatchActionResponse> surrender(HttpSession session) {
         String userId = currentUserService.requireUserId(session);
         return ResponseEntity.ok(botMatchService.surrender(userId));
-    }
-
-    @DeleteMapping
-    public ResponseEntity<Void> abandon(HttpSession session) {
-        String userId = currentUserService.requireUserId(session);
-        botMatchService.abandonMatch(userId);
-        return ResponseEntity.noContent().build();
     }
 }

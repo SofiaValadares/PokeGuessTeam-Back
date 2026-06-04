@@ -5,7 +5,11 @@ import com.svc.pokeguessteam.service.GameHistoryService;
 import com.svc.pokeguessteam.service.PokedexService;
 import com.svc.pokeguessteam.service.ProfileService;
 import com.svc.pokeguessteam.util.GameConstants;
+import com.svc.pokeguessteam.model.enums.GameModes;
+import com.svc.pokeguessteam.model.enums.GameResults;
 import com.svc.pokeguessteam.util.GameMatchRewards;
+import com.svc.pokeguessteam.util.PokeballGachaRules;
+import com.svc.pokeguessteam.util.PokemonEvolutionRewards;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -13,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Arrays;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -41,18 +46,56 @@ public class GameMetaController {
         body.put("friendJoinCodeLength", GameConstants.FRIEND_JOIN_CODE_LENGTH);
         body.put("matchStatuses", Arrays.stream(com.svc.pokeguessteam.model.enums.MatchStatus.values()).map(Enum::name).toList());
         body.put("matchPlayerSides", Arrays.stream(com.svc.pokeguessteam.model.enums.MatchPlayerSide.values()).map(Enum::name).toList());
+        body.put("matchPlayerSidesLegacyAliases", List.of("USER", "BOT"));
+        body.put("matchPlayerSidesByMode", Map.of(
+                "BOT", Map.of(
+                        "HOST", "Treinador (conta logada)",
+                        "OPPONENT", "IA (PokéBot)"
+                ),
+                "LOCAL", Map.of(
+                        "HOST", "Jogador 1 — conta logada (mesmo dispositivo)",
+                        "OPPONENT", "Jogador 2 — pass-and-play (nome em localOpponentName)"
+                ),
+                "FRIEND", Map.of(
+                        "HOST", "Anfitrião (criou a sala)",
+                        "OPPONENT", "Convidado (entrou com código)"
+                )
+        ));
         body.put("guessOutcomes", Arrays.stream(com.svc.pokeguessteam.model.enums.GuessOutcome.values()).map(Enum::name).toList());
         body.put("matchRewards", Map.of(
-                "winXp", GameMatchRewards.xpForResult(com.svc.pokeguessteam.model.enums.GameResults.WIN),
-                "drawXp", GameMatchRewards.xpForResult(com.svc.pokeguessteam.model.enums.GameResults.DRAW),
-                "loseXp", GameMatchRewards.xpForResult(com.svc.pokeguessteam.model.enums.GameResults.LOSE),
-                "desistenceXp", GameMatchRewards.xpForResult(com.svc.pokeguessteam.model.enums.GameResults.DESISTENCE)
+                "friend", Map.of(
+                        "win", payoutMeta(GameModes.FRIEND, GameResults.WIN),
+                        "loseOrDrawOrDesistence", payoutMeta(
+                                GameModes.FRIEND,
+                                GameResults.LOSE
+                        )
+                ),
+                "bot", Map.of(
+                        "win", payoutMeta(GameModes.BOT, GameResults.WIN),
+                        "loseOrDrawOrDesistence", payoutMeta(GameModes.BOT, GameResults.LOSE)
+                ),
+                "local", Map.of(
+                        "win", payoutMeta(GameModes.LOCAL, GameResults.WIN),
+                        "loseOrDrawOrDesistence", payoutMeta(GameModes.LOCAL, GameResults.LOSE)
+                ),
+                "note", "Derrota, empate e desistência usam a mesma tabela que loseOrDrawOrDesistence."
         ));
+        body.put("evolutionRewards", PokemonEvolutionRewards.meta());
+        body.put("gacha", PokeballGachaRules.meta());
         body.put("activeMatchApi", Map.of(
                 "bot", "/api/game/bot/match",
                 "local", "/api/game/local/match",
                 "friend", "/api/game/friend/match"
         ));
         return ResponseEntity.ok(body);
+    }
+
+    private static Map<String, Integer> payoutMeta(GameModes mode, GameResults result) {
+        GameMatchRewards.MatchRewardPayout p = GameMatchRewards.payout(mode, result);
+        return Map.of(
+                "trainingTeamXp", p.trainingTeamXp(),
+                "pokeBalls", p.pokeBalls(),
+                "pokeballFragments", p.pokeballFragments()
+        );
     }
 }

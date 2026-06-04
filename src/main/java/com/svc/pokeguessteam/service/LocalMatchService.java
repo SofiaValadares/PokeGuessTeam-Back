@@ -7,7 +7,8 @@ import com.svc.pokeguessteam.dto.game.LocalMatchActionResponse;
 import com.svc.pokeguessteam.dto.game.LocalMatchStartRequest;
 import com.svc.pokeguessteam.dto.game.LocalMatchStateDto;
 import com.svc.pokeguessteam.dto.game.LocalMatchTeamRequest;
-import com.svc.pokeguessteam.dto.game.OpponentKnowledgeSlotDto;
+import com.svc.pokeguessteam.dto.game.OpponentSlotKnowledgeDto;
+import com.svc.pokeguessteam.dto.game.OpponentTeamKnowledgeResponse;
 import com.svc.pokeguessteam.exception.ApiBusinessException;
 import com.svc.pokeguessteam.exception.ErrorCodes;
 import com.svc.pokeguessteam.messages.MessageKeys;
@@ -20,7 +21,6 @@ import com.svc.pokeguessteam.model.pokemon.PokemonModel;
 import com.svc.pokeguessteam.model.user.ProfileModel;
 import com.svc.pokeguessteam.repository.game.ActiveMatchRepository;
 import com.svc.pokeguessteam.repository.pokemon.PokemonRepository;
-import com.svc.pokeguessteam.util.BotAiOpponent;
 import com.svc.pokeguessteam.util.GameConstants;
 import com.svc.pokeguessteam.util.GameFinishValidation;
 import com.svc.pokeguessteam.util.MatchEngine;
@@ -43,19 +43,25 @@ public class LocalMatchService {
     private final ProfileService profileService;
     private final GameHistoryService gameHistoryService;
     private final MatchRewardService matchRewardService;
+    private final MatchKnowledgeService matchKnowledgeService;
+    private final ActiveMatchConstraintService activeMatchConstraintService;
 
     public LocalMatchService(
             ActiveMatchRepository activeMatchRepository,
             PokemonRepository pokemonRepository,
             ProfileService profileService,
             GameHistoryService gameHistoryService,
-            MatchRewardService matchRewardService
+            MatchRewardService matchRewardService,
+            MatchKnowledgeService matchKnowledgeService,
+            ActiveMatchConstraintService activeMatchConstraintService
     ) {
         this.activeMatchRepository = activeMatchRepository;
         this.pokemonRepository = pokemonRepository;
         this.profileService = profileService;
         this.gameHistoryService = gameHistoryService;
         this.matchRewardService = matchRewardService;
+        this.matchKnowledgeService = matchKnowledgeService;
+        this.activeMatchConstraintService = activeMatchConstraintService;
     }
 
     @Transactional
@@ -63,7 +69,7 @@ public class LocalMatchService {
         ProfileModel profile = profileService.ensureProfileWithStarters(userId);
         String opponentName = GameFinishValidation.validateAndNormalizeLocalOpponentName(request.opponentName());
 
-        clearActiveLocalMatch(profile.getId());
+        activeMatchConstraintService.ensureCanStartNewMatch(profile.getId());
 
         ActiveMatchModel match = new ActiveMatchModel();
         match.setProfile(profile);
@@ -72,14 +78,14 @@ public class LocalMatchService {
         match.setOpponentName(opponentName);
 
         ActiveMatchPlayerModel player = new ActiveMatchPlayerModel();
-        player.setSide(MatchPlayerSide.USER);
+        player.setSide(MatchPlayerSide.HOST);
         player.setSkipTurns(0);
-        match.setUserPlayer(player);
+        match.setHostPlayer(player);
 
         ActiveMatchPlayerModel opponent = new ActiveMatchPlayerModel();
-        opponent.setSide(MatchPlayerSide.BOT);
+        opponent.setSide(MatchPlayerSide.OPPONENT);
         opponent.setSkipTurns(0);
-        match.setBotPlayer(opponent);
+        match.setOpponentPlayer(opponent);
 
         ActiveMatchModel saved = activeMatchRepository.save(match);
         return toStateDto(saved, null);
@@ -89,6 +95,12 @@ public class LocalMatchService {
     public LocalMatchStateDto getActiveMatch(String userId) {
         ActiveMatchModel match = requireActiveMatch(userId);
         return toStateDto(match, null);
+    }
+
+    @Transactional(readOnly = true)
+    public OpponentTeamKnowledgeResponse getOpponentKnowledge(String userId) {
+        ActiveMatchModel match = requireActiveMatch(userId);
+        return matchKnowledgeService.getOpponentKnowledgeForCurrentTurn(match);
     }
 
     @Transactional
@@ -103,7 +115,7 @@ public class LocalMatchService {
         }
 
         MatchPlayerSide side = request.playerSide();
-        if (side != MatchPlayerSide.USER && side != MatchPlayerSide.BOT) {
+        if (side != MatchPlayerSide.HOST && side != MatchPlayerSide.OPPONENT) {
             throw new ApiBusinessException(
                     HttpStatus.BAD_REQUEST,
                     ErrorCodes.GAME_MATCH_INVALID_ACTION,
@@ -150,7 +162,7 @@ public class LocalMatchService {
     @Transactional
     public LocalMatchActionResponse surrender(String userId) {
         ActiveMatchModel match = requireActiveMatch(userId);
-        if (match.getStatus() != MatchStatus.ACTIVE) {
+        if (match.getStatus() == MatchStatus.FINISHED) {
             throw new ApiBusinessException(
                     HttpStatus.BAD_REQUEST,
                     ErrorCodes.GAME_MATCH_NOT_ACTIVE,
@@ -158,7 +170,9 @@ public class LocalMatchService {
             );
         }
 
-        MatchPlayerSide surrenderSide = match.getCurrentTurn();
+        MatchPlayerSide surrenderSide = match.getStatus() == MatchStatus.ACTIVE
+                ? match.getCurrentTurn()
+                : MatchPlayerSide.HOST;
         MatchEngine.finishBySurrender(match, surrenderSide);
         activeMatchRepository.save(match);
         GameHistoryEntryDto history = finalizeIfFinished(match, surrenderSide);
@@ -166,16 +180,6 @@ public class LocalMatchService {
         LocalMatchStateDto state = toStateDto(match, history);
         completeIfFinished(match, surrenderSide);
         return new LocalMatchActionResponse(state, List.of());
-    }
-
-    @Transactional
-    public void abandonMatch(String userId) {
-        ProfileModel profile = profileService.ensureProfileWithStarters(userId);
-        activeMatchRepository.findActiveByProfileIdAndGameMode(
-                profile.getId(),
-                GameModes.LOCAL,
-                MatchStatus.FINISHED
-        ).ifPresent(activeMatchRepository::delete);
     }
 
     private GameHistoryEntryDto finalizeIfFinished(ActiveMatchModel match, MatchPlayerSide surrenderSide) {
@@ -195,14 +199,10 @@ public class LocalMatchService {
     private LocalMatchStateDto toStateDto(ActiveMatchModel match, GameHistoryEntryDto history) {
         MatchPlayerSide knowledgeSide = match.getCurrentTurn() != null
                 ? match.getCurrentTurn()
-                : MatchPlayerSide.USER;
+                : MatchPlayerSide.HOST;
 
+        List<OpponentSlotKnowledgeDto> knowledge = matchKnowledgeService.buildKnowledge(match, knowledgeSide);
         Map<Integer, PokemonModel> pokemonByDex = loadPokemonByDex();
-        List<OpponentKnowledgeSlotDto> knowledge = BotAiOpponent
-                .buildOpponentKnowledge(match, knowledgeSide, pokemonByDex)
-                .stream()
-                .map(OpponentKnowledgeSlotDto::from)
-                .toList();
 
         List<BotMatchGuessFeedbackDto> recentGuesses = match.getGuesses().stream()
                 .limit(20)
@@ -229,16 +229,8 @@ public class LocalMatchService {
         ));
     }
 
-    private void clearActiveLocalMatch(String profileId) {
-        activeMatchRepository.findActiveByProfileIdAndGameMode(
-                profileId,
-                GameModes.LOCAL,
-                MatchStatus.FINISHED
-        ).ifPresent(activeMatchRepository::delete);
-    }
-
     private static ActiveMatchPlayerModel getPlayer(ActiveMatchModel match, MatchPlayerSide side) {
-        return side == MatchPlayerSide.USER ? match.getUserPlayer() : match.getBotPlayer();
+        return side == MatchPlayerSide.HOST ? match.getHostPlayer() : match.getOpponentPlayer();
     }
 
     private MatchEngine.ApplyGuessResult applyGuessSafe(
