@@ -25,8 +25,11 @@ public class WebConfig implements WebMvcConfigurer {
                         "/auth/logout",
                         "/auth/email/verification/send",
                         "/auth/email/verification/confirm",
+                        "/auth/verification/resend",
+                        "/auth/verification/confirm",
                         "/auth/password-reset/request",
                         "/auth/password-reset/confirm",
+                        "/api/meta",
                         "/public/**",
                         "/error",
                         "/favicon.ico"

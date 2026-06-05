@@ -85,7 +85,7 @@ public class AuthController {
         );
     }
 
-    @PostMapping("/email/verification/send")
+    @PostMapping({"/email/verification/send", "/verification/resend"})
     public ResponseEntity<MessageResponse> sendEmailVerification(
             @RequestBody @Valid EmailOnlyRequest request
     ) {
@@ -93,7 +93,7 @@ public class AuthController {
         return ResponseEntity.ok(new MessageResponse(msg(MessageKeys.AUTH_EMAIL_VERIFICATION_SENT)));
     }
 
-    @PostMapping("/email/verification/confirm")
+    @PostMapping({"/email/verification/confirm", "/verification/confirm"})
     public ResponseEntity<MessageResponse> confirmEmailVerification(
             @RequestBody @Valid EmailCodeRequest request
     ) {

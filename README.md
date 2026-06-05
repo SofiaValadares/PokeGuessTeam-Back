@@ -22,13 +22,34 @@ API: `http://localhost:8080`
 
 ## Autenticação
 
-| Método | Rota | Descrição |
-|--------|------|-----------|
-| POST | `/auth/register` | Cadastro |
-| POST | `/auth/login` | Login (cookie de sessão) |
-| GET | `/auth/session` | Sessão atual |
-| POST | `/auth/logout` | Logout |
-| GET | `/api/me` | Utilizador autenticado |
+Fluxo sugerido: **registo → confirmar e-mail (código de 8 dígitos) → login → `/api/*`**.
+
+O login exige e-mail verificado (`403 AUTH_EMAIL_NOT_VERIFIED` se ainda não confirmou). A verificação de e-mail **não exige sessão** — podes confirmar antes de fazer login.
+
+E-mails transacionais via **Resend** (`RESEND_API_KEY` no `.env`). Sem chave configurada, o código aparece no **log do servidor**.
+
+### Rotas públicas (sem cookie)
+
+| Método | Rota | Body | Descrição |
+|--------|------|------|-----------|
+| POST | `/auth/register` | `{ username, email, password }` | Cadastro; envia código de verificação |
+| POST | `/auth/email/verification/send` | `{ email }` | Reenvia código (cooldown 60s) |
+| POST | `/auth/email/verification/confirm` | `{ email, code }` | Confirma e-mail (`code`: 8 dígitos) |
+| POST | `/auth/verification/resend` | `{ email }` | Alias de `.../send` |
+| POST | `/auth/verification/confirm` | `{ email, code }` | Alias de `.../confirm` |
+| POST | `/auth/password-reset/request` | `{ email }` | Pedir código de redefinição (só se e-mail já verificado) |
+| POST | `/auth/password-reset/confirm` | `{ email, code, newPassword }` | Redefinir senha |
+| POST | `/auth/login` | `{ login, password }` | Login (`login` = e-mail ou username); define cookie `JSESSIONID` |
+| GET | `/auth/session` | — | Estado da sessão (`authenticated`, `emailVerified`) |
+| POST | `/auth/logout` | — | Logout |
+
+### Rotas autenticadas (sessão + session binding)
+
+| Método | Rota | Body | Descrição |
+|--------|------|------|-----------|
+| PATCH | `/auth/password` | `{ currentPassword, newPassword }` | Trocar senha |
+| PATCH | `/auth/username` | `{ newUsername, password }` | Trocar username |
+| GET | `/api/me` | — | Utilizador autenticado |
 
 ## Meta e Pokédex
 

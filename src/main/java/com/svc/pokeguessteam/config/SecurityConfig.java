@@ -40,6 +40,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/auth/session").permitAll()
                         .requestMatchers(HttpMethod.POST, "/auth/email/verification/send").permitAll()
                         .requestMatchers(HttpMethod.POST, "/auth/email/verification/confirm").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/auth/verification/resend").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/auth/verification/confirm").permitAll()
                         .requestMatchers(HttpMethod.POST, "/auth/password-reset/request").permitAll()
                         .requestMatchers(HttpMethod.POST, "/auth/password-reset/confirm").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/meta").permitAll()
