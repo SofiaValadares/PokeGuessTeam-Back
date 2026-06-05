@@ -4,6 +4,7 @@ import java.util.Optional;
 
 public record SessionResponse(
         Boolean authenticated,
-        Optional<String> userId
+        Optional<String> userId,
+        Optional<Boolean> emailVerified
 ) {
 }

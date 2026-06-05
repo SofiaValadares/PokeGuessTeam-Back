@@ -4,6 +4,7 @@ import com.svc.pokeguessteam.exception.ApiBusinessException;
 import com.svc.pokeguessteam.exception.ErrorCodes;
 import com.svc.pokeguessteam.messages.MessageKeys;
 import com.svc.pokeguessteam.model.user.UserModel;
+import com.svc.pokeguessteam.config.AppAuthProperties;
 import com.svc.pokeguessteam.repository.user.UserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -18,15 +19,21 @@ public class AuthService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final ProfileService profileService;
+    private final AuthCodeService authCodeService;
+    private final AppAuthProperties authProperties;
 
     public AuthService(
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
-            ProfileService profileService
+            ProfileService profileService,
+            AuthCodeService authCodeService,
+            AppAuthProperties authProperties
     ) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.profileService = profileService;
+        this.authCodeService = authCodeService;
+        this.authProperties = authProperties;
     }
 
     @Transactional
@@ -56,6 +63,7 @@ public class AuthService {
         user.setPasswordHash(passwordEncoder.encode(rawPassword));
         UserModel saved = userRepository.save(user);
         profileService.ensureProfileWithStarters(saved.getIdUser());
+        authCodeService.sendEmailVerificationCode(saved);
         return saved;
     }
 
@@ -71,7 +79,36 @@ public class AuthService {
         if (!passwordEncoder.matches(rawPassword, user.getPasswordHash())) {
             throw invalidCredentials();
         }
+        if (authProperties.isRequireEmailVerificationForLogin()
+                && !Boolean.TRUE.equals(user.getEmailVerify())) {
+            throw new ApiBusinessException(
+                    HttpStatus.FORBIDDEN,
+                    ErrorCodes.AUTH_EMAIL_NOT_VERIFIED,
+                    MessageKeys.AUTH_EMAIL_NOT_VERIFIED
+            );
+        }
         return user;
+    }
+
+    @Transactional
+    public void resetPasswordWithCode(String email, String code, String newPassword) {
+        if (newPassword == null || newPassword.isBlank()) {
+            throw new ApiBusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    ErrorCodes.VALIDATION_FAILED,
+                    MessageKeys.VALIDATION_REGISTER_PASSWORD_REQUIRED
+            );
+        }
+        UserModel user = authCodeService.confirmPasswordResetCode(email, code);
+        if (passwordEncoder.matches(newPassword, user.getPasswordHash())) {
+            throw new ApiBusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    ErrorCodes.AUTH_NEW_PASSWORD_SAME,
+                    MessageKeys.AUTH_NEW_PASSWORD_SAME
+            );
+        }
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
     }
 
     @Transactional
@@ -172,5 +209,12 @@ public class AuthService {
             return "";
         }
         return username.trim();
+    }
+
+    @Transactional(readOnly = true)
+    public boolean isEmailVerified(String userId) {
+        return userRepository.findById(userId)
+                .map(user -> Boolean.TRUE.equals(user.getEmailVerify()))
+                .orElse(false);
     }
 }

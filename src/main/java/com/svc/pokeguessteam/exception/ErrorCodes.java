@@ -12,6 +12,11 @@ public final class ErrorCodes {
     public static final String AUTH_USERNAME_ALREADY_TAKEN = "AUTH_USERNAME_ALREADY_TAKEN";
     public static final String AUTH_CURRENT_PASSWORD_WRONG = "AUTH_CURRENT_PASSWORD_WRONG";
     public static final String AUTH_NEW_PASSWORD_SAME = "AUTH_NEW_PASSWORD_SAME";
+    public static final String AUTH_EMAIL_NOT_VERIFIED = "AUTH_EMAIL_NOT_VERIFIED";
+    public static final String AUTH_EMAIL_ALREADY_VERIFIED = "AUTH_EMAIL_ALREADY_VERIFIED";
+    public static final String AUTH_EMAIL_NOT_FOUND = "AUTH_EMAIL_NOT_FOUND";
+    public static final String AUTH_CODE_INVALID = "AUTH_CODE_INVALID";
+    public static final String AUTH_CODE_RESEND_COOLDOWN = "AUTH_CODE_RESEND_COOLDOWN";
     public static final String UNAUTHENTICATED = "UNAUTHENTICATED";
     public static final String SESSION_NOT_FOUND = "SESSION_NOT_FOUND";
     public static final String SESSION_BINDING_MISSING = "SESSION_BINDING_MISSING";

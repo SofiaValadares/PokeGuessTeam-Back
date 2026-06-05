@@ -13,6 +13,19 @@ public final class MessageKeys {
     public static final String AUTH_USERNAME_ALREADY_TAKEN = "error.auth.username-already-taken";
     public static final String AUTH_CURRENT_PASSWORD_WRONG = "error.auth.current-password-wrong";
     public static final String AUTH_NEW_PASSWORD_SAME = "error.auth.new-password-same";
+    public static final String AUTH_EMAIL_NOT_VERIFIED = "error.auth.email-not-verified";
+    public static final String AUTH_EMAIL_ALREADY_VERIFIED = "error.auth.email-already-verified";
+    public static final String AUTH_EMAIL_NOT_FOUND = "error.auth.email-not-found";
+    public static final String AUTH_CODE_INVALID = "error.auth.code-invalid";
+    public static final String AUTH_CODE_RESEND_COOLDOWN = "error.auth.code-resend-cooldown";
+    public static final String AUTH_PASSWORD_RESET_SENT = "info.auth.password-reset-sent";
+    public static final String AUTH_EMAIL_VERIFICATION_SENT = "info.auth.email-verification-sent";
+    public static final String AUTH_EMAIL_VERIFIED = "info.auth.email-verified";
+    public static final String AUTH_PASSWORD_RESET_DONE = "info.auth.password-reset-done";
+
+    public static final String VALIDATION_REGISTER_PASSWORD_REQUIRED = "error.validation.register.password.required";
+    public static final String VALIDATION_AUTH_CODE_REQUIRED = "error.validation.auth.code.required";
+    public static final String VALIDATION_AUTH_CODE_FORMAT = "error.validation.auth.code.format";
 
     public static final String SECURITY_AUTHENTICATION_REQUIRED = "error.security.authentication-required";
     public static final String SESSION_INVALID_OR_EXPIRED = "error.session.invalid-or-expired";

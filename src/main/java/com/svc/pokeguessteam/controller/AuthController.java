@@ -2,19 +2,27 @@ package com.svc.pokeguessteam.controller;
 
 import com.svc.pokeguessteam.dto.auth.ChangePasswordRequest;
 import com.svc.pokeguessteam.dto.auth.ChangeUsernameRequest;
+import com.svc.pokeguessteam.dto.auth.EmailCodeRequest;
+import com.svc.pokeguessteam.dto.auth.EmailOnlyRequest;
 import com.svc.pokeguessteam.dto.auth.LoginRequest;
+import com.svc.pokeguessteam.dto.auth.MessageResponse;
+import com.svc.pokeguessteam.dto.auth.PasswordResetConfirmRequest;
 import com.svc.pokeguessteam.dto.auth.RegisterRequest;
 import com.svc.pokeguessteam.dto.auth.RegisterResponse;
 import com.svc.pokeguessteam.dto.auth.SessionResponse;
+import com.svc.pokeguessteam.messages.MessageKeys;
 import com.svc.pokeguessteam.model.user.UserModel;
 import com.svc.pokeguessteam.security.DeviceFingerprintUtil;
 import com.svc.pokeguessteam.security.SessionBindingInterceptor;
+import com.svc.pokeguessteam.service.AuthCodeService;
 import com.svc.pokeguessteam.service.AuthService;
 import com.svc.pokeguessteam.service.CurrentUserService;
 import com.svc.pokeguessteam.service.ProfileService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
+import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -26,6 +34,7 @@ import org.springframework.security.web.context.HttpSessionSecurityContextReposi
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 
 @RestController
@@ -35,22 +44,25 @@ public class AuthController {
     private static final String USER_ID_ATTR = "USER_ID";
 
     private final AuthService authService;
+    private final AuthCodeService authCodeService;
     private final ProfileService profileService;
     private final CurrentUserService currentUserService;
+    private final MessageSource messageSource;
 
     public AuthController(
             AuthService authService,
+            AuthCodeService authCodeService,
             ProfileService profileService,
-            CurrentUserService currentUserService
+            CurrentUserService currentUserService,
+            MessageSource messageSource
     ) {
         this.authService = authService;
+        this.authCodeService = authCodeService;
         this.profileService = profileService;
         this.currentUserService = currentUserService;
+        this.messageSource = messageSource;
     }
 
-    /**
-     * REGISTRO
-     */
     @PostMapping("/register")
     public ResponseEntity<RegisterResponse> register(
             @RequestBody @Valid RegisterRequest request
@@ -67,14 +79,44 @@ public class AuthController {
                 new RegisterResponse(
                         user.getIdUser(),
                         user.getEmail(),
-                        user.getUsername()
+                        user.getUsername(),
+                        Boolean.TRUE.equals(user.getEmailVerify())
                 )
         );
     }
 
-    /**
-     * Troca de senha (logado).
-     */
+    @PostMapping("/email/verification/send")
+    public ResponseEntity<MessageResponse> sendEmailVerification(
+            @RequestBody @Valid EmailOnlyRequest request
+    ) {
+        authCodeService.sendEmailVerificationCodeByEmail(request.email());
+        return ResponseEntity.ok(new MessageResponse(msg(MessageKeys.AUTH_EMAIL_VERIFICATION_SENT)));
+    }
+
+    @PostMapping("/email/verification/confirm")
+    public ResponseEntity<MessageResponse> confirmEmailVerification(
+            @RequestBody @Valid EmailCodeRequest request
+    ) {
+        authCodeService.confirmEmailVerification(request.email(), request.code());
+        return ResponseEntity.ok(new MessageResponse(msg(MessageKeys.AUTH_EMAIL_VERIFIED)));
+    }
+
+    @PostMapping("/password-reset/request")
+    public ResponseEntity<MessageResponse> requestPasswordReset(
+            @RequestBody @Valid EmailOnlyRequest request
+    ) {
+        authCodeService.sendPasswordResetCodeByEmailIfEligible(request.email());
+        return ResponseEntity.ok(new MessageResponse(msg(MessageKeys.AUTH_PASSWORD_RESET_SENT)));
+    }
+
+    @PostMapping("/password-reset/confirm")
+    public ResponseEntity<MessageResponse> confirmPasswordReset(
+            @RequestBody @Valid PasswordResetConfirmRequest request
+    ) {
+        authService.resetPasswordWithCode(request.email(), request.code(), request.newPassword());
+        return ResponseEntity.ok(new MessageResponse(msg(MessageKeys.AUTH_PASSWORD_RESET_DONE)));
+    }
+
     @PatchMapping("/password")
     public ResponseEntity<Void> changePassword(
             @RequestBody @Valid ChangePasswordRequest request,
@@ -86,9 +128,6 @@ public class AuthController {
         return ResponseEntity.ok().build();
     }
 
-    /**
-     * Troca de nome de usuário (confirma com senha atual).
-     */
     @PatchMapping("/username")
     public ResponseEntity<Void> changeUsername(
             @RequestBody @Valid ChangeUsernameRequest request,
@@ -100,9 +139,6 @@ public class AuthController {
         return ResponseEntity.ok().build();
     }
 
-    /**
-     * LOGIN
-     */
     @PostMapping("/login")
     public ResponseEntity<Void> login(
             @RequestBody @Valid LoginRequest request,
@@ -146,9 +182,6 @@ public class AuthController {
         return ResponseEntity.ok().build();
     }
 
-    /**
-     * LOGOUT
-     */
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(
             HttpServletRequest request
@@ -165,9 +198,6 @@ public class AuthController {
         return ResponseEntity.ok().build();
     }
 
-    /**
-     * VERIFICAR STATUS DE LOGIN
-     */
     @GetMapping("/session")
     public ResponseEntity<SessionResponse> session(
             HttpServletRequest request
@@ -189,18 +219,26 @@ public class AuthController {
             return ResponseEntity.ok(
                     new SessionResponse(
                             false,
+                            Optional.empty(),
                             Optional.empty()
                     )
             );
         }
 
         String userId = session.getAttribute(USER_ID_ATTR).toString();
+        boolean emailVerified = authService.isEmailVerified(userId);
 
         return ResponseEntity.ok(
                 new SessionResponse(
                         true,
-                        Optional.of(userId)
+                        Optional.of(userId),
+                        Optional.of(emailVerified)
                 )
         );
+    }
+
+    private String msg(String key) {
+        Locale locale = LocaleContextHolder.getLocale();
+        return messageSource.getMessage(key, null, key, locale);
     }
 }
