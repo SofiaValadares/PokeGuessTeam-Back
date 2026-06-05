@@ -1,6 +1,6 @@
 # PokeTeamGuess — Backend (Spring Boot)
 
-API REST do **PokeTeamGuess** ([GDD](https://github.com/SofiaValadares/PokeGuessTeam)): dedução de equipas secretas de 6 Pokémon, inventário, gacha e partidas com **regras no servidor** (requisito AV2 de Frontend).
+API REST do **PokeTeamGuess** ([GDD](https://github.com/SofiaValadares/PokeGuessTeam)): dedução de equipas secretas de 6 Pokémon, inventário, gacha e partidas (motor no **cliente** para bot/local; no **servidor** para amigo online).
 
 Frontend de referência (AV1): [PokeGuessTeam](https://github.com/SofiaValadares/PokeGuessTeam) — [produção](https://poke-guess-team.vercel.app/).
 
@@ -8,6 +8,7 @@ Frontend de referência (AV1): [PokeGuessTeam](https://github.com/SofiaValadares
 
 - Java 17, Spring Boot 3, Maven
 - PostgreSQL + JPA
+- Socket.io (porta `9092`, partidas amigo)
 - Sessão HTTP (`JSESSIONID`) + session binding (`User-Agent` + IP)
 - CORS para dev: `localhost:5173`, `3000`, `5500`
 
@@ -22,24 +23,49 @@ API: `http://localhost:8080`
 
 ## Autenticação
 
-Fluxo sugerido: **registo → confirmar e-mail (código de 8 dígitos) → login → `/api/*`**.
-
-O login exige e-mail verificado (`403 AUTH_EMAIL_NOT_VERIFIED` se ainda não confirmou). A verificação de e-mail **não exige sessão** — podes confirmar antes de fazer login.
+Todos os pedidos à API devem usar `credentials: 'include'` (cookie `JSESSIONID` + session binding por `User-Agent`).
 
 E-mails transacionais via **Resend** (`RESEND_API_KEY` no `.env`). Sem chave configurada, o código aparece no **log do servidor**.
 
-### Rotas públicas (sem cookie)
+### Fluxos suportados
+
+| Fluxo | Passos | Sessão ao final |
+|-------|--------|-----------------|
+| **Cadastro** | register → confirmar e-mail | Sim (confirm cria sessão) |
+| **Login sem e-mail verificado** | login (`403`) → confirmar e-mail | Sim (confirm cria sessão) |
+| **Login verificado** | login | Sim |
+| **Troca de senha** | pedir código → confirmar nova senha | Não → redirecionar para login |
+
+`POST /auth/login` e `POST /auth/email/verification/confirm` devolvem `AuthSessionResponse`:
+
+```json
+{
+  "userId": "...",
+  "email": "...",
+  "username": "...",
+  "emailVerified": true,
+  "message": "..." 
+}
+```
+
+(`message` só vem preenchido na confirmação de e-mail; no login é `null`.)
+
+Login sem e-mail verificado → **403** `AUTH_EMAIL_NOT_VERIFIED`.
+
+Prompt para implementação no frontend: `docs/frontend-auth-flows-prompt.md`.
+
+### Rotas públicas (sem cookie inicial)
 
 | Método | Rota | Body | Descrição |
 |--------|------|------|-----------|
 | POST | `/auth/register` | `{ username, email, password }` | Cadastro; envia código de verificação |
 | POST | `/auth/email/verification/send` | `{ email }` | Reenvia código (cooldown 60s) |
-| POST | `/auth/email/verification/confirm` | `{ email, code }` | Confirma e-mail (`code`: 8 dígitos) |
+| POST | `/auth/email/verification/confirm` | `{ email, code }` | Confirma e-mail e **cria sessão** |
 | POST | `/auth/verification/resend` | `{ email }` | Alias de `.../send` |
 | POST | `/auth/verification/confirm` | `{ email, code }` | Alias de `.../confirm` |
 | POST | `/auth/password-reset/request` | `{ email }` | Pedir código de redefinição (só se e-mail já verificado) |
-| POST | `/auth/password-reset/confirm` | `{ email, code, newPassword }` | Redefinir senha |
-| POST | `/auth/login` | `{ login, password }` | Login (`login` = e-mail ou username); define cookie `JSESSIONID` |
+| POST | `/auth/password-reset/confirm` | `{ email, code, newPassword }` | Redefinir senha (**sem** sessão) |
+| POST | `/auth/login` | `{ login, password }` | Login; exige e-mail verificado |
 | GET | `/auth/session` | — | Estado da sessão (`authenticated`, `emailVerified`) |
 | POST | `/auth/logout` | — | Logout |
 
@@ -67,63 +93,68 @@ E-mails transacionais via **Resend** (`RESEND_API_KEY` no `.env`). Sem chave con
 | GET | `/api/profile/collection` | Pokébolas e fragmentos |
 | POST | `/api/pokemon/draw` | Gacha (consome Pokébola) |
 
-## Partidas (motor no servidor)
+## Partidas
 
-Alinhado ao GDD e à [beta](https://poke-guess-team.vercel.app/): turnos, pistas (tipo, geração, cor, altura, peso), jogada extra, rodada de empate, histórico automático e **recompensas** (XP no time de treino + Pokébolas).
+Alinhado ao GDD e à [beta](https://poke-guess-team.vercel.app/): turnos, pistas (tipo, geração, cor, altura, peso), jogada extra, rodada de empate, histórico automático e **recompensas** (XP no time de treino + fragmentos de Pokébola).
 
-### Bot
+### Arquitetura
 
-| Método | Rota |
-|--------|------|
-| POST | `/api/game/bot/match` |
-| GET | `/api/game/bot/match` |
-| PUT | `/api/game/bot/match/team` |
-| POST | `/api/game/bot/match/guess` |
-| POST | `/api/game/bot/match/surrender` — também em fase `SETUP` (desistência) |
+| Modo | Motor | API |
+|------|-------|-----|
+| **Bot** | Cliente (frontend) | Valida equipa + regista resultado |
+| **Local** | Cliente (frontend) | Valida setup + regista resultado |
+| **Amigo** | Servidor | Fluxo completo + Socket.io |
 
-**Uma partida por conta:** com qualquer partida não terminada (`SETUP` ou `ACTIVE`, em bot/local/amigo), não é possível iniciar outra em nenhum modo até vitória, derrota, empate ou desistência (`409 GAME_MATCH_ALREADY_IN_PROGRESS`). Não existe abandonar partida — só `POST .../surrender`.
+Socket.io (`http://localhost:9092`, evento `match:event`) **só no modo amigo**. Cookie `JSESSIONID` na handshake.
 
-### WebSocket (STOMP) — bot e amigo
+### Bot (client-side)
 
-- Endpoint SockJS: `http://localhost:8080/ws` (mesmo cookie `JSESSIONID` do login)
-- Enviar palpite: `SEND /app/match/bot/guess` ou `/app/match/friend/guess` — body `{ "pokedexNumber": 25 }`
-- Subscrever **bot:** `/topic/match/bot/{matchId}`
-- Subscrever **amigo:** `/topic/match/friend/{matchId}/user/{userId}`
+| Método | Rota | Body |
+|--------|------|------|
+| PUT | `/api/game/bot/match/team` | `{ "team": [6 dex] }` → `{ hostTeam, opponentTeam }` |
+| POST | `/api/game/bot/match/finish` | `{ userCorrectGuesses, opponentCorrectGuesses, result }` → `{ historyEntry, reward }` |
 
-Eventos (`MatchRealtimeMessage.type`):
+Requer ≥12 espécies registadas no PC. Limpa partidas bot antigas em `TB_ACTIVE_MATCH` ao validar ou terminar.
 
-| Tipo | Uso |
-|------|-----|
-| `PLAYER_GUESS` | Teu palpite + estado atualizado |
-| `BOT_TURN_START` | Bloquear UI — vez do bot |
-| `BOT_GUESS` | Um palpite do bot (pode repetir se acertar e jogar de novo) |
-| `MATCH_STATE` / `MATCH_FINISHED` | Estado final do turno ou partida |
-| `TURN_TIMER` | Prazo de 50s (amigo) |
-| `TIMEOUT_PENALTY` | Palpite automático + penalidade no histórico |
-| `OPPONENT_REPLACED_BY_BOT` | 3 penalidades → adversário vira bot |
+### Local (client-side, pass-and-play)
 
-**Amigo:** 50s por turno; timeout = palpite aleatório + penalidade (`turnTimeoutPenalties` no histórico). 3 penalidades na mesma partida = desistência desse jogador; o outro termina vs IA. 5 penalidades na última hora = ban de 3 dias do modo amigo (`403 GAME_FRIEND_ONLINE_BANNED`). Penalidades ficam no perfil por 7 dias (`TB_FRIEND_ONLINE_PENALTIES`).
+| Método | Rota | Body |
+|--------|------|------|
+| PUT | `/api/game/local/match/setup` | `{ opponentName, hostTeam, opponentTeam }` → `204` |
+| POST | `/api/game/local/match/finish` | `{ opponentName, userCorrectGuesses, opponentCorrectGuesses, result }` |
 
-O `POST /api/game/*/match/guess` HTTP continua válido; em **bot** o palpite do utilizador vem na resposta e os palpites do bot só por WebSocket.
+### Amigo remoto (motor no servidor)
 
-### Local (pass-and-play)
-
-| Método | Rota |
-|--------|------|
-| POST | `/api/game/local/match` — body: `{ "opponentName": "Ash" }` |
-| PUT | `/api/game/local/match/team` — `{ "playerSide": "HOST"|"OPPONENT", "team": [6 dex] }` (aliases `USER`/`BOT`) |
-| POST | `/api/game/local/match/guess` |
-| GET | `/api/game/*/match/opponent-knowledge` | Início de turno: 6 slots com pistas acumuladas |
-| POST | `/api/game/local/match/surrender` |
-
-### Amigo remoto
+**Uma partida por conta:** com partida amigo não terminada (`SETUP` ou `ACTIVE`), não é possível iniciar outra até vitória, derrota, empate ou desistência (`409 GAME_MATCH_ALREADY_IN_PROGRESS`).
 
 | Método | Rota |
 |--------|------|
 | POST | `/api/game/friend/match` — gera `joinCode` (6 caracteres) |
 | POST | `/api/game/friend/match/join` — `{ "joinCode": "ABC123" }` |
+| GET | `/api/game/friend/match` |
 | PUT | `/api/game/friend/match/team` |
 | POST | `/api/game/friend/match/guess` |
+| POST | `/api/game/friend/match/surrender` |
+| GET | `/api/game/friend/match/opponent-knowledge` |
+
+### Socket.io — amigo
+
+- Conectar: `http://localhost:9092` (porta `SOCKETIO_PORT`, default `9092`) com cookie `JSESSIONID`
+- Entrar na sala: emit `match:join` `{ "mode": "friend", "matchId": "..." }` → room `match:friend:{matchId}:user:{userId}`
+- Palpite: emit `match:friend:guess` `{ "pokedexNumber": 25 }` (alternativa ao HTTP)
+- Sair: emit `match:leave` ou desconectar
+
+Eventos recebidos (`match:event`, campo `type`):
+
+| Tipo | Uso |
+|------|-----|
+| `PLAYER_GUESS` | Palpite + estado atualizado |
+| `MATCH_STATE` / `MATCH_FINISHED` | Estado ou fim da partida |
+| `TURN_TIMER` | Prazo de 50s |
+| `TIMEOUT_PENALTY` | Palpite automático + penalidade |
+| `OPPONENT_REPLACED_BY_BOT` | 3 penalidades → adversário vira bot |
+
+**Amigo:** 50s por turno; timeout = palpite aleatório + penalidade (`turnTimeoutPenalties` no histórico). 3 penalidades na mesma partida = desistência desse jogador; o outro termina vs IA. 5 penalidades na última hora = ban de 3 dias do modo amigo (`403 GAME_FRIEND_ONLINE_BANNED`). Penalidades ficam no perfil por 7 dias (`TB_FRIEND_ONLINE_PENALTIES`).
 
 ### Histórico
 
@@ -135,16 +166,21 @@ O `POST /api/game/*/match/guess` HTTP continua válido; em **bot** o palpite do 
 
 ## Recompensas pós-partida (GDD)
 
-Após terminar uma partida ativa:
+Valores em `GET /api/meta` → `matchRewards`.
 
-| Resultado | XP (time de treino) | Pokébolas |
-|-----------|---------------------|-----------|
-| WIN | 40 | 2 |
-| DRAW | 20 | 1 |
-| LOSE | 12 | 0 |
-| DESISTENCE | 5 | 0 |
+**Bot / local:**
 
-Modo amigo: **ambos** os jogadores recebem recompensas na sua perspetiva.
+| Resultado | XP (time de treino) | Fragmentos |
+|-----------|---------------------|------------|
+| WIN | 150 | 5 |
+| DRAW, LOSE, DESISTENCE | 75 | 0 |
+
+**Amigo** (cada jogador na sua perspetiva):
+
+| Resultado | XP | Fragmentos |
+|-----------|-----|------------|
+| WIN | 300 | 0 |
+| DRAW, LOSE, DESISTENCE | 150 | 5 |
 
 ## Postman
 
@@ -153,10 +189,6 @@ Modo amigo: **ambos** os jogadores recebem recompensas na sua perspetiva.
 ## Integração React (AV2)
 
 1. `credentials: 'include'` em todos os pedidos à API.
-2. Substituir `localStorage` / `MatchState` do cliente pelos endpoints `/api/game/*/match`.
-3. Polling ou refresh em `GET .../match` no modo amigo enquanto espera o adversário.
+2. **Bot/local:** motor no cliente; chamar `PUT .../team` ou `PUT .../setup` antes de jogar e `POST .../finish` ao terminar.
+3. **Amigo:** polling ou Socket.io em `GET .../match` / eventos `match:event`.
 4. Usar `GET /api/pokemon/search` no campo de palpite.
-
-## Endpoints legados (finish manual)
-
-Ainda disponíveis para migração gradual: `POST /api/game/local`, `/bot`, `/friend` (cliente envia placar). Preferir os fluxos `/match` acima.

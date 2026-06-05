@@ -22,4 +22,6 @@ public interface FriendOnlinePenaltyRepository extends JpaRepository<FriendOnlin
     );
 
     long countByProfile_IdAndOccurredAtAfter(String profileId, LocalDateTime since);
+
+    void deleteByProfile_Id(String profileId);
 }

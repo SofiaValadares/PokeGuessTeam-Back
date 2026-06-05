@@ -5,7 +5,9 @@ import com.svc.pokeguessteam.model.enums.MatchStatus;
 import com.svc.pokeguessteam.model.game.ActiveMatchModel;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /** Partida vs IA: {@link MatchPlayerSide#HOST} = treinador; {@link MatchPlayerSide#OPPONENT} = bot. */
 public record BotMatchStateDto(
@@ -16,6 +18,8 @@ public record BotMatchStateDto(
         MatchPlayerSide finalResponseFor,
         List<Integer> hostTeam,
         List<Integer> hostHits,
+        List<Integer> opponentTeam,
+        List<Integer> opponentHits,
         int hostCorrectGuesses,
         int opponentCorrectGuesses,
         List<OpponentSlotKnowledgeDto> opponentKnowledge,
@@ -38,7 +42,9 @@ public record BotMatchStateDto(
                 match.getStartingPlayer(),
                 match.getFinalResponseFor(),
                 List.copyOf(match.getHostPlayer().getTeam()),
-                List.copyOf(match.getHostPlayer().getHits()),
+                sortedDexList(match.getHostPlayer().getHits()),
+                List.copyOf(match.getOpponentPlayer().getTeam()),
+                sortedDexList(match.getOpponentPlayer().getHits()),
                 match.getHostPlayer().getHits().size(),
                 match.getOpponentPlayer().getHits().size(),
                 opponentKnowledge,
@@ -48,5 +54,9 @@ public record BotMatchStateDto(
                 match.getFinishedAt(),
                 historyEntry
         );
+    }
+
+    private static List<Integer> sortedDexList(Set<Integer> dexNumbers) {
+        return dexNumbers.stream().sorted().toList();
     }
 }

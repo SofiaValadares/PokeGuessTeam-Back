@@ -34,6 +34,9 @@ public class ActiveMatchConstraintService {
     }
 
     public Optional<ActiveMatchModel> findUnfinishedMatch(String profileId) {
-        return activeMatchRepository.findUnfinishedForProfile(profileId, MatchStatus.FINISHED);
+        return activeMatchRepository
+                .findAllUnfinishedForProfileOrderByCreatedAtDesc(profileId, MatchStatus.FINISHED)
+                .stream()
+                .findFirst();
     }
 }

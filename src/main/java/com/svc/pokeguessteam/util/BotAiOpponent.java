@@ -28,10 +28,22 @@ public final class BotAiOpponent {
             Set<Integer> excludedDexNumbers,
             int teamSize
     ) {
+        return buildRandomTeam(allPokemon, excludedDexNumbers, teamSize, false);
+    }
+
+    public static List<Integer> buildRandomTeam(
+            List<PokemonModel> allPokemon,
+            Set<Integer> excludedDexNumbers,
+            int teamSize,
+            boolean strictPool
+    ) {
         List<PokemonModel> pool = allPokemon.stream()
                 .filter(p -> !excludedDexNumbers.contains(p.getPokedexNumber()))
                 .toList();
-        List<PokemonModel> safePool = pool.size() >= teamSize ? pool : allPokemon;
+        List<PokemonModel> safePool = strictPool || pool.size() >= teamSize ? pool : allPokemon;
+        if (safePool.size() < teamSize) {
+            throw new IllegalStateException("Pool insuficiente para montar equipa de " + teamSize);
+        }
         List<PokemonModel> shuffled = new ArrayList<>(safePool);
         java.util.Collections.shuffle(shuffled, ThreadLocalRandom.current());
         return shuffled.stream()

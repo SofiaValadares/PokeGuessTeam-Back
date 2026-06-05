@@ -168,6 +168,7 @@ public class PokeballDrawService {
         row.setEvolutionLine(line);
         row.setTotalXp(0);
         row.setTimesObtained(1);
+        row.setClaimedMilestones("");
         PokemonInventoryXp.syncLevelFromTotalXp(row);
         userPokemonInventoryRepository.save(row);
         return new GrantResult(true, 1);

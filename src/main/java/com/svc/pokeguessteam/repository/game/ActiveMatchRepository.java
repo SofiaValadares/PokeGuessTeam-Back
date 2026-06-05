@@ -13,23 +13,36 @@ import java.util.Optional;
 
 public interface ActiveMatchRepository extends JpaRepository<ActiveMatchModel, String> {
 
-    @EntityGraph(attributePaths = {"userPlayer", "botPlayer", "guesses", "profile", "profile.user", "guestProfile", "guestProfile.user"})
+    @EntityGraph(type = EntityGraph.EntityGraphType.LOAD, attributePaths = {
+            "userPlayer", "userPlayer.team",
+            "botPlayer", "botPlayer.team",
+            "guesses", "profile", "profile.user", "guestProfile", "guestProfile.user"
+    })
     Optional<ActiveMatchModel> findByIdAndProfile_Id(String id, String profileId);
 
-    @EntityGraph(attributePaths = {"userPlayer", "botPlayer", "guesses", "profile", "profile.user", "guestProfile", "guestProfile.user"})
+    @EntityGraph(type = EntityGraph.EntityGraphType.LOAD, attributePaths = {
+            "userPlayer", "userPlayer.team",
+            "botPlayer", "botPlayer.team",
+            "guesses", "profile", "profile.user", "guestProfile", "guestProfile.user"
+    })
     @Query("""
             SELECT m FROM ActiveMatchModel m
             WHERE m.profile.id = :profileId
               AND m.gameMode = :gameMode
               AND m.status <> :finished
+            ORDER BY m.createdAt DESC
             """)
-    Optional<ActiveMatchModel> findActiveByProfileIdAndGameMode(
+    List<ActiveMatchModel> findAllActiveByProfileIdAndGameModeOrderByCreatedAtDesc(
             @Param("profileId") String profileId,
             @Param("gameMode") GameModes gameMode,
             @Param("finished") MatchStatus finished
     );
 
-    @EntityGraph(attributePaths = {"userPlayer", "botPlayer", "guesses", "profile", "profile.user", "guestProfile", "guestProfile.user"})
+    @EntityGraph(type = EntityGraph.EntityGraphType.LOAD, attributePaths = {
+            "userPlayer", "userPlayer.team",
+            "botPlayer", "botPlayer.team",
+            "guesses", "profile", "profile.user", "guestProfile", "guestProfile.user"
+    })
     @Query("""
             SELECT m FROM ActiveMatchModel m
             WHERE m.gameMode = :gameMode
@@ -42,7 +55,11 @@ public interface ActiveMatchRepository extends JpaRepository<ActiveMatchModel, S
             @Param("finished") MatchStatus finished
     );
 
-    @EntityGraph(attributePaths = {"userPlayer", "botPlayer", "guesses", "profile", "profile.user", "guestProfile", "guestProfile.user"})
+    @EntityGraph(type = EntityGraph.EntityGraphType.LOAD, attributePaths = {
+            "userPlayer", "userPlayer.team",
+            "botPlayer", "botPlayer.team",
+            "guesses", "profile", "profile.user", "guestProfile", "guestProfile.user"
+    })
     Optional<ActiveMatchModel> findByJoinCodeAndGameModeAndStatusNot(
             String joinCode,
             GameModes gameMode,
@@ -51,18 +68,30 @@ public interface ActiveMatchRepository extends JpaRepository<ActiveMatchModel, S
 
     List<ActiveMatchModel> findByProfile_IdAndStatusNot(String profileId, MatchStatus status);
 
-    @EntityGraph(attributePaths = {"userPlayer", "botPlayer", "guesses", "profile", "profile.user", "guestProfile", "guestProfile.user"})
+    @EntityGraph(type = EntityGraph.EntityGraphType.LOAD, attributePaths = {
+            "userPlayer", "userPlayer.team",
+            "botPlayer", "botPlayer.team",
+            "guesses", "profile", "profile.user", "guestProfile", "guestProfile.user"
+    })
     @Query("SELECT m FROM ActiveMatchModel m WHERE m.id = :matchId")
     Optional<ActiveMatchModel> findDetailedById(@Param("matchId") String matchId);
 
-    @EntityGraph(attributePaths = {"userPlayer", "botPlayer", "guesses", "profile", "profile.user", "guestProfile", "guestProfile.user"})
+    @EntityGraph(type = EntityGraph.EntityGraphType.LOAD, attributePaths = {
+            "userPlayer", "userPlayer.team",
+            "botPlayer", "botPlayer.team",
+            "guesses", "profile", "profile.user", "guestProfile", "guestProfile.user"
+    })
     @Query("""
             SELECT m FROM ActiveMatchModel m
             WHERE m.status <> :finished
               AND (m.profile.id = :profileId OR m.guestProfile.id = :profileId)
+            ORDER BY m.createdAt DESC
             """)
-    Optional<ActiveMatchModel> findUnfinishedForProfile(
+    List<ActiveMatchModel> findAllUnfinishedForProfileOrderByCreatedAtDesc(
             @Param("profileId") String profileId,
             @Param("finished") MatchStatus finished
     );
+
+    @Query("SELECT m FROM ActiveMatchModel m WHERE m.guestProfile.id = :profileId")
+    java.util.List<ActiveMatchModel> findByGuestProfile_Id(@Param("profileId") String profileId);
 }

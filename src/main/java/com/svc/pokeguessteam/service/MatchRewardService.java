@@ -7,7 +7,6 @@ import com.svc.pokeguessteam.model.enums.MatchPlayerSide;
 import com.svc.pokeguessteam.model.enums.PokeballType;
 import com.svc.pokeguessteam.model.game.ActiveMatchModel;
 import com.svc.pokeguessteam.model.user.ProfileModel;
-import com.svc.pokeguessteam.repository.game.ActiveMatchRepository;
 import com.svc.pokeguessteam.util.GameMatchRewards;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,11 +15,20 @@ import org.springframework.transaction.annotation.Transactional;
 public class MatchRewardService {
 
     private final ProfileService profileService;
-    private final ActiveMatchRepository activeMatchRepository;
+    private final ActiveMatchRemovalService activeMatchRemovalService;
 
-    public MatchRewardService(ProfileService profileService, ActiveMatchRepository activeMatchRepository) {
+    public MatchRewardService(
+            ProfileService profileService,
+            ActiveMatchRemovalService activeMatchRemovalService
+    ) {
         this.profileService = profileService;
-        this.activeMatchRepository = activeMatchRepository;
+        this.activeMatchRemovalService = activeMatchRemovalService;
+    }
+
+    @Transactional
+    public MatchRewardDto grantForUser(String userId, GameModes mode, GameResults result) {
+        ProfileModel profile = profileService.ensureProfileWithStarters(userId);
+        return grantForProfile(profile, mode, result);
     }
 
     /**
@@ -28,20 +36,11 @@ public class MatchRewardService {
      */
     @Transactional
     public MatchRewardDto grantAndRemoveActiveMatch(ActiveMatchModel match, MatchPlayerSide surrenderSide) {
-        MatchRewardDto reward = switch (match.getGameMode()) {
-            case BOT -> grantForProfile(
-                    match.getProfile(),
-                    match.getGameMode(),
-                    resolveBotResult(match, surrenderSide == MatchPlayerSide.HOST)
-            );
-            case LOCAL -> grantForProfile(
-                    match.getProfile(),
-                    match.getGameMode(),
-                    resolveLocalResult(match, surrenderSide)
-            );
-            case FRIEND -> grantFriendMatch(match, surrenderSide);
-        };
-        activeMatchRepository.delete(match);
+        if (match.getGameMode() != GameModes.FRIEND) {
+            throw new IllegalStateException("Partida ativa inesperada: " + match.getGameMode());
+        }
+        MatchRewardDto reward = grantFriendMatch(match, surrenderSide);
+        activeMatchRemovalService.deleteByMatchId(match.getId());
         return reward;
     }
 
@@ -70,29 +69,6 @@ public class MatchRewardService {
                 payout.pokeBalls(),
                 payout.pokeballFragments()
         );
-    }
-
-    private static GameResults resolveBotResult(ActiveMatchModel match, boolean userSurrendered) {
-        if (userSurrendered) {
-            return GameResults.DESISTENCE;
-        }
-        if (match.getWinner() == null) {
-            return GameResults.DRAW;
-        }
-        return match.getWinner() == MatchPlayerSide.HOST ? GameResults.WIN : GameResults.LOSE;
-    }
-
-    private static GameResults resolveLocalResult(ActiveMatchModel match, MatchPlayerSide surrenderSide) {
-        if (surrenderSide == MatchPlayerSide.HOST) {
-            return GameResults.DESISTENCE;
-        }
-        if (surrenderSide == MatchPlayerSide.OPPONENT) {
-            return GameResults.WIN;
-        }
-        if (match.getWinner() == null) {
-            return GameResults.DRAW;
-        }
-        return match.getWinner() == MatchPlayerSide.HOST ? GameResults.WIN : GameResults.LOSE;
     }
 
     private static GameResults resolveParticipantResult(

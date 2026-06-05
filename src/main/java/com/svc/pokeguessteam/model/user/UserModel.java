@@ -1,5 +1,6 @@
 package com.svc.pokeguessteam.model.user;
 
+import org.hibernate.annotations.ColumnDefault;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
@@ -27,10 +28,18 @@ public class UserModel {
     @Column(name = "USER_REGISTER_DATE", nullable = false, updatable = false)
     private LocalDateTime registerDate;
 
+    /** {@code false} até ao primeiro login com sessão criada. */
+    @Column(name = "USER_HAS_LOGGED_IN", nullable = false)
+    @ColumnDefault("false")
+    private Boolean hasLoggedIn = false;
+
     @PrePersist
     protected void onCreate() {
         this.registerDate = LocalDateTime.now();
         this.emailVerify = false;
+        if (this.hasLoggedIn == null) {
+            this.hasLoggedIn = false;
+        }
     }
 
     public String getIdUser() {
@@ -72,5 +81,13 @@ public class UserModel {
 
     public void setPasswordHash(String passwordHash) {
         this.passwordHash = passwordHash;
+    }
+
+    public Boolean getHasLoggedIn() {
+        return hasLoggedIn;
+    }
+
+    public void setHasLoggedIn(Boolean hasLoggedIn) {
+        this.hasLoggedIn = hasLoggedIn;
     }
 }

@@ -46,6 +46,20 @@ class MatchEngineTest {
     }
 
     @Test
+    void correctGuessByPokedexNumberEvenWhenNameDiffers() {
+        PokemonModel bulbasaurEn = species(1, "Bulbasaur");
+        byDex = Map.of(1, bulbasaurEn, 26, species(26, "Raichu"));
+        match.getOpponentPlayer().setTeam(List.of(1, 2, 3, 4, 5, 6));
+
+        PokemonModel guessAlias = species(1, "Bulbasauro");
+        var result = MatchEngine.applyGuess(match, MatchPlayerSide.HOST, guessAlias, byDex);
+
+        assertTrue(result.guess().isExactMatch());
+        assertEquals(GuessOutcome.KEEP_TURN, result.outcome());
+        assertTrue(match.getHostPlayer().getHits().contains(1));
+    }
+
+    @Test
     void correctGuessKeepsTurn() {
         var result = MatchEngine.applyGuess(match, MatchPlayerSide.HOST, byDex.get(26), byDex);
         assertTrue(result.guess().isExactMatch());

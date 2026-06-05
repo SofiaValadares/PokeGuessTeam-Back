@@ -12,7 +12,6 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 public final class MatchEngine {
 
@@ -48,14 +47,11 @@ public final class MatchEngine {
 
         ActiveMatchPlayerModel currentPlayer = match.getPlayer(playerSide);
         ActiveMatchPlayerModel opponentPlayer = match.getOpponent(playerSide);
-        List<PokemonModel> opponentTeamPokemon = opponentPlayer.getTeam().stream()
-                .map(pokemonByDex::get)
-                .filter(Objects::nonNull)
-                .toList();
+        int guessedDex = guessedPokemon.getPokedexNumber();
 
-        List<Integer> matchedDexNumbers = opponentTeamPokemon.stream()
-                .filter(p -> p.getName().equalsIgnoreCase(guessedPokemon.getName()))
-                .map(PokemonModel::getPokedexNumber)
+        List<Integer> matchedDexNumbers = opponentPlayer.getTeam().stream()
+                .filter(dex -> dex != null && dex == guessedDex)
+                .distinct()
                 .toList();
 
         ActiveMatchGuessModel guessRecord = new ActiveMatchGuessModel();
@@ -66,11 +62,7 @@ public final class MatchEngine {
         match.addGuess(guessRecord);
 
         if (guessRecord.isExactMatch()) {
-            for (Integer dex : matchedDexNumbers) {
-                if (!currentPlayer.getHits().contains(dex)) {
-                    currentPlayer.getHits().add(dex);
-                }
-            }
+            currentPlayer.addHits(matchedDexNumbers);
 
             if (match.getFinalResponseFor() == playerSide) {
                 if (hasPlayerCompleted(match, playerSide)) {

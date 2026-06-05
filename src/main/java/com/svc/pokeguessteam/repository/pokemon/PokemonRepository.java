@@ -11,6 +11,8 @@ import java.util.Optional;
 public interface PokemonRepository extends JpaRepository<PokemonModel, String> {
     Optional<PokemonModel> findByPokedexNumber(int pokedexNumber);
 
+    List<PokemonModel> findByPokedexNumberIn(Iterable<Integer> pokedexNumbers);
+
     List<PokemonModel> findAllByOrderByPokedexNumberAsc();
 
     List<PokemonModel> findByEvolutionLine_Rarity(PokemonRarity rarity);

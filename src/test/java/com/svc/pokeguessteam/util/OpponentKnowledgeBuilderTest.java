@@ -82,7 +82,7 @@ class OpponentKnowledgeBuilderTest {
         assertEquals(DiscoveredPokemonHintsDto.TIPO_SECUNDARIO_NENHUM, slot6.informacoes().tipoSecundario());
 
         addGuess(match, MatchPlayerSide.HOST, bulbasaur);
-        host.getHits().add(1);
+        host.addHit(1);
 
         List<OpponentSlotKnowledgeDto> afterBulbasaur = OpponentKnowledgeBuilder.buildTeamKnowledge(
                 match, MatchPlayerSide.HOST, byDex

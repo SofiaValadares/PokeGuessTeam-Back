@@ -29,7 +29,7 @@ public class ProfileModel {
     @Column(name = "PK_PROFILE_ID")
     private String id;
 
-    @OneToOne(cascade = CascadeType.ALL, optional = false)
+    @OneToOne(optional = false)
     @JoinColumn(name = "FK_USER_ID", nullable = false, unique = true)
     private UserModel user;
 

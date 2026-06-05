@@ -1,23 +1,20 @@
 package com.svc.pokeguessteam.realtime;
 
-import org.springframework.messaging.simp.SimpMessagingTemplate;
+import com.corundumstudio.socketio.SocketIOServer;
 import org.springframework.stereotype.Component;
 
 @Component
 public class MatchRealtimePublisher {
 
-    private final SimpMessagingTemplate messagingTemplate;
+    private final SocketIOServer server;
 
-    public MatchRealtimePublisher(SimpMessagingTemplate messagingTemplate) {
-        this.messagingTemplate = messagingTemplate;
-    }
-
-    public void publishBot(String matchId, MatchRealtimeMessage message) {
-        messagingTemplate.convertAndSend("/topic/match/bot/" + matchId, message);
+    public MatchRealtimePublisher(SocketIOServer server) {
+        this.server = server;
     }
 
     public void publishFriendToUser(String matchId, String userId, MatchRealtimeMessage message) {
-        messagingTemplate.convertAndSend("/topic/match/friend/" + matchId + "/user/" + userId, message);
+        server.getRoomOperations(MatchSocketIoListener.friendRoom(matchId, userId))
+                .sendEvent("match:event", message);
     }
 
     public void publishFriendToBoth(

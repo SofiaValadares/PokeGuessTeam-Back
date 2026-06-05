@@ -1,16 +1,24 @@
 package com.svc.pokeguessteam.controller;
 
+import com.svc.pokeguessteam.config.AppDevToolsProperties;
+import com.svc.pokeguessteam.dto.dev.AdjustTrainingTeamXpRequest;
 import com.svc.pokeguessteam.dto.pokemon.PcPageResponse;
 import com.svc.pokeguessteam.dto.profile.TrainingTeamResponse;
+import com.svc.pokeguessteam.dto.profile.UpdateFavoritePokemonRequest;
 import com.svc.pokeguessteam.dto.profile.UpdateTrainingTeamRequest;
 import com.svc.pokeguessteam.model.user.ProfileInventoryItemModel;
 import com.svc.pokeguessteam.model.user.ProfileModel;
+import com.svc.pokeguessteam.exception.ApiBusinessException;
+import com.svc.pokeguessteam.exception.ErrorCodes;
+import com.svc.pokeguessteam.messages.MessageKeys;
 import com.svc.pokeguessteam.service.CurrentUserService;
 import com.svc.pokeguessteam.service.ProfileService;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -29,10 +37,16 @@ public class ProfileController {
 
     private final ProfileService profileService;
     private final CurrentUserService currentUserService;
+    private final AppDevToolsProperties devToolsProperties;
 
-    public ProfileController(ProfileService profileService, CurrentUserService currentUserService) {
+    public ProfileController(
+            ProfileService profileService,
+            CurrentUserService currentUserService,
+            AppDevToolsProperties devToolsProperties
+    ) {
         this.profileService = profileService;
         this.currentUserService = currentUserService;
+        this.devToolsProperties = devToolsProperties;
     }
 
     @GetMapping("/me")
@@ -50,6 +64,16 @@ public class ProfileController {
             body.put("favoritePokemonName", null);
         }
         return ResponseEntity.ok(body);
+    }
+
+    @PatchMapping("/favorite-pokemon")
+    public ResponseEntity<Map<String, Object>> updateFavoritePokemon(
+            HttpSession session,
+            @Valid @RequestBody UpdateFavoritePokemonRequest request
+    ) {
+        String userId = currentUserService.requireUserId(session);
+        profileService.updateFavoritePokemon(userId, request.pokedexNumber());
+        return me(session);
     }
 
     /**
@@ -123,5 +147,25 @@ public class ProfileController {
         body.put("pokeballFragments", profile.getPokeballFragments() != null ? profile.getPokeballFragments() : 0);
         body.put("fragmentsPerPokeBall", ProfileService.FRAGMENTS_PER_POKE_BALL);
         return ResponseEntity.ok(body);
+    }
+
+    /**
+     * Ferramenta de dev: ajusta XP do time de treino. Requer {@code app.dev-tools.enabled=true}.
+     */
+    @PostMapping("/dev/training-team/xp")
+    public ResponseEntity<TrainingTeamResponse> adjustTrainingTeamXpDev(
+            HttpSession session,
+            @Valid @RequestBody AdjustTrainingTeamXpRequest request
+    ) {
+        if (!devToolsProperties.isEnabled()) {
+            throw new ApiBusinessException(
+                    HttpStatus.NOT_FOUND,
+                    ErrorCodes.DEV_TOOLS_DISABLED,
+                    MessageKeys.DEV_TOOLS_DISABLED
+            );
+        }
+        String userId = currentUserService.requireUserId(session);
+        profileService.ensureProfileWithStarters(userId);
+        return ResponseEntity.ok(profileService.adjustTrainingTeamXp(userId, request.delta()));
     }
 }

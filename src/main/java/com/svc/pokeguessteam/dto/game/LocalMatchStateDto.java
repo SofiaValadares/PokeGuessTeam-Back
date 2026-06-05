@@ -7,6 +7,7 @@ import com.svc.pokeguessteam.util.GameConstants;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Estado da partida local (pass-and-play): dois jogadores no mesmo dispositivo.
@@ -24,6 +25,8 @@ public record LocalMatchStateDto(
         boolean opponentTeamReady,
         List<Integer> hostTeam,
         List<Integer> opponentTeam,
+        List<Integer> hostHits,
+        List<Integer> opponentHits,
         int hostCorrectGuesses,
         int opponentCorrectGuesses,
         List<OpponentSlotKnowledgeDto> opponentKnowledge,
@@ -54,6 +57,8 @@ public record LocalMatchStateDto(
                 match.getOpponentPlayer().getTeam().size() >= GameConstants.TEAM_SIZE,
                 List.copyOf(match.getHostPlayer().getTeam()),
                 List.copyOf(match.getOpponentPlayer().getTeam()),
+                sortedDexList(match.getHostPlayer().getHits()),
+                sortedDexList(match.getOpponentPlayer().getHits()),
                 match.getHostPlayer().getHits().size(),
                 match.getOpponentPlayer().getHits().size(),
                 opponentKnowledge,
@@ -63,5 +68,9 @@ public record LocalMatchStateDto(
                 match.getFinishedAt(),
                 historyEntry
         );
+    }
+
+    private static List<Integer> sortedDexList(Set<Integer> dexNumbers) {
+        return dexNumbers.stream().sorted().toList();
     }
 }

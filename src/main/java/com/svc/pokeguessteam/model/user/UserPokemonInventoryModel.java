@@ -53,6 +53,13 @@ public class UserPokemonInventoryModel {
     @Column(name = "TIMES_OBTAINED", nullable = false)
     private Integer timesObtained;
 
+    /**
+     * Marcos de recompensa já resgatados (ex.: {@code "25,50"}).
+     * {@code null} indica linha legada (recompensas auto-concedidas antes do resgate manual).
+     */
+    @Column(name = "CLAIMED_MILESTONES", length = 64)
+    private String claimedMilestones;
+
     public String getId() {
         return id;
     }
@@ -95,5 +102,13 @@ public class UserPokemonInventoryModel {
 
     public void setTimesObtained(Integer timesObtained) {
         this.timesObtained = timesObtained;
+    }
+
+    public String getClaimedMilestones() {
+        return claimedMilestones;
+    }
+
+    public void setClaimedMilestones(String claimedMilestones) {
+        this.claimedMilestones = claimedMilestones;
     }
 }

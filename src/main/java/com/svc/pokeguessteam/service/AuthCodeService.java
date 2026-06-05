@@ -70,7 +70,7 @@ public class AuthCodeService {
     }
 
     @Transactional
-    public void confirmEmailVerification(String email, String plainCode) {
+    public UserModel confirmEmailVerification(String email, String plainCode) {
         UserModel user = requireUserByEmail(email);
         if (Boolean.TRUE.equals(user.getEmailVerify())) {
             throw new ApiBusinessException(
@@ -81,7 +81,46 @@ public class AuthCodeService {
         }
         consumeValidCode(user, AuthCodePurpose.EMAIL_VERIFICATION, plainCode);
         user.setEmailVerifyTrue();
+        return userRepository.save(user);
+    }
+
+    @Transactional
+    public void sendEmailChangeCode(UserModel user, String newEmail) {
+        String normalizedNewEmail = normalizeEmail(newEmail);
+        if (normalizedNewEmail.equals(normalizeEmail(user.getEmail()))) {
+            throw new ApiBusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    ErrorCodes.AUTH_EMAIL_SAME,
+                    MessageKeys.AUTH_EMAIL_SAME
+            );
+        }
+        if (userRepository.findByEmail(normalizedNewEmail).isPresent()) {
+            throw new ApiBusinessException(
+                    HttpStatus.CONFLICT,
+                    ErrorCodes.AUTH_EMAIL_ALREADY_REGISTERED,
+                    MessageKeys.AUTH_EMAIL_ALREADY_REGISTERED
+            );
+        }
+        issueCode(user, AuthCodePurpose.EMAIL_CHANGE, normalizedNewEmail, normalizedNewEmail);
+    }
+
+    @Transactional
+    public String confirmEmailChangeCode(UserModel user, String newEmail, String plainCode) {
+        String normalizedNewEmail = normalizeEmail(newEmail);
+        consumeValidCode(user, AuthCodePurpose.EMAIL_CHANGE, plainCode, normalizedNewEmail);
+        if (userRepository.findByEmail(normalizedNewEmail)
+                .filter(existing -> !existing.getIdUser().equals(user.getIdUser()))
+                .isPresent()) {
+            throw new ApiBusinessException(
+                    HttpStatus.CONFLICT,
+                    ErrorCodes.AUTH_EMAIL_ALREADY_REGISTERED,
+                    MessageKeys.AUTH_EMAIL_ALREADY_REGISTERED
+            );
+        }
+        user.setEmail(normalizedNewEmail);
+        user.setEmailVerifyTrue();
         userRepository.save(user);
+        return normalizedNewEmail;
     }
 
     @Transactional
@@ -99,6 +138,10 @@ public class AuthCodeService {
     }
 
     private void issueCode(UserModel user, AuthCodePurpose purpose) {
+        issueCode(user, purpose, null, user.getEmail());
+    }
+
+    private void issueCode(UserModel user, AuthCodePurpose purpose, String targetEmail, String deliverTo) {
         LocalDateTime now = LocalDateTime.now();
         authCodeRepository.findFirstByUser_IdUserAndPurposeAndConsumedAtIsNullOrderByCreatedAtDesc(
                         user.getIdUser(),
@@ -120,12 +163,13 @@ public class AuthCodeService {
         AuthCodeModel row = new AuthCodeModel();
         row.setUser(user);
         row.setPurpose(purpose);
-        row.setCodeHash(authCodeHasher.hash(user.getIdUser(), purpose, plainCode));
+        row.setTargetEmail(targetEmail);
+        row.setCodeHash(authCodeHasher.hash(user.getIdUser(), purpose, plainCode, targetEmail));
         row.setExpiresAt(now.plusMinutes(authProperties.getVerificationCodeExpiryMinutes()));
         authCodeRepository.save(row);
 
         emailService.sendAuthCode(
-                user.getEmail(),
+                deliverTo,
                 purpose,
                 plainCode,
                 authProperties.getVerificationCodeExpiryMinutes()
@@ -133,6 +177,10 @@ public class AuthCodeService {
     }
 
     private void consumeValidCode(UserModel user, AuthCodePurpose purpose, String plainCode) {
+        consumeValidCode(user, purpose, plainCode, null);
+    }
+
+    private void consumeValidCode(UserModel user, AuthCodePurpose purpose, String plainCode, String targetEmail) {
         LocalDateTime now = LocalDateTime.now();
         AuthCodeModel active = authCodeRepository
                 .findFirstByUser_IdUserAndPurposeAndConsumedAtIsNullOrderByCreatedAtDesc(user.getIdUser(), purpose)
@@ -142,13 +190,22 @@ public class AuthCodeService {
             throw invalidOrExpiredCode();
         }
 
+        if (purpose == AuthCodePurpose.EMAIL_CHANGE) {
+            String expectedTarget = normalizeEmail(targetEmail);
+            String storedTarget = active.getTargetEmail() == null ? "" : normalizeEmail(active.getTargetEmail());
+            if (!expectedTarget.equals(storedTarget)) {
+                throw invalidOrExpiredCode();
+            }
+        }
+
         if (active.getFailedAttempts() >= authProperties.getMaxCodeVerificationAttempts()) {
             active.setConsumedAt(now);
             authCodeRepository.save(active);
             throw invalidOrExpiredCode();
         }
 
-        if (!authCodeHasher.matches(user.getIdUser(), purpose, plainCode, active.getCodeHash())) {
+        String hashTarget = purpose == AuthCodePurpose.EMAIL_CHANGE ? active.getTargetEmail() : null;
+        if (!authCodeHasher.matches(user.getIdUser(), purpose, plainCode, hashTarget, active.getCodeHash())) {
             active.incrementFailedAttempts();
             authCodeRepository.save(active);
             throw invalidOrExpiredCode();

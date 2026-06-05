@@ -5,7 +5,6 @@ import com.svc.pokeguessteam.service.GameHistoryService;
 import com.svc.pokeguessteam.service.PokedexService;
 import com.svc.pokeguessteam.service.ProfileService;
 import com.svc.pokeguessteam.util.GameConstants;
-import com.svc.pokeguessteam.model.enums.GameModes;
 import com.svc.pokeguessteam.model.enums.GameResults;
 import com.svc.pokeguessteam.util.GameMatchRewards;
 import com.svc.pokeguessteam.util.PokeballGachaRules;
@@ -28,7 +27,7 @@ public class GameMetaController {
     public ResponseEntity<Map<String, Object>> meta() {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("name", "PokeTeamGuess");
-        body.put("summary", "Dedução estratégica: duas equipas secretas de 6 Pokémon; vence quem descobrir o time adversário primeiro, "
+        body.put("summary", "Dedução estratégica: duas equipes secretas de 6 Pokémon; vence quem descobrir o time adversário primeiro, "
                 + "com pistas por tipagem, geração, cor, altura e peso.");
         body.put("pokedexDefaultPageSize", PokedexService.DEFAULT_PAGE_SIZE);
         body.put("pokedexMaxPageSize", PokedexService.MAX_PAGE_SIZE);
@@ -83,8 +82,10 @@ public class GameMetaController {
         body.put("evolutionRewards", PokemonEvolutionRewards.meta());
         body.put("gacha", PokeballGachaRules.meta());
         body.put("activeMatchApi", Map.of(
-                "bot", "/api/game/bot/match",
-                "local", "/api/game/local/match",
+                "botValidateTeam", "/api/game/bot/match/team",
+                "botFinish", "/api/game/bot/match/finish",
+                "localSetup", "/api/game/local/match/setup",
+                "localFinish", "/api/game/local/match/finish",
                 "friend", "/api/game/friend/match"
         ));
         return ResponseEntity.ok(body);

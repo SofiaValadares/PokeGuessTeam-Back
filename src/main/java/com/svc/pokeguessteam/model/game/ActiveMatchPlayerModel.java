@@ -15,10 +15,14 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OrderColumn;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import jakarta.persistence.UniqueConstraint;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Entity
 @Table(
@@ -50,16 +54,11 @@ public class ActiveMatchPlayerModel {
     )
     @OrderColumn(name = "SLOT_INDEX")
     @Column(name = "POKEDEX_NUMBER", nullable = false)
-    private List<Integer> team = new ArrayList<>();
+    private List<Integer> team;
 
-    @ElementCollection(fetch = FetchType.EAGER)
-    @CollectionTable(
-            name = "TB_ACTIVE_MATCH_PLAYER_HITS",
-            joinColumns = @JoinColumn(name = "FK_ACTIVE_MATCH_PLAYER_ID")
-    )
-    @OrderColumn(name = "HIT_ORDER")
-    @Column(name = "POKEDEX_NUMBER", nullable = false)
-    private List<Integer> hits = new ArrayList<>();
+    /** Carregado/gravado via {@link com.svc.pokeguessteam.service.ActiveMatchHitsService}. */
+    @Transient
+    private Set<Integer> hits;
 
     @Column(name = "SKIP_TURNS", nullable = false)
     private int skipTurns;
@@ -89,19 +88,41 @@ public class ActiveMatchPlayerModel {
     }
 
     public List<Integer> getTeam() {
-        return team;
+        return team == null ? List.of() : List.copyOf(team);
     }
 
     public void setTeam(List<Integer> team) {
         this.team = team != null ? new ArrayList<>(team) : new ArrayList<>();
     }
 
-    public List<Integer> getHits() {
-        return hits;
+    public Set<Integer> getHits() {
+        return hits == null ? Set.of() : Set.copyOf(hits);
     }
 
-    public void setHits(List<Integer> hits) {
-        this.hits = hits != null ? new ArrayList<>(hits) : new ArrayList<>();
+    public void loadHits(Set<Integer> loaded) {
+        hits = loaded != null ? new HashSet<>(loaded) : new HashSet<>();
+    }
+
+    public void addHit(int pokedexNumber) {
+        if (hits == null) {
+            hits = new HashSet<>();
+        }
+        hits.add(pokedexNumber);
+    }
+
+    public void addHits(Collection<Integer> pokedexNumbers) {
+        if (pokedexNumbers == null) {
+            return;
+        }
+        for (Integer dex : pokedexNumbers) {
+            if (dex != null) {
+                addHit(dex);
+            }
+        }
+    }
+
+    public void setHits(Set<Integer> newHits) {
+        hits = newHits != null ? new HashSet<>(newHits) : new HashSet<>();
     }
 
     public int getSkipTurns() {

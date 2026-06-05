@@ -41,98 +41,33 @@ public class GameHistoryService {
         this.profileService = profileService;
     }
 
-    /**
-     * Persiste histórico a partir de partida local ativa (motor no servidor).
-     */
     @Transactional
-    public GameHistoryEntryDto saveLocalGameFromActiveMatch(
-            ActiveMatchModel match,
-            MatchPlayerSide surrenderSide
-    ) {
-        int userHits = match.getHostPlayer().getHits().size();
-        int opponentHits = match.getOpponentPlayer().getHits().size();
-        GameResults userResult = resolveLocalUserResult(match, surrenderSide);
-
-        GameFinishValidation.validateScores(userHits, opponentHits);
-        validateLocalActiveResult(userHits, opponentHits, userResult, surrenderSide);
-
-        GameLocalFinishRequest request = new GameLocalFinishRequest(
-                match.getOpponentName(),
-                userHits,
-                opponentHits,
-                userResult
-        );
-        HistoryGameModel game = buildFinishedGame(
-                GameModes.LOCAL,
-                match.getOpponentName(),
-                match.getProfile(),
-                null,
-                request
-        );
-        return GameHistoryEntryDto.from(historyGameRepository.save(game));
-    }
-
-    private static GameResults resolveLocalUserResult(ActiveMatchModel match, MatchPlayerSide surrenderSide) {
-        if (surrenderSide == MatchPlayerSide.HOST) {
-            return GameResults.DESISTENCE;
-        }
-        if (surrenderSide == MatchPlayerSide.OPPONENT) {
-            return GameResults.WIN;
-        }
-        if (match.getWinner() == null) {
-            return GameResults.DRAW;
-        }
-        return match.getWinner() == MatchPlayerSide.HOST ? GameResults.WIN : GameResults.LOSE;
-    }
-
-    private static void validateLocalActiveResult(
-            int userHits,
-            int opponentHits,
-            GameResults userResult,
-            MatchPlayerSide surrenderSide
-    ) {
-        if (surrenderSide == MatchPlayerSide.HOST || userResult == GameResults.DESISTENCE) {
-            return;
-        }
-        if (surrenderSide == MatchPlayerSide.OPPONENT) {
-            if (userResult != GameResults.WIN) {
-                throw new IllegalStateException("Resultado inconsistente após desistência do adversário local.");
-            }
-            return;
-        }
-        GameFinishValidation.validateResult(userHits, opponentHits, userResult);
-    }
-
-    /**
-     * Persiste histórico a partir de partida ativa vs bot (motor no servidor).
-     */
-    @Transactional
-    public GameHistoryEntryDto saveBotGameFromActiveMatch(ActiveMatchModel match, boolean userSurrendered) {
-        GameResults userResult = resolveUserResult(match, userSurrendered);
-        GameBotFinishRequest request = new GameBotFinishRequest(
-                match.getHostPlayer().getHits().size(),
-                match.getOpponentPlayer().getHits().size(),
-                userResult
-        );
+    public GameHistoryEntryDto saveBotFinish(String userId, GameBotFinishRequest request) {
+        ProfileModel profile = profileService.ensureProfileWithStarters(userId);
         validateFinishRequest(request);
         HistoryGameModel game = buildFinishedGame(
                 GameModes.BOT,
                 null,
-                match.getProfile(),
+                profile,
                 null,
                 request
         );
         return GameHistoryEntryDto.from(historyGameRepository.save(game));
     }
 
-    private static GameResults resolveUserResult(ActiveMatchModel match, boolean userSurrendered) {
-        if (userSurrendered) {
-            return GameResults.DESISTENCE;
-        }
-        if (match.getWinner() == null) {
-            return GameResults.DRAW;
-        }
-        return match.getWinner() == MatchPlayerSide.HOST ? GameResults.WIN : GameResults.LOSE;
+    @Transactional
+    public GameHistoryEntryDto saveLocalFinish(String userId, GameLocalFinishRequest request) {
+        String opponentName = GameFinishValidation.validateAndNormalizeLocalOpponentName(request.opponentName());
+        ProfileModel profile = profileService.ensureProfileWithStarters(userId);
+        validateFinishRequest(request);
+        HistoryGameModel game = buildFinishedGame(
+                GameModes.LOCAL,
+                opponentName,
+                profile,
+                null,
+                request
+        );
+        return GameHistoryEntryDto.from(historyGameRepository.save(game));
     }
 
     /**

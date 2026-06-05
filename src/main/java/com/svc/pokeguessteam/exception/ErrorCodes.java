@@ -17,6 +17,7 @@ public final class ErrorCodes {
     public static final String AUTH_EMAIL_NOT_FOUND = "AUTH_EMAIL_NOT_FOUND";
     public static final String AUTH_CODE_INVALID = "AUTH_CODE_INVALID";
     public static final String AUTH_CODE_RESEND_COOLDOWN = "AUTH_CODE_RESEND_COOLDOWN";
+    public static final String AUTH_EMAIL_SAME = "AUTH_EMAIL_SAME";
     public static final String UNAUTHENTICATED = "UNAUTHENTICATED";
     public static final String SESSION_NOT_FOUND = "SESSION_NOT_FOUND";
     public static final String SESSION_BINDING_MISSING = "SESSION_BINDING_MISSING";
@@ -28,6 +29,8 @@ public final class ErrorCodes {
     public static final String TRAINING_TEAM_LINE_NOT_IN_INVENTORY = "TRAINING_TEAM_LINE_NOT_IN_INVENTORY";
     public static final String TRAINING_TEAM_LINE_NOT_FOUND = "TRAINING_TEAM_LINE_NOT_FOUND";
     public static final String TRAINING_TEAM_DUPLICATE = "TRAINING_TEAM_DUPLICATE";
+    public static final String EVOLUTION_REWARD_NOT_AVAILABLE = "EVOLUTION_REWARD_NOT_AVAILABLE";
+    public static final String DEV_TOOLS_DISABLED = "DEV_TOOLS_DISABLED";
 
     public static final String POKEMON_SPECIES_NOT_FOUND = "POKEMON_SPECIES_NOT_FOUND";
     public static final String POKEBALL_INSUFFICIENT = "POKEBALL_INSUFFICIENT";
@@ -48,6 +51,8 @@ public final class ErrorCodes {
     public static final String GAME_MATCH_INVALID_PHASE = "GAME_MATCH_INVALID_PHASE";
     public static final String GAME_MATCH_INVALID_ACTION = "GAME_MATCH_INVALID_ACTION";
     public static final String GAME_TEAM_INVALID = "GAME_TEAM_INVALID";
+    public static final String GAME_TEAM_NOT_IN_POKEDEX = "GAME_TEAM_NOT_IN_POKEDEX";
+    public static final String GAME_POKEDEX_INSUFFICIENT = "GAME_POKEDEX_INSUFFICIENT";
     public static final String GAME_GUESS_ALREADY_USED = "GAME_GUESS_ALREADY_USED";
     public static final String GAME_FRIEND_MATCH_NOT_FOUND = "GAME_FRIEND_MATCH_NOT_FOUND";
     public static final String GAME_FRIEND_ONLINE_BANNED = "GAME_FRIEND_ONLINE_BANNED";

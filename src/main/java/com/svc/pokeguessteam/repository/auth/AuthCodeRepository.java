@@ -8,9 +8,12 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 public interface AuthCodeRepository extends JpaRepository<AuthCodeModel, String> {
+
+    List<AuthCodeModel> findByUser_IdUser(String userId);
 
     Optional<AuthCodeModel> findFirstByUser_IdUserAndPurposeAndConsumedAtIsNullOrderByCreatedAtDesc(
             String userId,
@@ -30,4 +33,8 @@ public interface AuthCodeRepository extends JpaRepository<AuthCodeModel, String>
             @Param("purpose") AuthCodePurpose purpose,
             @Param("now") LocalDateTime now
     );
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("delete from AuthCodeModel c where c.user.idUser = :userId")
+    void deleteAllByUserId(@Param("userId") String userId);
 }

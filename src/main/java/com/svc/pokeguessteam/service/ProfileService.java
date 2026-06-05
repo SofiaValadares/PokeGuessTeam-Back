@@ -5,6 +5,8 @@ import com.svc.pokeguessteam.exception.ErrorCodes;
 import com.svc.pokeguessteam.messages.MessageKeys;
 import com.svc.pokeguessteam.model.pokemon.EvolutionLineModel;
 import com.svc.pokeguessteam.model.pokemon.PokemonModel;
+import com.svc.pokeguessteam.dto.pokemon.ClaimEvolutionRewardsResponse;
+import com.svc.pokeguessteam.dto.pokemon.PcLineDto;
 import com.svc.pokeguessteam.dto.pokemon.PcPageResponse;
 import com.svc.pokeguessteam.dto.profile.TrainingTeamResponse;
 import com.svc.pokeguessteam.dto.profile.UpdateTrainingTeamRequest;
@@ -34,8 +36,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -97,6 +101,19 @@ public class ProfileService {
         userPokedexService.syncFromOwnership(profile);
         ensureTrainingTeamFromInventory(profile);
         return profileRepository.findById(profile.getId()).orElse(profile);
+    }
+
+    @Transactional
+    public ProfileModel updateFavoritePokemon(String userId, int pokedexNumber) {
+        ProfileModel profile = ensureProfileWithStarters(userId);
+        PokemonModel pokemon = pokemonRepository.findByPokedexNumber(pokedexNumber)
+                .orElseThrow(() -> new ApiBusinessException(
+                        HttpStatus.NOT_FOUND,
+                        ErrorCodes.POKEMON_SPECIES_NOT_FOUND,
+                        MessageKeys.POKEMON_SPECIES_NOT_FOUND
+                ));
+        profile.setFavoritePokemon(pokemon);
+        return profileRepository.save(profile);
     }
 
     private ProfileModel createProfile(String userId) {
@@ -189,11 +206,68 @@ public class ProfileService {
     private Map<Integer, UserPokemonInventoryModel> inventoryByLineKey(String profileId) {
         Map<Integer, UserPokemonInventoryModel> map = new HashMap<>();
         for (UserPokemonInventoryModel row : inventoryRepository.findByProfile_IdOrderByEvolutionLine_LineKeyAsc(profileId)) {
+            migrateLegacyClaimedMilestonesIfNeeded(row);
             if (row.getEvolutionLine() != null) {
                 map.put(row.getEvolutionLine().getLineKey(), row);
             }
         }
         return map;
+    }
+
+    private void migrateLegacyClaimedMilestonesIfNeeded(UserPokemonInventoryModel row) {
+        if (row.getClaimedMilestones() != null) {
+            return;
+        }
+        int level = row.getLevel() != null
+                ? row.getLevel()
+                : PokemonInventoryXp.levelFromTotalXp(row.getTotalXp() != null ? row.getTotalXp() : 0);
+        row.setClaimedMilestones(PokemonEvolutionRewards.formatClaimed(PokemonEvolutionRewards.milestonesReached(level)));
+        inventoryRepository.save(row);
+    }
+
+    /**
+     * Resgata todas as recompensas de marco pendentes numa linha evolutiva do inventário.
+     */
+    @Transactional
+    public ClaimEvolutionRewardsResponse claimEvolutionRewards(String userId, int lineKey) {
+        ProfileModel profile = ensureProfileWithStarters(userId);
+        UserPokemonInventoryModel row = inventoryRepository
+                .findByProfile_IdAndEvolutionLine_LineKey(profile.getId(), lineKey)
+                .orElseThrow(() -> new ApiBusinessException(
+                        HttpStatus.NOT_FOUND,
+                        ErrorCodes.TRAINING_TEAM_LINE_NOT_IN_INVENTORY,
+                        MessageKeys.TRAINING_TEAM_LINE_NOT_IN_INVENTORY
+                ));
+        migrateLegacyClaimedMilestonesIfNeeded(row);
+        int level = row.getLevel() != null
+                ? row.getLevel()
+                : PokemonInventoryXp.levelFromTotalXp(row.getTotalXp() != null ? row.getTotalXp() : 0);
+        List<Integer> claimed = new ArrayList<>(PokemonEvolutionRewards.parseClaimed(row.getClaimedMilestones()));
+        List<Integer> pending = PokemonEvolutionRewards.pendingMilestones(level, claimed);
+        if (pending.isEmpty()) {
+            throw new ApiBusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    ErrorCodes.EVOLUTION_REWARD_NOT_AVAILABLE,
+                    MessageKeys.EVOLUTION_REWARD_NOT_AVAILABLE
+            );
+        }
+        EnumMap<PokeballType, Integer> grants = new EnumMap<>(PokeballType.class);
+        for (int milestone : pending) {
+            for (var entry : PokemonEvolutionRewards.rewardsForMilestone(milestone).entrySet()) {
+                grants.merge(entry.getKey(), entry.getValue(), Integer::sum);
+            }
+            claimed.add(milestone);
+        }
+        row.setClaimedMilestones(PokemonEvolutionRewards.formatClaimed(claimed));
+        inventoryRepository.save(row);
+        for (var entry : grants.entrySet()) {
+            addPokeballs(userId, entry.getKey(), entry.getValue());
+        }
+        Map<String, Integer> granted = new LinkedHashMap<>();
+        for (var entry : grants.entrySet()) {
+            granted.put(entry.getKey().name(), entry.getValue());
+        }
+        return new ClaimEvolutionRewardsResponse(PcLineDto.from(row), Map.copyOf(granted));
     }
 
     /**
@@ -269,6 +343,7 @@ public class ProfileService {
         row.setEvolutionLine(line);
         row.setTotalXp(0);
         row.setTimesObtained(1);
+        row.setClaimedMilestones("");
         PokemonInventoryXp.syncLevelFromTotalXp(row);
         inventoryRepository.save(row);
         userPokedexService.registerSpeciesIfPresent(profile, pokedexNumber);
@@ -300,7 +375,7 @@ public class ProfileService {
     /**
      * PC do jogador: linhas evolutivas do inventário, paginadas (ordenadas por linha evolutiva).
      */
-    @Transactional(readOnly = true)
+    @Transactional
     public PcPageResponse getPokemonPcPage(String userId, int page, int size) {
         ProfileModel profile = profileRepository.findByUser_IdUser(userId)
                 .orElseThrow(() -> new ApiBusinessException(
@@ -316,10 +391,11 @@ public class ProfileService {
                 Sort.by(Sort.Direction.ASC, "evolutionLine.lineKey")
         );
         Page<UserPokemonInventoryModel> result = inventoryRepository.findByProfile_Id(profile.getId(), pageable);
+        result.getContent().forEach(this::migrateLegacyClaimedMilestonesIfNeeded);
         return PcPageResponse.from(result);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public TrainingTeamResponse getTrainingTeam(String userId) {
         ProfileModel profile = ensureProfileWithStarters(userId);
         return TrainingTeamResponse.from(
@@ -422,30 +498,62 @@ public class ProfileService {
         }
     }
 
+    /**
+     * Ajusta XP do time de treino (ferramenta de dev). Distribui o delta pelos slots ocupados.
+     */
+    @Transactional
+    public TrainingTeamResponse adjustTrainingTeamXp(String userId, int totalDelta) {
+        if (totalDelta == 0) {
+            return getTrainingTeam(userId);
+        }
+        ProfileModel profile = ensureProfileWithStarters(userId);
+        TrainingTeamModel team = profile.getTrainingTeam();
+        if (team == null) {
+            return TrainingTeamResponse.from(null, inventoryByLineKey(profile.getId()));
+        }
+        List<Integer> lineKeys = new ArrayList<>();
+        for (int i = 0; i < TrainingTeamModel.TEAM_SIZE; i++) {
+            EvolutionLineModel slot = team.getSlot(i);
+            if (slot != null) {
+                lineKeys.add(slot.getLineKey());
+            }
+        }
+        if (lineKeys.isEmpty()) {
+            return getTrainingTeam(userId);
+        }
+        int absTotal = Math.abs(totalDelta);
+        int perSlot = absTotal / lineKeys.size();
+        int remainder = absTotal % lineKeys.size();
+        int sign = totalDelta > 0 ? 1 : -1;
+        for (int i = 0; i < lineKeys.size(); i++) {
+            int magnitude = perSlot + (i == 0 ? remainder : 0);
+            applyXpDeltaToInventoryLine(profile, lineKeys.get(i), sign * magnitude);
+        }
+        return getTrainingTeam(userId);
+    }
+
     private void addXpToInventoryLine(ProfileModel profile, Integer lineKey, int xp) {
         if (xp <= 0 || lineKey == null) {
             return;
         }
         inventoryRepository.findByProfile_IdAndEvolutionLine_LineKey(profile.getId(), lineKey)
                 .ifPresent(row -> {
-                    int oldLevel = row.getLevel() != null
-                            ? row.getLevel()
-                            : PokemonInventoryXp.levelFromTotalXp(row.getTotalXp() != null ? row.getTotalXp() : 0);
                     PokemonInventoryXp.addXpAndSyncLevel(row, xp);
-                    int newLevel = row.getLevel() != null ? row.getLevel() : oldLevel;
-                    grantEvolutionMilestoneBalls(profile.getUser().getIdUser(), oldLevel, newLevel);
                     inventoryRepository.save(row);
                     userPokedexService.registerUnlockedSpeciesForInventoryLine(profile, row);
                 });
     }
 
-    private void grantEvolutionMilestoneBalls(String userId, int oldLevel, int newLevel) {
-        if (newLevel <= oldLevel) {
+    private void applyXpDeltaToInventoryLine(ProfileModel profile, Integer lineKey, int xpDelta) {
+        if (xpDelta == 0 || lineKey == null) {
             return;
         }
-        for (var entry : PokemonEvolutionRewards.ballsForLevelCrossing(oldLevel, newLevel).entrySet()) {
-            addPokeballs(userId, entry.getKey(), entry.getValue());
-        }
+        inventoryRepository.findByProfile_IdAndEvolutionLine_LineKey(profile.getId(), lineKey)
+                .ifPresent(row -> {
+                    PokemonInventoryXp.applyXpDeltaAndSyncLevel(row, xpDelta);
+                    inventoryRepository.save(row);
+                    userPokedexService.registerUnlockedSpeciesForInventoryLine(profile, row);
+                });
     }
 
     /** Constantes partilhadas com {@link com.svc.pokeguessteam.controller.PokemonController} (PC). */

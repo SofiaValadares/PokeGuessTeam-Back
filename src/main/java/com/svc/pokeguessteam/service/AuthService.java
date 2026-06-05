@@ -211,10 +211,57 @@ public class AuthService {
         return username.trim();
     }
 
+    @Transactional
+    public void requestEmailChange(String userId, String newEmail, String currentPassword) {
+        UserModel user = requireUser(userId);
+        requireCurrentPassword(user, currentPassword);
+        authCodeService.sendEmailChangeCode(user, newEmail);
+    }
+
+    @Transactional
+    public UserModel confirmEmailChange(String userId, String newEmail, String code, String currentPassword) {
+        UserModel user = requireUser(userId);
+        requireCurrentPassword(user, currentPassword);
+        authCodeService.confirmEmailChangeCode(user, newEmail, code);
+        return userRepository.findById(userId).orElseThrow();
+    }
+
+    /**
+     * Marca o utilizador como tendo feito login e indica se este é o primeiro login.
+     */
+    @Transactional
+    public boolean recordLogin(UserModel user) {
+        boolean firstLogin = !Boolean.TRUE.equals(user.getHasLoggedIn());
+        if (firstLogin) {
+            user.setHasLoggedIn(true);
+            userRepository.save(user);
+        }
+        return firstLogin;
+    }
+
     @Transactional(readOnly = true)
     public boolean isEmailVerified(String userId) {
         return userRepository.findById(userId)
                 .map(user -> Boolean.TRUE.equals(user.getEmailVerify()))
                 .orElse(false);
+    }
+
+    private UserModel requireUser(String userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new ApiBusinessException(
+                        HttpStatus.NOT_FOUND,
+                        ErrorCodes.PROFILE_USER_NOT_FOUND,
+                        MessageKeys.PROFILE_USER_NOT_FOUND
+                ));
+    }
+
+    private void requireCurrentPassword(UserModel user, String currentPassword) {
+        if (!passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
+            throw new ApiBusinessException(
+                    HttpStatus.UNAUTHORIZED,
+                    ErrorCodes.AUTH_CURRENT_PASSWORD_WRONG,
+                    MessageKeys.AUTH_CURRENT_PASSWORD_WRONG
+            );
+        }
     }
 }

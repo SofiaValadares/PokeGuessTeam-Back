@@ -1,18 +1,13 @@
 package com.svc.pokeguessteam.controller;
 
-import com.svc.pokeguessteam.dto.game.BotMatchGuessRequest;
-import com.svc.pokeguessteam.dto.game.LocalMatchActionResponse;
-import com.svc.pokeguessteam.dto.game.LocalMatchStartRequest;
-import com.svc.pokeguessteam.dto.game.LocalMatchStateDto;
-import com.svc.pokeguessteam.dto.game.LocalMatchTeamRequest;
-import com.svc.pokeguessteam.dto.game.OpponentTeamKnowledgeResponse;
+import com.svc.pokeguessteam.dto.game.GameFinishResponse;
+import com.svc.pokeguessteam.dto.game.GameLocalFinishRequest;
+import com.svc.pokeguessteam.dto.game.LocalMatchSetupRequest;
 import com.svc.pokeguessteam.service.CurrentUserService;
 import com.svc.pokeguessteam.service.LocalMatchService;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -20,7 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Partida local (pass-and-play): dois jogadores no mesmo dispositivo, motor no servidor.
+ * Partida local: validação de equipas e registo de resultado no servidor; motor no cliente.
  */
 @RestController
 @RequestMapping("/api/game/local/match")
@@ -34,48 +29,22 @@ public class LocalMatchController {
         this.currentUserService = currentUserService;
     }
 
-    @PostMapping
-    public ResponseEntity<LocalMatchStateDto> start(
+    @PutMapping("/setup")
+    public ResponseEntity<Void> validateSetup(
             HttpSession session,
-            @Valid @RequestBody LocalMatchStartRequest request
+            @Valid @RequestBody LocalMatchSetupRequest request
     ) {
         String userId = currentUserService.requireUserId(session);
-        return ResponseEntity.status(HttpStatus.CREATED).body(localMatchService.startMatch(userId, request));
+        localMatchService.validateSetupForClient(userId, request);
+        return ResponseEntity.noContent().build();
     }
 
-    @GetMapping
-    public ResponseEntity<LocalMatchStateDto> active(HttpSession session) {
-        String userId = currentUserService.requireUserId(session);
-        return ResponseEntity.ok(localMatchService.getActiveMatch(userId));
-    }
-
-    @GetMapping("/opponent-knowledge")
-    public ResponseEntity<OpponentTeamKnowledgeResponse> opponentKnowledge(HttpSession session) {
-        String userId = currentUserService.requireUserId(session);
-        return ResponseEntity.ok(localMatchService.getOpponentKnowledge(userId));
-    }
-
-    @PutMapping("/team")
-    public ResponseEntity<LocalMatchActionResponse> submitTeam(
+    @PostMapping("/finish")
+    public ResponseEntity<GameFinishResponse> finish(
             HttpSession session,
-            @Valid @RequestBody LocalMatchTeamRequest request
+            @Valid @RequestBody GameLocalFinishRequest request
     ) {
         String userId = currentUserService.requireUserId(session);
-        return ResponseEntity.ok(localMatchService.submitTeam(userId, request));
-    }
-
-    @PostMapping("/guess")
-    public ResponseEntity<LocalMatchActionResponse> guess(
-            HttpSession session,
-            @Valid @RequestBody BotMatchGuessRequest request
-    ) {
-        String userId = currentUserService.requireUserId(session);
-        return ResponseEntity.ok(localMatchService.submitGuess(userId, request));
-    }
-
-    @PostMapping("/surrender")
-    public ResponseEntity<LocalMatchActionResponse> surrender(HttpSession session) {
-        String userId = currentUserService.requireUserId(session);
-        return ResponseEntity.ok(localMatchService.surrender(userId));
+        return ResponseEntity.ok(localMatchService.finishClientMatch(userId, request));
     }
 }

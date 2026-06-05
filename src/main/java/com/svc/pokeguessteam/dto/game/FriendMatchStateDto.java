@@ -9,6 +9,7 @@ import com.svc.pokeguessteam.util.GameConstants;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 
 public record FriendMatchStateDto(
         String matchId,
@@ -21,6 +22,7 @@ public record FriendMatchStateDto(
         MatchPlayerSide finalResponseFor,
         List<Integer> yourTeam,
         List<Integer> yourHits,
+        List<Integer> opponentHitsOnYourTeam,
         int yourCorrectGuesses,
         int opponentCorrectGuesses,
         FriendMatchParticipantDto host,
@@ -58,7 +60,8 @@ public record FriendMatchStateDto(
                 match.getStartingPlayer(),
                 match.getFinalResponseFor(),
                 List.copyOf(yours.getTeam()),
-                List.copyOf(yours.getHits()),
+                sortedDexList(yours.getHits()),
+                sortedDexList(opponent.getHits()),
                 yours.getHits().size(),
                 opponent.getHits().size(),
                 participant(match.getProfile(), match.getHostPlayer().getTeam().size(), match.getHostPlayer().getTurnTimeoutPenalties()),
@@ -94,5 +97,9 @@ public record FriendMatchStateDto(
             return new FriendMatchParticipantDto(null, null, false, 0);
         }
         return participant(guest, match.getOpponentPlayer().getTeam().size(), match.getOpponentPlayer().getTurnTimeoutPenalties());
+    }
+
+    private static List<Integer> sortedDexList(Set<Integer> dexNumbers) {
+        return dexNumbers.stream().sorted().toList();
     }
 }

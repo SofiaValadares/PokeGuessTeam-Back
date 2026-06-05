@@ -22,6 +22,10 @@ public final class MessageKeys {
     public static final String AUTH_EMAIL_VERIFICATION_SENT = "info.auth.email-verification-sent";
     public static final String AUTH_EMAIL_VERIFIED = "info.auth.email-verified";
     public static final String AUTH_PASSWORD_RESET_DONE = "info.auth.password-reset-done";
+    public static final String AUTH_EMAIL_SAME = "error.auth.email-same";
+    public static final String AUTH_EMAIL_CHANGE_SENT = "info.auth.email-change-sent";
+    public static final String AUTH_EMAIL_CHANGED = "info.auth.email-changed";
+    public static final String AUTH_ACCOUNT_DELETED = "info.auth.account-deleted";
 
     public static final String VALIDATION_REGISTER_PASSWORD_REQUIRED = "error.validation.register.password.required";
     public static final String VALIDATION_AUTH_CODE_REQUIRED = "error.validation.auth.code.required";
@@ -44,6 +48,8 @@ public final class MessageKeys {
     public static final String TRAINING_TEAM_LINE_NOT_IN_INVENTORY = "error.profile.training-team.not-in-inventory";
     public static final String TRAINING_TEAM_LINE_NOT_FOUND = "error.profile.training-team.line-not-found";
     public static final String TRAINING_TEAM_DUPLICATE = "error.profile.training-team.duplicate";
+    public static final String EVOLUTION_REWARD_NOT_AVAILABLE = "error.pokemon.evolution-reward-not-available";
+    public static final String DEV_TOOLS_DISABLED = "error.dev.tools-disabled";
 
     public static final String POKEMON_SPECIES_NOT_FOUND = "error.pokemon.species-not-found";
     public static final String POKEBALL_INSUFFICIENT = "error.pokemon.pokeball-insufficient";
@@ -66,6 +72,8 @@ public final class MessageKeys {
     public static final String GAME_MATCH_INVALID_ACTION = "error.game.match-invalid-action";
     public static final String GAME_TEAM_INVALID = "error.game.team-invalid";
     public static final String GAME_TEAM_DUPLICATE = "error.game.team-duplicate";
+    public static final String GAME_TEAM_NOT_IN_POKEDEX = "error.game.team-not-in-pokedex";
+    public static final String GAME_POKEDEX_INSUFFICIENT = "error.game.pokedex-insufficient";
     public static final String GAME_GUESS_ALREADY_USED = "error.game.guess-already-used";
     public static final String GAME_FRIEND_MATCH_NOT_FOUND = "error.game.friend-match-not-found";
     public static final String GAME_FRIEND_ONLINE_BANNED = "error.game.friend-online-banned";

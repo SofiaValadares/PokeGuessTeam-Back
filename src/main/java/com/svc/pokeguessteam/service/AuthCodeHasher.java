@@ -19,12 +19,28 @@ public class AuthCodeHasher {
     }
 
     public String hash(String userId, AuthCodePurpose purpose, String plainCode) {
-        String payload = userId + "|" + purpose.name() + "|" + plainCode.trim() + "|" + authProperties.getCodeSecret();
+        return hash(userId, purpose, plainCode, null);
+    }
+
+    public String hash(String userId, AuthCodePurpose purpose, String plainCode, String targetEmail) {
+        String normalizedTarget = targetEmail == null ? "" : targetEmail.trim().toLowerCase();
+        String payload = userId + "|" + purpose.name() + "|" + normalizedTarget + "|"
+                + plainCode.trim() + "|" + authProperties.getCodeSecret();
         return sha256(payload);
     }
 
     public boolean matches(String userId, AuthCodePurpose purpose, String plainCode, String expectedHash) {
-        return hash(userId, purpose, plainCode).equals(expectedHash);
+        return matches(userId, purpose, plainCode, null, expectedHash);
+    }
+
+    public boolean matches(
+            String userId,
+            AuthCodePurpose purpose,
+            String plainCode,
+            String targetEmail,
+            String expectedHash
+    ) {
+        return hash(userId, purpose, plainCode, targetEmail).equals(expectedHash);
     }
 
     private static String sha256(String value) {

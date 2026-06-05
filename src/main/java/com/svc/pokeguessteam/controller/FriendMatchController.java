@@ -12,6 +12,7 @@ import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -83,5 +84,12 @@ public class FriendMatchController {
     public ResponseEntity<FriendMatchActionResponse> surrender(HttpSession session) {
         String userId = currentUserService.requireUserId(session);
         return ResponseEntity.ok(friendMatchService.surrender(userId));
+    }
+
+    @DeleteMapping
+    public ResponseEntity<Void> abandonSetup(HttpSession session) {
+        String userId = currentUserService.requireUserId(session);
+        friendMatchService.abandonSetupMatch(userId);
+        return ResponseEntity.noContent().build();
     }
 }

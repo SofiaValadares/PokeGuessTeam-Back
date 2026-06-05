@@ -1,7 +1,11 @@
 package com.svc.pokeguessteam.controller;
 
+import com.svc.pokeguessteam.dto.auth.AuthSessionResponse;
+import com.svc.pokeguessteam.dto.auth.ChangeEmailConfirmRequest;
+import com.svc.pokeguessteam.dto.auth.ChangeEmailRequestRequest;
 import com.svc.pokeguessteam.dto.auth.ChangePasswordRequest;
 import com.svc.pokeguessteam.dto.auth.ChangeUsernameRequest;
+import com.svc.pokeguessteam.dto.auth.DeleteAccountRequest;
 import com.svc.pokeguessteam.dto.auth.EmailCodeRequest;
 import com.svc.pokeguessteam.dto.auth.EmailOnlyRequest;
 import com.svc.pokeguessteam.dto.auth.LoginRequest;
@@ -14,6 +18,7 @@ import com.svc.pokeguessteam.messages.MessageKeys;
 import com.svc.pokeguessteam.model.user.UserModel;
 import com.svc.pokeguessteam.security.DeviceFingerprintUtil;
 import com.svc.pokeguessteam.security.SessionBindingInterceptor;
+import com.svc.pokeguessteam.service.AccountDeletionService;
 import com.svc.pokeguessteam.service.AuthCodeService;
 import com.svc.pokeguessteam.service.AuthService;
 import com.svc.pokeguessteam.service.CurrentUserService;
@@ -45,6 +50,7 @@ public class AuthController {
 
     private final AuthService authService;
     private final AuthCodeService authCodeService;
+    private final AccountDeletionService accountDeletionService;
     private final ProfileService profileService;
     private final CurrentUserService currentUserService;
     private final MessageSource messageSource;
@@ -52,12 +58,14 @@ public class AuthController {
     public AuthController(
             AuthService authService,
             AuthCodeService authCodeService,
+            AccountDeletionService accountDeletionService,
             ProfileService profileService,
             CurrentUserService currentUserService,
             MessageSource messageSource
     ) {
         this.authService = authService;
         this.authCodeService = authCodeService;
+        this.accountDeletionService = accountDeletionService;
         this.profileService = profileService;
         this.currentUserService = currentUserService;
         this.messageSource = messageSource;
@@ -94,11 +102,14 @@ public class AuthController {
     }
 
     @PostMapping({"/email/verification/confirm", "/verification/confirm"})
-    public ResponseEntity<MessageResponse> confirmEmailVerification(
-            @RequestBody @Valid EmailCodeRequest request
+    public ResponseEntity<AuthSessionResponse> confirmEmailVerification(
+            @RequestBody @Valid EmailCodeRequest request,
+            HttpServletRequest httpRequest
     ) {
-        authCodeService.confirmEmailVerification(request.email(), request.code());
-        return ResponseEntity.ok(new MessageResponse(msg(MessageKeys.AUTH_EMAIL_VERIFIED)));
+        UserModel user = authCodeService.confirmEmailVerification(request.email(), request.code());
+        boolean firstLogin = authService.recordLogin(user);
+        establishSession(user, httpRequest);
+        return ResponseEntity.ok(toSessionResponse(user, msg(MessageKeys.AUTH_EMAIL_VERIFIED), firstLogin));
     }
 
     @PostMapping("/password-reset/request")
@@ -139,47 +150,61 @@ public class AuthController {
         return ResponseEntity.ok().build();
     }
 
+    @PostMapping("/email/change/request")
+    public ResponseEntity<MessageResponse> requestEmailChange(
+            @RequestBody @Valid ChangeEmailRequestRequest request,
+            HttpServletRequest httpRequest
+    ) {
+        HttpSession session = httpRequest.getSession(false);
+        String userId = currentUserService.requireUserId(session);
+        authService.requestEmailChange(userId, request.newEmail(), request.currentPassword());
+        return ResponseEntity.ok(new MessageResponse(msg(MessageKeys.AUTH_EMAIL_CHANGE_SENT)));
+    }
+
+    @PostMapping("/email/change/confirm")
+    public ResponseEntity<AuthSessionResponse> confirmEmailChange(
+            @RequestBody @Valid ChangeEmailConfirmRequest request,
+            HttpServletRequest httpRequest
+    ) {
+        HttpSession session = httpRequest.getSession(false);
+        String userId = currentUserService.requireUserId(session);
+        UserModel user = authService.confirmEmailChange(
+                userId,
+                request.newEmail(),
+                request.code(),
+                request.currentPassword()
+        );
+        return ResponseEntity.ok(toSessionResponse(user, msg(MessageKeys.AUTH_EMAIL_CHANGED), false));
+    }
+
+    @DeleteMapping("/account")
+    public ResponseEntity<MessageResponse> deleteAccount(
+            @RequestBody @Valid DeleteAccountRequest request,
+            HttpServletRequest httpRequest
+    ) {
+        HttpSession session = httpRequest.getSession(false);
+        String userId = currentUserService.requireUserId(session);
+        accountDeletionService.deleteAccount(userId, request.password());
+        if (session != null) {
+            session.invalidate();
+        }
+        SecurityContextHolder.clearContext();
+        return ResponseEntity.ok(new MessageResponse(msg(MessageKeys.AUTH_ACCOUNT_DELETED)));
+    }
+
     @PostMapping("/login")
-    public ResponseEntity<Void> login(
+    public ResponseEntity<AuthSessionResponse> login(
             @RequestBody @Valid LoginRequest request,
             HttpServletRequest httpRequest
     ) {
-
         UserModel user = authService.authenticate(
                 request.login(),
                 request.password()
         );
 
-        profileService.ensureProfileWithStarters(user.getIdUser());
-
-        HttpSession session = httpRequest.getSession(true);
-
-        session.setAttribute(USER_ID_ATTR, user.getIdUser());
-
-        session.setAttribute(
-                SessionBindingInterceptor.DEVICE_ID_ATTR,
-                DeviceFingerprintUtil.generateDeviceId(httpRequest)
-        );
-
-        UsernamePasswordAuthenticationToken authentication =
-                new UsernamePasswordAuthenticationToken(
-                        user.getEmail(),
-                        null,
-                        List.of(new SimpleGrantedAuthority("ROLE_USER"))
-                );
-
-        SecurityContext securityContext =
-                SecurityContextHolder.createEmptyContext();
-
-        securityContext.setAuthentication(authentication);
-        SecurityContextHolder.setContext(securityContext);
-
-        session.setAttribute(
-                HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY,
-                securityContext
-        );
-
-        return ResponseEntity.ok().build();
+        boolean firstLogin = authService.recordLogin(user);
+        establishSession(user, httpRequest);
+        return ResponseEntity.ok(toSessionResponse(user, null, firstLogin));
     }
 
     @PostMapping("/logout")
@@ -234,6 +259,43 @@ public class AuthController {
                         Optional.of(userId),
                         Optional.of(emailVerified)
                 )
+        );
+    }
+
+    private void establishSession(UserModel user, HttpServletRequest httpRequest) {
+        profileService.ensureProfileWithStarters(user.getIdUser());
+
+        HttpSession session = httpRequest.getSession(true);
+        session.setAttribute(USER_ID_ATTR, user.getIdUser());
+        session.setAttribute(
+                SessionBindingInterceptor.DEVICE_ID_ATTR,
+                DeviceFingerprintUtil.generateDeviceId(httpRequest)
+        );
+
+        UsernamePasswordAuthenticationToken authentication =
+                new UsernamePasswordAuthenticationToken(
+                        user.getEmail(),
+                        null,
+                        List.of(new SimpleGrantedAuthority("ROLE_USER"))
+                );
+
+        SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
+        securityContext.setAuthentication(authentication);
+        SecurityContextHolder.setContext(securityContext);
+        session.setAttribute(
+                HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY,
+                securityContext
+        );
+    }
+
+    private AuthSessionResponse toSessionResponse(UserModel user, String message, boolean firstLogin) {
+        return new AuthSessionResponse(
+                user.getIdUser(),
+                user.getEmail(),
+                user.getUsername(),
+                Boolean.TRUE.equals(user.getEmailVerify()),
+                message,
+                firstLogin
         );
     }
 

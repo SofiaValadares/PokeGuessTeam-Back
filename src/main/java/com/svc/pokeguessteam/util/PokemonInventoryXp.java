@@ -83,4 +83,11 @@ public final class PokemonInventoryXp {
         row.setTotalXp(current + delta);
         syncLevelFromTotalXp(row);
     }
+
+    /** Soma ou subtrai XP (total nunca fica negativo) e atualiza o nível. */
+    public static void applyXpDeltaAndSyncLevel(UserPokemonInventoryModel row, int xpDelta) {
+        int current = row.getTotalXp() != null ? row.getTotalXp() : 0;
+        row.setTotalXp(Math.max(0, current + xpDelta));
+        syncLevelFromTotalXp(row);
+    }
 }

@@ -22,70 +22,6 @@ public record MatchRealtimeMessage(
         Integer maxTimeoutPenalties,
         String message
 ) {
-    public static MatchRealtimeMessage botPlayerGuess(String matchId, BotMatchStateDto match, BotMatchGuessFeedbackDto feedback) {
-        return new MatchRealtimeMessage(
-                MatchRealtimeEventType.PLAYER_GUESS,
-                matchId,
-                match,
-                null,
-                feedback,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null
-        );
-    }
-
-    public static MatchRealtimeMessage botTurnStart(String matchId) {
-        return new MatchRealtimeMessage(
-                MatchRealtimeEventType.BOT_TURN_START,
-                matchId,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                "Aguardando palpite do bot."
-        );
-    }
-
-    public static MatchRealtimeMessage botGuess(String matchId, BotMatchStateDto match, BotMatchGuessFeedbackDto feedback) {
-        return new MatchRealtimeMessage(
-                MatchRealtimeEventType.BOT_GUESS,
-                matchId,
-                match,
-                null,
-                feedback,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null
-        );
-    }
-
-    public static MatchRealtimeMessage botState(String matchId, BotMatchStateDto match) {
-        return new MatchRealtimeMessage(
-                MatchRealtimeEventType.MATCH_STATE,
-                matchId,
-                match,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null
-        );
-    }
-
     public static MatchRealtimeMessage friendPlayerGuess(
             String matchId,
             FriendMatchStateDto match,
@@ -178,22 +114,6 @@ public record MatchRealtimeMessage(
                 null,
                 null,
                 "Adversário substituído por bot após 3 penalidades."
-        );
-    }
-
-    public static MatchRealtimeMessage finishedBot(String matchId, BotMatchStateDto match) {
-        return new MatchRealtimeMessage(
-                MatchRealtimeEventType.MATCH_FINISHED,
-                matchId,
-                match,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null
         );
     }
 

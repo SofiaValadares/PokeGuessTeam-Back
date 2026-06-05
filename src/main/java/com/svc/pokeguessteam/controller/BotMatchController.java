@@ -1,17 +1,14 @@
 package com.svc.pokeguessteam.controller;
 
-import com.svc.pokeguessteam.dto.game.BotMatchActionResponse;
-import com.svc.pokeguessteam.dto.game.BotMatchGuessRequest;
-import com.svc.pokeguessteam.dto.game.BotMatchStateDto;
+import com.svc.pokeguessteam.dto.game.BotMatchSetupResponse;
 import com.svc.pokeguessteam.dto.game.BotMatchTeamRequest;
-import com.svc.pokeguessteam.dto.game.OpponentTeamKnowledgeResponse;
+import com.svc.pokeguessteam.dto.game.GameBotFinishRequest;
+import com.svc.pokeguessteam.dto.game.GameFinishResponse;
 import com.svc.pokeguessteam.service.BotMatchService;
 import com.svc.pokeguessteam.service.CurrentUserService;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -19,7 +16,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Partida vs bot com lógica de palpites no servidor (modo mais simples).
+ * Partida vs bot: validação de equipa e registo de resultado no servidor; motor no cliente.
  */
 @RestController
 @RequestMapping("/api/game/bot/match")
@@ -33,48 +30,21 @@ public class BotMatchController {
         this.currentUserService = currentUserService;
     }
 
-    @PostMapping
-    public ResponseEntity<BotMatchStateDto> start(HttpSession session) {
-        String userId = currentUserService.requireUserId(session);
-        return ResponseEntity.status(HttpStatus.CREATED).body(botMatchService.startMatch(userId));
-    }
-
-    @GetMapping
-    public ResponseEntity<BotMatchStateDto> active(HttpSession session) {
-        String userId = currentUserService.requireUserId(session);
-        return ResponseEntity.ok(botMatchService.getActiveMatch(userId));
-    }
-
-    /**
-     * Início de turno: 6 slots do adversário com pistas acumuladas (só quando é a tua vez).
-     */
-    @GetMapping("/opponent-knowledge")
-    public ResponseEntity<OpponentTeamKnowledgeResponse> opponentKnowledge(HttpSession session) {
-        String userId = currentUserService.requireUserId(session);
-        return ResponseEntity.ok(botMatchService.getOpponentKnowledge(userId));
-    }
-
     @PutMapping("/team")
-    public ResponseEntity<BotMatchActionResponse> submitTeam(
+    public ResponseEntity<BotMatchSetupResponse> validateTeam(
             HttpSession session,
             @Valid @RequestBody BotMatchTeamRequest request
     ) {
         String userId = currentUserService.requireUserId(session);
-        return ResponseEntity.ok(botMatchService.submitTeam(userId, request));
+        return ResponseEntity.ok(botMatchService.validateTeamForClient(userId, request));
     }
 
-    @PostMapping("/guess")
-    public ResponseEntity<BotMatchActionResponse> guess(
+    @PostMapping("/finish")
+    public ResponseEntity<GameFinishResponse> finish(
             HttpSession session,
-            @Valid @RequestBody BotMatchGuessRequest request
+            @Valid @RequestBody GameBotFinishRequest request
     ) {
         String userId = currentUserService.requireUserId(session);
-        return ResponseEntity.ok(botMatchService.submitGuess(userId, request));
-    }
-
-    @PostMapping("/surrender")
-    public ResponseEntity<BotMatchActionResponse> surrender(HttpSession session) {
-        String userId = currentUserService.requireUserId(session);
-        return ResponseEntity.ok(botMatchService.surrender(userId));
+        return ResponseEntity.ok(botMatchService.finishClientMatch(userId, request));
     }
 }

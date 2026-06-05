@@ -26,9 +26,9 @@ public class ResendEmailSender {
         return resendClient != null;
     }
 
-    public String sendTextEmail(String from, String toEmail, String subject, String textBody) {
+    public boolean sendTextEmail(String from, String toEmail, String subject, String textBody) {
         if (!isConfigured()) {
-            throw new IllegalStateException("Resend API key não configurada.");
+            return false;
         }
 
         CreateEmailOptions options = CreateEmailOptions.builder()
@@ -42,10 +42,10 @@ public class ResendEmailSender {
             CreateEmailResponse response = resendClient.emails().send(options);
             String emailId = response != null ? response.getId() : null;
             log.info("E-mail enviado via Resend para {} (id={})", toEmail, emailId);
-            return emailId;
+            return true;
         } catch (ResendException ex) {
             log.error("Falha ao enviar e-mail via Resend para {}", toEmail, ex);
-            throw new IllegalStateException("Falha ao enviar e-mail via Resend.", ex);
+            return false;
         }
     }
 }

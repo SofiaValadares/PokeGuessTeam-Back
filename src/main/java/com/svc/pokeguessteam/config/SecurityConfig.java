@@ -21,6 +21,12 @@ import java.util.List;
 @Configuration
 public class SecurityConfig {
 
+    private final AppCorsProperties corsProperties;
+
+    public SecurityConfig(AppCorsProperties corsProperties) {
+        this.corsProperties = corsProperties;
+    }
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
                                                    JsonAuthenticationEntryPoint authenticationEntryPoint) throws Exception {
@@ -46,7 +52,6 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/auth/password-reset/confirm").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/meta").permitAll()
                         .requestMatchers("/public/**").permitAll()
-                        .requestMatchers("/ws/**").permitAll()
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(ex -> ex
@@ -61,15 +66,10 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of(
-                "http://localhost:5173",
-                "http://localhost:3000",
-                "http://localhost:5500",
-                "http://127.0.0.1:5500"
-        ));
+        config.setAllowedOriginPatterns(corsProperties.getAllowedOriginPatterns());
         config.setAllowCredentials(true);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("Content-Type", "Authorization", "X-Requested-With"));
+        config.setAllowedHeaders(List.of("Content-Type", "Authorization", "X-Requested-With", "Accept-Language"));
         config.setExposedHeaders(List.of("Set-Cookie"));
         config.setMaxAge(Duration.ofHours(1));
 

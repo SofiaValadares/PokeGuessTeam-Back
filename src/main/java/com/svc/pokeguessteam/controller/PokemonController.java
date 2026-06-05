@@ -1,5 +1,6 @@
 package com.svc.pokeguessteam.controller;
 
+import com.svc.pokeguessteam.dto.pokemon.ClaimEvolutionRewardsResponse;
 import com.svc.pokeguessteam.dto.pokemon.PcPageResponse;
 import com.svc.pokeguessteam.dto.pokemon.PokeballDrawRequest;
 import com.svc.pokeguessteam.dto.pokemon.PokeballDrawResponse;
@@ -66,6 +67,19 @@ public class PokemonController {
     }
 
     /**
+     * Resgata recompensas de marco de nível pendentes numa linha evolutiva do PC.
+     */
+    @PostMapping("/pc/{lineKey}/claim-rewards")
+    public ResponseEntity<ClaimEvolutionRewardsResponse> claimEvolutionRewards(
+            HttpSession session,
+            @PathVariable int lineKey
+    ) {
+        String userId = currentUserService.requireUserId(session);
+        profileService.ensureProfileWithStarters(userId);
+        return ResponseEntity.ok(profileService.claimEvolutionRewards(userId, lineKey));
+    }
+
+    /**
      * Consome uma Pokébola do inventário, sorteia raridade conforme o tipo e adiciona ao PC (linha evolutiva).
      */
     @PostMapping("/draw")
@@ -87,6 +101,37 @@ public class PokemonController {
                         ErrorCodes.POKEMON_SPECIES_NOT_FOUND,
                         MessageKeys.POKEMON_SPECIES_NOT_FOUND
                 ));
+    }
+
+    /**
+     * Metadados de várias espécies num único pedido ({@code numbers=1,4,7}).
+     */
+    @GetMapping("/species")
+    public ResponseEntity<List<PokemonDto>> speciesBatch(@RequestParam("numbers") String numbers) {
+        if (numbers == null || numbers.isBlank()) {
+            return ResponseEntity.ok(List.of());
+        }
+        List<Integer> dexList = java.util.Arrays.stream(numbers.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .map(s -> {
+                    try {
+                        return Integer.parseInt(s);
+                    } catch (NumberFormatException e) {
+                        return null;
+                    }
+                })
+                .filter(n -> n != null && n > 0)
+                .distinct()
+                .limit(100)
+                .toList();
+        if (dexList.isEmpty()) {
+            return ResponseEntity.ok(List.of());
+        }
+        List<PokemonDto> results = pokemonRepository.findByPokedexNumberIn(dexList).stream()
+                .map(PokemonDto::from)
+                .toList();
+        return ResponseEntity.ok(results);
     }
 
     /**

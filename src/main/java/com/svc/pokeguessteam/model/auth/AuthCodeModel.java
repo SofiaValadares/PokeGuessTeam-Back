@@ -24,6 +24,10 @@ public class AuthCodeModel {
     @Column(name = "CODE_PURPOSE", nullable = false, length = 32)
     private AuthCodePurpose purpose;
 
+    /** Novo e-mail pendente (troca de e-mail autenticada). */
+    @Column(name = "TARGET_EMAIL")
+    private String targetEmail;
+
     @Column(name = "CODE_HASH", nullable = false, length = 64)
     private String codeHash;
 
@@ -62,6 +66,14 @@ public class AuthCodeModel {
 
     public void setPurpose(AuthCodePurpose purpose) {
         this.purpose = purpose;
+    }
+
+    public String getTargetEmail() {
+        return targetEmail;
+    }
+
+    public void setTargetEmail(String targetEmail) {
+        this.targetEmail = targetEmail;
     }
 
     public String getCodeHash() {

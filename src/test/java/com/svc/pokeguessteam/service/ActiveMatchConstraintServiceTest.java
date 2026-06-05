@@ -12,7 +12,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.Optional;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -35,8 +35,8 @@ class ActiveMatchConstraintServiceTest {
         existing.setGameMode(GameModes.LOCAL);
         existing.setStatus(MatchStatus.SETUP);
 
-        when(activeMatchRepository.findUnfinishedForProfile(eq("profile-1"), eq(MatchStatus.FINISHED)))
-                .thenReturn(Optional.of(existing));
+        when(activeMatchRepository.findAllUnfinishedForProfileOrderByCreatedAtDesc(eq("profile-1"), eq(MatchStatus.FINISHED)))
+                .thenReturn(List.of(existing));
 
         ApiBusinessException ex = assertThrows(
                 ApiBusinessException.class,
@@ -47,8 +47,8 @@ class ActiveMatchConstraintServiceTest {
 
     @Test
     void allowsStartWhenNoUnfinishedMatch() {
-        when(activeMatchRepository.findUnfinishedForProfile(eq("profile-1"), eq(MatchStatus.FINISHED)))
-                .thenReturn(Optional.empty());
+        when(activeMatchRepository.findAllUnfinishedForProfileOrderByCreatedAtDesc(eq("profile-1"), eq(MatchStatus.FINISHED)))
+                .thenReturn(List.of());
 
         assertDoesNotThrow(() -> service.ensureCanStartNewMatch("profile-1"));
     }

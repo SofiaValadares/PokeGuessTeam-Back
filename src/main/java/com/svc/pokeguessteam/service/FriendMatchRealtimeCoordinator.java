@@ -47,6 +47,18 @@ public class FriendMatchRealtimeCoordinator {
         afterTurnChange(matchId, hostUserId, guestUserId, hostView);
     }
 
+    public void publishAfterGuestJoin(String matchId, String hostUserId, String guestUserId) {
+        FriendMatchStateDto hostView = friendMatchService.getStateForUser(matchId, hostUserId);
+        FriendMatchStateDto guestView = friendMatchService.getStateForUser(matchId, guestUserId);
+        publisher.publishFriendToBoth(
+                matchId,
+                hostUserId,
+                guestUserId,
+                MatchRealtimeMessage.friendState(matchId, hostView),
+                MatchRealtimeMessage.friendState(matchId, guestView)
+        );
+    }
+
     public void publishAfterTeamReady(
             String matchId,
             String hostUserId,
