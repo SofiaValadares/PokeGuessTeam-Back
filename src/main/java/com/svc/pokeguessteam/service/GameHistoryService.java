@@ -1,5 +1,8 @@
 package com.svc.pokeguessteam.service;
 
+import com.svc.pokeguessteam.exception.ApiBusinessException;
+import com.svc.pokeguessteam.exception.ErrorCodes;
+import com.svc.pokeguessteam.messages.MessageKeys;
 import com.svc.pokeguessteam.dto.game.GameBotFinishRequest;
 import com.svc.pokeguessteam.dto.game.GameFinishRequest;
 import com.svc.pokeguessteam.dto.game.GameHistoryEntryDto;
@@ -18,6 +21,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -144,6 +148,19 @@ public class GameHistoryService {
         Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "playedAt"));
         Page<HistoryGameModel> result = historyGameRepository.findByProfileId(profile.getId(), pageable);
         return GameHistoryPageResponse.from(result);
+    }
+
+    @Transactional
+    public void deleteHistory(String userId, String gameId) {
+        ProfileModel profile = profileService.ensureProfileWithStarters(userId);
+        HistoryGameModel game = historyGameRepository
+                .findByIdAndProfileId(gameId, profile.getId())
+                .orElseThrow(() -> new ApiBusinessException(
+                        HttpStatus.NOT_FOUND,
+                        ErrorCodes.GAME_MATCH_NOT_FOUND,
+                        MessageKeys.GAME_MATCH_NOT_FOUND
+                ));
+        historyGameRepository.delete(game);
     }
 
     private void validateFinishRequest(GameFinishRequest request) {

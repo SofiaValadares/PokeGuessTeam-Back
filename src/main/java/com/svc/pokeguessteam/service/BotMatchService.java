@@ -18,7 +18,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class BotMatchService {
@@ -68,7 +70,9 @@ public class BotMatchService {
                     registeredCount
             );
         }
-        return new BotMatchSetupResponse(team, GameConstants.BOT_FIXED_TEAM);
+        Set<Integer> excluded = new HashSet<>(team);
+        List<Integer> botTeam = duelTeamService.buildBotTeamFromUserPokedex(userId, excluded);
+        return new BotMatchSetupResponse(team, botTeam);
     }
 
     /** Persiste histórico e recompensas após partida resolvida no cliente. */
