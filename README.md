@@ -16,7 +16,7 @@ Frontend de referência (AV1): [PokeGuessTeam](https://github.com/SofiaValadares
 
 ```bash
 docker compose up -d db
-./mvnw spring-boot:run
+./mvn spring-boot:run
 ```
 
 API: `http://localhost:8080`
