@@ -18,10 +18,7 @@ public final class GameConstants {
     /** Tempo por turno no modo amigo (segundos). */
     public static final int FRIEND_TURN_TIMEOUT_SECONDS = 50;
 
-    /** Penalidades por timeout na mesma partida → desistência automática. */
-    public static final int FRIEND_MAX_TIMEOUT_PENALTIES_PER_MATCH = 3;
-
-    /** Penalidades na última hora → ban temporário do modo amigo. */
+    /** Penalidades na última hora → ban temporário do modo amigo (legado; não usado no modo amigo). */
     public static final int FRIEND_TIMEOUT_BAN_THRESHOLD = 5;
 
     public static final int FRIEND_TIMEOUT_BAN_HOURS = 72;

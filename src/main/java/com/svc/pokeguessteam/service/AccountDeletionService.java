@@ -29,6 +29,7 @@ public class AccountDeletionService {
     private final ProfileRepository profileRepository;
     private final ActiveMatchRepository activeMatchRepository;
     private final ActiveMatchRemovalService activeMatchRemovalService;
+    private final FriendMatchStore friendMatchStore;
     private final HistoryGamePlayerRepository historyGamePlayerRepository;
     private final FriendOnlinePenaltyRepository friendOnlinePenaltyRepository;
     private final UserPokedexRepository userPokedexRepository;
@@ -40,6 +41,7 @@ public class AccountDeletionService {
             ProfileRepository profileRepository,
             ActiveMatchRepository activeMatchRepository,
             ActiveMatchRemovalService activeMatchRemovalService,
+            FriendMatchStore friendMatchStore,
             HistoryGamePlayerRepository historyGamePlayerRepository,
             FriendOnlinePenaltyRepository friendOnlinePenaltyRepository,
             UserPokedexRepository userPokedexRepository,
@@ -50,6 +52,7 @@ public class AccountDeletionService {
         this.profileRepository = profileRepository;
         this.activeMatchRepository = activeMatchRepository;
         this.activeMatchRemovalService = activeMatchRemovalService;
+        this.friendMatchStore = friendMatchStore;
         this.historyGamePlayerRepository = historyGamePlayerRepository;
         this.friendOnlinePenaltyRepository = friendOnlinePenaltyRepository;
         this.userPokedexRepository = userPokedexRepository;
@@ -79,6 +82,7 @@ public class AccountDeletionService {
         String profileId = profile != null ? profile.getId() : null;
 
         if (profileId != null) {
+            friendMatchStore.removeForProfile(profileId);
             detachGuestFromActiveMatches(profileId);
             deleteHostedActiveMatches(profileId);
             historyGamePlayerRepository.clearProfileReferences(profileId);

@@ -7,6 +7,7 @@ import com.svc.pokeguessteam.dto.game.FriendMatchActionResponse;
 import com.svc.pokeguessteam.dto.game.FriendMatchJoinRequest;
 import com.svc.pokeguessteam.dto.game.FriendMatchStateDto;
 import com.svc.pokeguessteam.dto.game.GameHistoryEntryDto;
+import com.svc.pokeguessteam.dto.game.MatchRewardDto;
 import com.svc.pokeguessteam.dto.game.OpponentSlotKnowledgeDto;
 import com.svc.pokeguessteam.dto.game.OpponentTeamKnowledgeResponse;
 import com.svc.pokeguessteam.exception.ApiBusinessException;
@@ -19,9 +20,7 @@ import com.svc.pokeguessteam.model.game.ActiveMatchGuessModel;
 import com.svc.pokeguessteam.model.game.ActiveMatchModel;
 import com.svc.pokeguessteam.model.game.ActiveMatchPlayerModel;
 import com.svc.pokeguessteam.model.pokemon.PokemonModel;
-import com.svc.pokeguessteam.util.BotAiOpponent;
 import com.svc.pokeguessteam.model.user.ProfileModel;
-import com.svc.pokeguessteam.repository.game.ActiveMatchRepository;
 import com.svc.pokeguessteam.repository.pokemon.PokemonRepository;
 import com.svc.pokeguessteam.util.GameConstants;
 import com.svc.pokeguessteam.util.JoinCodeGenerator;
@@ -36,6 +35,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Function;
@@ -44,48 +44,39 @@ import java.util.stream.Collectors;
 @Service
 public class FriendMatchService {
 
-    private final ActiveMatchRepository activeMatchRepository;
     private final PokemonRepository pokemonRepository;
     private final ProfileService profileService;
     private final GameHistoryService gameHistoryService;
     private final MatchRewardService matchRewardService;
     private final MatchKnowledgeService matchKnowledgeService;
     private final ActiveMatchConstraintService activeMatchConstraintService;
-    private final FriendOnlineModerationService friendOnlineModerationService;
     private final FriendMatchRealtimeCoordinator friendMatchRealtimeCoordinator;
     private final DuelTeamService duelTeamService;
-    private final ActiveMatchHitsService activeMatchHitsService;
-    private final ActiveMatchRemovalService activeMatchRemovalService;
+    private final FriendMatchStore friendMatchStore;
 
     public FriendMatchService(
-            ActiveMatchRepository activeMatchRepository,
             PokemonRepository pokemonRepository,
             ProfileService profileService,
             GameHistoryService gameHistoryService,
             MatchRewardService matchRewardService,
             MatchKnowledgeService matchKnowledgeService,
             ActiveMatchConstraintService activeMatchConstraintService,
-            FriendOnlineModerationService friendOnlineModerationService,
             @Lazy FriendMatchRealtimeCoordinator friendMatchRealtimeCoordinator,
             DuelTeamService duelTeamService,
-            ActiveMatchHitsService activeMatchHitsService,
-            ActiveMatchRemovalService activeMatchRemovalService
+            FriendMatchStore friendMatchStore
     ) {
-        this.activeMatchRepository = activeMatchRepository;
         this.pokemonRepository = pokemonRepository;
         this.profileService = profileService;
         this.gameHistoryService = gameHistoryService;
         this.matchRewardService = matchRewardService;
         this.matchKnowledgeService = matchKnowledgeService;
         this.activeMatchConstraintService = activeMatchConstraintService;
-        this.friendOnlineModerationService = friendOnlineModerationService;
         this.friendMatchRealtimeCoordinator = friendMatchRealtimeCoordinator;
         this.duelTeamService = duelTeamService;
-        this.activeMatchHitsService = activeMatchHitsService;
-        this.activeMatchRemovalService = activeMatchRemovalService;
+        this.friendMatchStore = friendMatchStore;
     }
 
-    public record BotReplacementStep(
+    public record TurnTimeoutStep(
             FriendMatchStateDto hostView,
             FriendMatchStateDto guestView,
             BotMatchGuessFeedbackDto feedback
@@ -93,26 +84,21 @@ public class FriendMatchService {
     }
 
     @Transactional
-    public FriendMatchStateDto startMatch(String userId) {
+    public FriendMatchStateDto startMatch(String userId, BotMatchTeamRequest request) {
         ProfileModel profile = profileService.ensureProfileWithStarters(userId);
-        friendOnlineModerationService.ensureNotBanned(profile);
         activeMatchConstraintService.ensureCanStartNewMatch(profile.getId());
 
-        ActiveMatchModel match = new ActiveMatchModel();
+        List<Integer> team = duelTeamService.validateTeamFromRegisteredPokedex(userId, request.team());
+
+        ActiveMatchModel match = FriendMatchStore.newMatchShell();
         match.setProfile(profile);
         match.setGameMode(GameModes.FRIEND);
-        match.setStatus(MatchStatus.SETUP);
-        match.setJoinCode(JoinCodeGenerator.generateUnique(activeMatchRepository));
-
-        ActiveMatchPlayerModel hostPlayer = new ActiveMatchPlayerModel();
-        hostPlayer.setSide(MatchPlayerSide.HOST);
-        hostPlayer.setSkipTurns(0);
-        match.setHostPlayer(hostPlayer);
-
-        ActiveMatchPlayerModel guestPlayer = new ActiveMatchPlayerModel();
-        guestPlayer.setSide(MatchPlayerSide.OPPONENT);
-        guestPlayer.setSkipTurns(0);
-        match.setOpponentPlayer(guestPlayer);
+        match.setJoinCode(JoinCodeGenerator.generateUnique(friendMatchStore::isJoinCodeTaken));
+        match.getHostPlayer().setSide(MatchPlayerSide.HOST);
+        match.getHostPlayer().setSkipTurns(0);
+        match.getHostPlayer().setTeam(team);
+        match.getOpponentPlayer().setSide(MatchPlayerSide.OPPONENT);
+        match.getOpponentPlayer().setSkipTurns(0);
 
         ActiveMatchModel saved = saveMatch(match);
         return toStateDto(saved, profile, null);
@@ -121,7 +107,6 @@ public class FriendMatchService {
     @Transactional
     public FriendMatchStateDto joinMatch(String userId, FriendMatchJoinRequest request) {
         ProfileModel guestProfile = profileService.ensureProfileWithStarters(userId);
-        friendOnlineModerationService.ensureNotBanned(guestProfile);
         String joinCode = JoinCodeGenerator.normalize(request.joinCode());
         if (joinCode == null || joinCode.length() < GameConstants.FRIEND_JOIN_CODE_LENGTH) {
             throw new ApiBusinessException(
@@ -131,15 +116,12 @@ public class FriendMatchService {
             );
         }
 
-        ActiveMatchModel match = activeMatchRepository.findByJoinCodeAndGameModeAndStatusNot(
-                joinCode,
-                GameModes.FRIEND,
-                MatchStatus.FINISHED
-        ).orElseThrow(() -> new ApiBusinessException(
-                HttpStatus.NOT_FOUND,
-                ErrorCodes.GAME_JOIN_CODE_NOT_FOUND,
-                MessageKeys.GAME_JOIN_CODE_NOT_FOUND
-        ));
+        ActiveMatchModel match = friendMatchStore.findByJoinCode(joinCode)
+                .orElseThrow(() -> new ApiBusinessException(
+                        HttpStatus.NOT_FOUND,
+                        ErrorCodes.GAME_JOIN_CODE_NOT_FOUND,
+                        MessageKeys.GAME_JOIN_CODE_NOT_FOUND
+                ));
 
         if (match.getProfile().getUser().getIdUser().equals(userId)) {
             throw new ApiBusinessException(
@@ -168,24 +150,32 @@ public class FriendMatchService {
             );
         }
 
+        List<Integer> team = duelTeamService.validateTeamFromRegisteredPokedex(userId, request.team());
+
         activeMatchConstraintService.ensureCanStartNewMatch(guestProfile.getId());
         match.setGuestProfile(guestProfile);
+        match.getOpponentPlayer().setTeam(team);
+        MatchEngine.tryStartIfBothTeamsReady(match, GameConstants.TEAM_SIZE);
         ActiveMatchModel saved = saveMatch(match);
+
         String hostUserId = saved.getProfile().getUser().getIdUser();
         String guestUserId = guestProfile.getUser().getIdUser();
-        friendMatchRealtimeCoordinator.publishAfterGuestJoin(
-                saved.getId(),
-                hostUserId,
-                guestUserId
-        );
+        if (saved.getStatus() == MatchStatus.ACTIVE) {
+            friendMatchRealtimeCoordinator.publishAfterTeamReady(
+                    saved.getId(),
+                    hostUserId,
+                    guestUserId,
+                    toStateDto(saved, saved.getProfile(), null),
+                    toStateDto(saved, guestProfile, null)
+            );
+        } else {
+            friendMatchRealtimeCoordinator.publishAfterGuestJoin(
+                    saved.getId(),
+                    hostUserId,
+                    guestUserId
+            );
+        }
         return toStateDto(saved, guestProfile, null);
-    }
-
-    @Transactional(readOnly = true)
-    public FriendMatchStateDto getActiveMatch(String userId) {
-        ProfileModel profile = profileService.ensureProfileWithStarters(userId);
-        ActiveMatchModel match = requireActiveFriendMatch(profile);
-        return toStateDto(match, profile, null);
     }
 
     @Transactional(readOnly = true)
@@ -200,9 +190,7 @@ public class FriendMatchService {
         ProfileModel profile = profileService.ensureProfileWithStarters(userId);
         ActiveMatchModel match = requireActiveFriendMatch(profile);
         MatchPlayerSide side = resolveSide(match, profile);
-        if (side == MatchPlayerSide.OPPONENT) {
-            ensureGuestJoined(match);
-        }
+        ensureGuestJoined(match);
 
         if (match.getStatus() != MatchStatus.SETUP && match.getStatus() != MatchStatus.ACTIVE) {
             throw new ApiBusinessException(
@@ -220,21 +208,29 @@ public class FriendMatchService {
         }
 
         List<Integer> team = duelTeamService.validateTeamFromRegisteredPokedex(userId, request.team());
-        getPlayer(match, side).setTeam(team);
+        ActiveMatchPlayerModel player = getPlayer(match, side);
+        if (player.getTeam().size() >= GameConstants.TEAM_SIZE) {
+            throw new ApiBusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    ErrorCodes.GAME_MATCH_INVALID_PHASE,
+                    MessageKeys.GAME_MATCH_TEAM_LOCKED
+            );
+        }
+        player.setTeam(team);
 
-        boolean started = MatchEngine.tryStartIfBothTeamsReady(match, GameConstants.TEAM_SIZE);
+        MatchEngine.tryStartIfBothTeamsReady(match, GameConstants.TEAM_SIZE);
         saveMatch(match);
 
         FriendMatchStateDto viewerState = toStateDto(match, profile, null);
-        if (started && match.getGuestProfile() != null) {
+        if (match.getGuestProfile() != null) {
             String hostUserId = match.getProfile().getUser().getIdUser();
             String guestUserId = match.getGuestProfile().getUser().getIdUser();
             friendMatchRealtimeCoordinator.publishAfterTeamReady(
                     match.getId(),
                     hostUserId,
                     guestUserId,
-                    getStateForUser(match.getId(), hostUserId),
-                    getStateForUser(match.getId(), guestUserId)
+                    toStateDto(match, match.getProfile(), null),
+                    toStateDto(match, match.getGuestProfile(), null)
             );
         }
         return new FriendMatchActionResponse(viewerState, List.of());
@@ -243,7 +239,17 @@ public class FriendMatchService {
     @Transactional
     public FriendMatchActionResponse submitGuess(String userId, BotMatchGuessRequest request) {
         ProfileModel profile = profileService.ensureProfileWithStarters(userId);
-        ActiveMatchModel match = requireActiveFriendMatch(profile);
+        String matchId = requireActiveFriendMatch(profile).getId();
+        return friendMatchStore.callExclusive(matchId, () -> submitGuessLocked(userId, request, profile, matchId));
+    }
+
+    private FriendMatchActionResponse submitGuessLocked(
+            String userId,
+            BotMatchGuessRequest request,
+            ProfileModel profile,
+            String matchId
+    ) {
+        ActiveMatchModel match = requireMatchById(matchId);
         ensureGuestJoined(match);
 
         if (match.getStatus() != MatchStatus.ACTIVE) {
@@ -273,28 +279,42 @@ public class FriendMatchService {
         GameHistoryEntryDto history = finalizeIfFinished(match, null);
 
         List<BotMatchGuessFeedbackDto> feedbacks = List.of(toFeedback(result, pokemonByDex));
-        FriendMatchStateDto state = toStateDto(match, profile, history);
-        completeIfFinished(match, null);
-
+        FriendMatchStateDto state = toStateDto(match, profile, history, null);
         String hostUserId = match.getProfile().getUser().getIdUser();
         String guestUserId = match.getGuestProfile().getUser().getIdUser();
+        FriendMatchStateDto hostView = toStateDto(match, match.getProfile(), history, null);
+        FriendMatchStateDto guestView = toStateDto(match, match.getGuestProfile(), history, null);
+
+        MatchRewardDto reward = null;
+        if (match.getStatus() == MatchStatus.FINISHED) {
+            reward = completeIfFinished(match, null, userId);
+            state = toStateDto(match, profile, history, null);
+            hostView = toStateDto(match, match.getProfile(), history, null);
+            guestView = toStateDto(match, match.getGuestProfile(), history, null);
+        }
+
         friendMatchRealtimeCoordinator.publishAfterHumanGuess(
-                new FriendMatchActionResponse(state, feedbacks),
+                match.getId(),
                 hostUserId,
-                guestUserId
+                guestUserId,
+                hostView,
+                guestView,
+                feedbacks.get(0)
         );
-        return new FriendMatchActionResponse(state, feedbacks);
+        return new FriendMatchActionResponse(state, feedbacks, reward);
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<FriendMatchStateDto> findActiveMatch(String userId) {
+        ProfileModel profile = profileService.ensureProfileWithStarters(userId);
+        return friendMatchStore.findActiveForProfile(profile.getId())
+                .filter(match -> match.getStatus() != MatchStatus.FINISHED)
+                .map(match -> toStateDto(match, profile, null));
     }
 
     @Transactional(readOnly = true)
     public FriendMatchStateDto getStateForUser(String matchId, String userId) {
-        ActiveMatchModel match = activeMatchRepository.findDetailedById(matchId)
-                .orElseThrow(() -> new ApiBusinessException(
-                        HttpStatus.NOT_FOUND,
-                        ErrorCodes.GAME_FRIEND_MATCH_NOT_FOUND,
-                        MessageKeys.GAME_FRIEND_MATCH_NOT_FOUND
-                ));
-        activeMatchHitsService.attachHits(match);
+        ActiveMatchModel match = requireMatchById(matchId);
         ProfileModel profile = profileService.ensureProfileWithStarters(userId);
         return toStateDto(match, profile, null);
     }
@@ -325,19 +345,12 @@ public class FriendMatchService {
         return requireMatchById(matchId).getTurnDeadlineAt();
     }
 
-    @Transactional(readOnly = true)
-    public boolean isBotControlledTurn(String matchId, MatchPlayerSide side) {
-        ActiveMatchModel match = requireMatchById(matchId);
-        return match.isSideControlledByBot(side);
-    }
-
-    @Transactional(readOnly = true)
-    public boolean wasBotReplacementTriggered(String matchId) {
-        return requireMatchById(matchId).getBotReplacementSide() != null;
-    }
-
     @Transactional
-    public FriendMatchActionResponse processTurnTimeout(String matchId, long expectedSequence) {
+    public TurnTimeoutStep processTurnTimeout(String matchId, long expectedSequence) {
+        return friendMatchStore.callExclusive(matchId, () -> processTurnTimeoutLocked(matchId, expectedSequence));
+    }
+
+    private TurnTimeoutStep processTurnTimeoutLocked(String matchId, long expectedSequence) {
         ActiveMatchModel match = requireMatchById(matchId);
         if (match.getStatus() != MatchStatus.ACTIVE) {
             return null;
@@ -350,23 +363,11 @@ public class FriendMatchService {
             return null;
         }
 
-        ProfileModel penalizedProfile = side == MatchPlayerSide.HOST ? match.getProfile() : match.getGuestProfile();
-        if (penalizedProfile == null) {
-            return null;
-        }
-
         Map<Integer, PokemonModel> pokemonByDex = loadPokemonByDex();
-        PokemonModel autoGuess = pickRandomUnusedGuess(match, side, new ArrayList<>(pokemonRepository.findAllByOrderByPokedexNumberAsc()));
+        List<PokemonModel> allPokemon = pokemonRepository.findAllByOrderByPokedexNumberAsc();
+        PokemonModel autoGuess = pickRandomUnusedGuess(match, side, allPokemon);
         if (autoGuess == null) {
             return null;
-        }
-
-        ActiveMatchPlayerModel player = getPlayer(match, side);
-        player.setTurnTimeoutPenalties(player.getTurnTimeoutPenalties() + 1);
-        friendOnlineModerationService.recordTimeoutPenalty(penalizedProfile, match);
-
-        if (player.getTurnTimeoutPenalties() >= GameConstants.FRIEND_MAX_TIMEOUT_PENALTIES_PER_MATCH) {
-            match.setBotReplacementSide(side);
         }
 
         MatchEngine.ApplyGuessResult result = applyGuessSafe(match, side, autoGuess, pokemonByDex);
@@ -374,50 +375,34 @@ public class FriendMatchService {
         result.guess().setAutoSelected(true);
         saveMatch(match);
 
-        GameHistoryEntryDto history = finalizeIfFinished(match, match.getBotReplacementSide());
-        ProfileModel viewerProfile = penalizedProfile;
-        FriendMatchStateDto state = toStateDto(match, viewerProfile, history);
-        completeIfFinished(match, match.getBotReplacementSide());
-        return new FriendMatchActionResponse(state, List.of(toFeedback(result, pokemonByDex)));
+        GameHistoryEntryDto history = finalizeIfFinished(match, null);
+        if (match.getStatus() == MatchStatus.FINISHED) {
+            completeIfFinished(match, null, null);
+        }
+        FriendMatchStateDto hostView = toStateDto(match, match.getProfile(), history, null);
+        FriendMatchStateDto guestView = toStateDto(match, match.getGuestProfile(), history, null);
+        BotMatchGuessFeedbackDto feedback = toFeedback(result, pokemonByDex);
+        return new TurnTimeoutStep(hostView, guestView, feedback);
     }
 
     @Transactional
-    public BotReplacementStep processSingleBotReplacementTurn(String matchId) {
+    public void completeFinishedMatch(String matchId, MatchPlayerSide surrenderSide) {
         ActiveMatchModel match = requireMatchById(matchId);
-        if (match.getStatus() != MatchStatus.ACTIVE || match.getBotReplacementSide() == null) {
-            return null;
+        if (match.getStatus() != MatchStatus.FINISHED) {
+            return;
         }
-        MatchPlayerSide botSide = match.getBotReplacementSide();
-        if (match.getCurrentTurn() != botSide) {
-            return null;
-        }
-
-        List<PokemonModel> allPokemon = pokemonRepository.findAllByOrderByPokedexNumberAsc();
-        Map<Integer, PokemonModel> pokemonByDex = allPokemon.stream()
-                .collect(Collectors.toMap(PokemonModel::getPokedexNumber, Function.identity(), (a, b) -> a));
-        PokemonModel botGuess = BotAiOpponent.chooseGuess(allPokemon, match, botSide, pokemonByDex);
-        if (botGuess == null) {
-            return null;
-        }
-
-        MatchEngine.ApplyGuessResult result = applyGuessSafe(match, botSide, botGuess, pokemonByDex);
-        saveMatch(match);
-        GameHistoryEntryDto history = finalizeIfFinished(match, match.getBotReplacementSide());
-        completeIfFinished(match, match.getBotReplacementSide());
-
-        String hostUserId = match.getProfile().getUser().getIdUser();
-        String guestUserId = match.getGuestProfile().getUser().getIdUser();
-        return new BotReplacementStep(
-                getStateForUser(matchId, hostUserId),
-                getStateForUser(matchId, guestUserId),
-                toFeedback(result, pokemonByDex)
-        );
+        completeIfFinished(match, surrenderSide, null);
     }
 
     @Transactional
     public FriendMatchActionResponse surrender(String userId) {
         ProfileModel profile = profileService.ensureProfileWithStarters(userId);
-        ActiveMatchModel match = requireActiveFriendMatch(profile);
+        String matchId = requireActiveFriendMatch(profile).getId();
+        return friendMatchStore.callExclusive(matchId, () -> surrenderLocked(userId, profile, matchId));
+    }
+
+    private FriendMatchActionResponse surrenderLocked(String userId, ProfileModel profile, String matchId) {
+        ActiveMatchModel match = requireMatchById(matchId);
 
         if (match.getStatus() == MatchStatus.FINISHED) {
             throw new ApiBusinessException(
@@ -427,18 +412,30 @@ public class FriendMatchService {
             );
         }
 
+        if (match.getStatus() != MatchStatus.ACTIVE) {
+            throw new ApiBusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    ErrorCodes.GAME_MATCH_NOT_ACTIVE,
+                    MessageKeys.GAME_MATCH_NOT_ACTIVE
+            );
+        }
+        ensureGuestJoined(match);
+
         MatchPlayerSide side = resolveSide(match, profile);
         MatchEngine.finishBySurrender(match, side);
         saveMatch(match);
 
-        GameHistoryEntryDto history = null;
-        if (match.getGuestProfile() != null) {
-            history = finalizeIfFinished(match, side);
-        }
+        GameHistoryEntryDto history = finalizeIfFinished(match, side);
+        String hostUserId = match.getProfile().getUser().getIdUser();
+        String guestUserId = match.getGuestProfile().getUser().getIdUser();
+        FriendMatchStateDto hostView = toStateDto(match, match.getProfile(), history, side);
+        FriendMatchStateDto guestView = toStateDto(match, match.getGuestProfile(), history, side);
+        FriendMatchStateDto surrendererView = toStateDto(match, profile, history, side);
 
-        FriendMatchStateDto state = toStateDto(match, profile, history);
-        completeIfFinished(match, side);
-        return new FriendMatchActionResponse(state, List.of());
+        MatchRewardDto reward = completeIfFinished(match, side, userId);
+        friendMatchRealtimeCoordinator.publishAfterSurrender(matchId, hostUserId, guestUserId, hostView, guestView);
+
+        return new FriendMatchActionResponse(surrendererView, List.of(), reward);
     }
 
     @Transactional
@@ -452,7 +449,7 @@ public class FriendMatchService {
                     MessageKeys.GAME_MATCH_INVALID_PHASE
             );
         }
-        activeMatchRemovalService.deleteByMatchId(match.getId());
+        friendMatchStore.remove(match.getId());
     }
 
     private GameHistoryEntryDto finalizeIfFinished(ActiveMatchModel match, MatchPlayerSide surrenderSide) {
@@ -462,11 +459,15 @@ public class FriendMatchService {
         return gameHistoryService.saveFriendGameFromActiveMatch(match, surrenderSide);
     }
 
-    private void completeIfFinished(ActiveMatchModel match, MatchPlayerSide surrenderSide) {
+    private MatchRewardDto completeIfFinished(
+            ActiveMatchModel match,
+            MatchPlayerSide surrenderSide,
+            String rewardForUserId
+    ) {
         if (match.getStatus() != MatchStatus.FINISHED) {
-            return;
+            return null;
         }
-        matchRewardService.grantAndRemoveActiveMatch(match, surrenderSide);
+        return matchRewardService.grantAndRemoveActiveMatch(match, surrenderSide, rewardForUserId);
     }
 
     private FriendMatchStateDto toStateDto(
@@ -474,11 +475,20 @@ public class FriendMatchService {
             ProfileModel viewerProfile,
             GameHistoryEntryDto history
     ) {
+        return toStateDto(match, viewerProfile, history, null);
+    }
+
+    private FriendMatchStateDto toStateDto(
+            ActiveMatchModel match,
+            ProfileModel viewerProfile,
+            GameHistoryEntryDto history,
+            MatchPlayerSide surrenderSide
+    ) {
         MatchPlayerSide viewerSide = resolveSide(match, viewerProfile);
         Map<Integer, PokemonModel> pokemonByDex = loadPokemonByDex();
         List<OpponentSlotKnowledgeDto> knowledge = matchKnowledgeService.buildKnowledge(match, viewerSide);
 
-        List<BotMatchGuessFeedbackDto> recentGuesses = match.getGuesses().stream()
+        List<BotMatchGuessFeedbackDto> recentGuesses = List.copyOf(match.getGuesses()).stream()
                 .limit(20)
                 .map(g -> {
                     PokemonModel p = pokemonByDex.get(g.getGuessedPokedexNumber());
@@ -487,21 +497,20 @@ public class FriendMatchService {
                 })
                 .toList();
 
-        return FriendMatchStateDto.from(match, viewerSide, knowledge, recentGuesses, history);
+        MatchRewardDto yourReward = history != null && match.getStatus() == MatchStatus.FINISHED
+                ? matchRewardService.previewRewardForProfile(match, viewerProfile, surrenderSide)
+                : null;
+
+        return FriendMatchStateDto.from(match, viewerSide, knowledge, recentGuesses, history, yourReward);
     }
 
     private ActiveMatchModel requireActiveFriendMatch(ProfileModel profile) {
-        ActiveMatchModel match = activeMatchRepository.findActiveFriendMatchForProfile(
-                profile.getId(),
-                GameModes.FRIEND,
-                MatchStatus.FINISHED
-        ).orElseThrow(() -> new ApiBusinessException(
-                HttpStatus.NOT_FOUND,
-                ErrorCodes.GAME_FRIEND_MATCH_NOT_FOUND,
-                MessageKeys.GAME_FRIEND_MATCH_NOT_FOUND
-        ));
-        activeMatchHitsService.attachHits(match);
-        return match;
+        return friendMatchStore.findActiveForProfile(profile.getId())
+                .orElseThrow(() -> new ApiBusinessException(
+                        HttpStatus.NOT_FOUND,
+                        ErrorCodes.GAME_FRIEND_MATCH_NOT_FOUND,
+                        MessageKeys.GAME_FRIEND_MATCH_NOT_FOUND
+                ));
     }
 
     private static void ensureGuestJoined(ActiveMatchModel match) {
@@ -568,7 +577,7 @@ public class FriendMatchService {
     }
 
     private void ensureNotAlreadyGuessed(ActiveMatchModel match, MatchPlayerSide side, int pokedexNumber) {
-        boolean already = match.getGuesses().stream()
+        boolean already = List.copyOf(match.getGuesses()).stream()
                 .anyMatch(g -> g.getPlayerSide() == side && g.getGuessedPokedexNumber() == pokedexNumber);
         if (already) {
             throw new ApiBusinessException(
@@ -585,19 +594,17 @@ public class FriendMatchService {
     }
 
     private ActiveMatchModel requireMatchById(String matchId) {
-        ActiveMatchModel match = activeMatchRepository.findDetailedById(matchId)
+        return friendMatchStore.findById(matchId)
                 .orElseThrow(() -> new ApiBusinessException(
                         HttpStatus.NOT_FOUND,
                         ErrorCodes.GAME_FRIEND_MATCH_NOT_FOUND,
                         MessageKeys.GAME_FRIEND_MATCH_NOT_FOUND
                 ));
-        activeMatchHitsService.attachHits(match);
-        return match;
     }
 
     private ActiveMatchModel saveMatch(ActiveMatchModel match) {
-        activeMatchHitsService.persistHits(match);
-        return activeMatchRepository.save(match);
+        friendMatchStore.save(match);
+        return match;
     }
 
     private static PokemonModel pickRandomUnusedGuess(

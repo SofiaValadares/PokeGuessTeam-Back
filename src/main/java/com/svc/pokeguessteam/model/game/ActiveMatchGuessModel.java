@@ -73,6 +73,10 @@ public class ActiveMatchGuessModel {
         return id;
     }
 
+    public void setId(String id) {
+        this.id = id;
+    }
+
     public ActiveMatchModel getMatch() {
         return match;
     }
@@ -117,6 +121,10 @@ public class ActiveMatchGuessModel {
 
     public LocalDateTime getCreatedAt() {
         return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
     }
 
     public boolean isTimedOut() {

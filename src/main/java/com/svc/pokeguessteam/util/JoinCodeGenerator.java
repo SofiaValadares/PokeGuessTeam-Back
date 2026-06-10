@@ -1,10 +1,7 @@
 package com.svc.pokeguessteam.util;
 
-import com.svc.pokeguessteam.model.enums.GameModes;
-import com.svc.pokeguessteam.model.enums.MatchStatus;
-import com.svc.pokeguessteam.repository.game.ActiveMatchRepository;
-
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Predicate;
 
 public final class JoinCodeGenerator {
 
@@ -20,15 +17,10 @@ public final class JoinCodeGenerator {
         return raw.trim().toUpperCase();
     }
 
-    public static String generateUnique(ActiveMatchRepository repository) {
+    public static String generateUnique(Predicate<String> isTaken) {
         for (int attempt = 0; attempt < 20; attempt++) {
             String code = randomCode();
-            boolean taken = repository.findByJoinCodeAndGameModeAndStatusNot(
-                    code,
-                    GameModes.FRIEND,
-                    MatchStatus.FINISHED
-            ).isPresent();
-            if (!taken) {
+            if (!isTaken.test(code)) {
                 return code;
             }
         }

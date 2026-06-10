@@ -35,14 +35,16 @@ public record FriendMatchStateDto(
         LocalDateTime turnDeadlineAt,
         int yourTimeoutPenalties,
         boolean opponentReplacedByBot,
-        GameHistoryEntryDto historyEntry
+        GameHistoryEntryDto historyEntry,
+        MatchRewardDto yourReward
 ) {
     public static FriendMatchStateDto from(
             ActiveMatchModel match,
             MatchPlayerSide viewerSide,
             List<OpponentSlotKnowledgeDto> opponentKnowledge,
             List<BotMatchGuessFeedbackDto> recentGuesses,
-            GameHistoryEntryDto historyEntry
+            GameHistoryEntryDto historyEntry,
+            MatchRewardDto yourReward
     ) {
         ActiveMatchPlayerModel yours = viewerSide == MatchPlayerSide.HOST
                 ? match.getHostPlayer()
@@ -74,7 +76,8 @@ public record FriendMatchStateDto(
                 match.getTurnDeadlineAt(),
                 yours.getTurnTimeoutPenalties(),
                 match.getBotReplacementSide() != null && match.getBotReplacementSide() != viewerSide,
-                historyEntry
+                historyEntry,
+                yourReward
         );
     }
 

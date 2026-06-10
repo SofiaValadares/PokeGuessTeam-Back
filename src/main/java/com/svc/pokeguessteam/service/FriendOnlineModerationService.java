@@ -44,7 +44,6 @@ public class FriendOnlineModerationService {
     public int recordTimeoutPenalty(ProfileModel profile, ActiveMatchModel match) {
         FriendOnlinePenaltyModel penalty = new FriendOnlinePenaltyModel();
         penalty.setProfile(profile);
-        penalty.setMatch(match);
         penaltyRepository.save(penalty);
 
         long recentCount = penaltyRepository.countByProfile_IdAndOccurredAtAfter(

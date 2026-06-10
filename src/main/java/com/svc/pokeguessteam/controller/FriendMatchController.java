@@ -35,10 +35,21 @@ public class FriendMatchController {
         this.currentUserService = currentUserService;
     }
 
-    @PostMapping
-    public ResponseEntity<FriendMatchStateDto> start(HttpSession session) {
+    @GetMapping
+    public ResponseEntity<FriendMatchStateDto> active(HttpSession session) {
         String userId = currentUserService.requireUserId(session);
-        return ResponseEntity.status(HttpStatus.CREATED).body(friendMatchService.startMatch(userId));
+        return friendMatchService.findActiveMatch(userId)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.noContent().build());
+    }
+
+    @PostMapping
+    public ResponseEntity<FriendMatchStateDto> start(
+            HttpSession session,
+            @Valid @RequestBody BotMatchTeamRequest request
+    ) {
+        String userId = currentUserService.requireUserId(session);
+        return ResponseEntity.status(HttpStatus.CREATED).body(friendMatchService.startMatch(userId, request));
     }
 
     @PostMapping("/join")
@@ -48,12 +59,6 @@ public class FriendMatchController {
     ) {
         String userId = currentUserService.requireUserId(session);
         return ResponseEntity.ok(friendMatchService.joinMatch(userId, request));
-    }
-
-    @GetMapping
-    public ResponseEntity<FriendMatchStateDto> active(HttpSession session) {
-        String userId = currentUserService.requireUserId(session);
-        return ResponseEntity.ok(friendMatchService.getActiveMatch(userId));
     }
 
     @GetMapping("/opponent-knowledge")

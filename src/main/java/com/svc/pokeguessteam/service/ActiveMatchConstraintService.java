@@ -18,9 +18,14 @@ import java.util.Optional;
 public class ActiveMatchConstraintService {
 
     private final ActiveMatchRepository activeMatchRepository;
+    private final FriendMatchStore friendMatchStore;
 
-    public ActiveMatchConstraintService(ActiveMatchRepository activeMatchRepository) {
+    public ActiveMatchConstraintService(
+            ActiveMatchRepository activeMatchRepository,
+            FriendMatchStore friendMatchStore
+    ) {
         this.activeMatchRepository = activeMatchRepository;
+        this.friendMatchStore = friendMatchStore;
     }
 
     public void ensureCanStartNewMatch(String profileId) {
@@ -31,6 +36,15 @@ public class ActiveMatchConstraintService {
                     MessageKeys.GAME_MATCH_ALREADY_IN_PROGRESS
             );
         });
+        friendMatchStore.findActiveForProfile(profileId)
+                .filter(match -> match.getStatus() != MatchStatus.FINISHED)
+                .ifPresent(ignored -> {
+                    throw new ApiBusinessException(
+                            HttpStatus.CONFLICT,
+                            ErrorCodes.GAME_MATCH_ALREADY_IN_PROGRESS,
+                            MessageKeys.GAME_MATCH_ALREADY_IN_PROGRESS
+                    );
+                });
     }
 
     public Optional<ActiveMatchModel> findUnfinishedMatch(String profileId) {

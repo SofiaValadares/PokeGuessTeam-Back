@@ -67,6 +67,17 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
     }
 
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ApiErrorResponse> handleIllegalState(IllegalStateException ex) {
+        ApiErrorResponse body = ApiErrorResponse.of(
+                ErrorCodes.GAME_MATCH_INVALID_ACTION,
+                ex.getMessage() != null && !ex.getMessage().isBlank()
+                        ? ex.getMessage()
+                        : "Erro interno ao processar a partida."
+        );
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(body);
+    }
+
     private ApiErrorResponse.FieldError mapFieldError(FieldError fe, Locale locale) {
         String field = fe.getField();
         String message = fe.getDefaultMessage();

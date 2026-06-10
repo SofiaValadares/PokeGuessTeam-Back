@@ -53,8 +53,9 @@ public class ActiveMatchModel {
     @Column(name = "GAME_MODE", nullable = false, length = 20)
     private GameModes gameMode;
 
+  /** Partidas amigo ativas ficam só em {@link com.svc.pokeguessteam.service.FriendMatchStore}. */
     @Enumerated(EnumType.STRING)
-    @Column(name = "MATCH_STATUS", nullable = false, length = 20)
+    @Column(name = "MATCH_STATUS", nullable = false, length = 20, updatable = false)
     private MatchStatus status;
 
     @Convert(converter = MatchPlayerSideConverter.class)
@@ -111,6 +112,9 @@ public class ActiveMatchModel {
         if (createdAt == null) {
             createdAt = LocalDateTime.now();
         }
+        if (status == null) {
+            status = MatchStatus.SETUP;
+        }
     }
 
     public boolean isSideControlledByBot(MatchPlayerSide side) {
@@ -123,6 +127,14 @@ public class ActiveMatchModel {
 
     public String getId() {
         return id;
+    }
+
+    public void setId(String id) {
+        this.id = id;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
     }
 
     public ProfileModel getProfile() {

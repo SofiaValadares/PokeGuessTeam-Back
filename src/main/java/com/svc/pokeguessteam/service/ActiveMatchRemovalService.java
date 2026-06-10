@@ -7,7 +7,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Remove partidas ativas na ordem correta — o Hibernate não garante cascade com
- * {@code @OneToOne(mappedBy)} + {@code @ManyToOne} no filho.
+ * {@code @OneToOne(mappedBy)} + {@code @ManyToOne} no filho. Penalidades online
+ * mantêm o registo histórico, mas a FK para a partida é anulada antes do DELETE.
  */
 @Service
 public class ActiveMatchRemovalService {
@@ -56,6 +57,10 @@ public class ActiveMatchRemovalService {
 
         jdbc.update("DELETE FROM tb_active_match_guesses WHERE fk_active_match_id = ?", matchId);
         jdbc.update("DELETE FROM tb_active_match_players WHERE fk_active_match_id = ?", matchId);
+        jdbc.update(
+                "UPDATE tb_friend_online_penalties SET fk_active_match_id = NULL WHERE fk_active_match_id = ?",
+                matchId
+        );
         jdbc.update("DELETE FROM tb_active_matches WHERE pk_active_match_id = ?", matchId);
 
         entityManager.clear();

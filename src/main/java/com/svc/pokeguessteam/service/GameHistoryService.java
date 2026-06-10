@@ -107,7 +107,16 @@ public class GameHistoryService {
             MatchPlayerSide side,
             MatchPlayerSide surrenderSide
     ) {
-        if (surrenderSide == side || match.getBotReplacementSide() == side) {
+        if (surrenderSide != null) {
+            if (surrenderSide == side) {
+                return GameResults.DESISTENCE;
+            }
+            if (match.getWinner() == null) {
+                return GameResults.DRAW;
+            }
+            return match.getWinner() == side ? GameResults.WIN : GameResults.LOSE;
+        }
+        if (match.getBotReplacementSide() == side) {
             return GameResults.DESISTENCE;
         }
         if (match.getWinner() == null) {

@@ -2,10 +2,8 @@ package com.svc.pokeguessteam.model.game;
 
 import com.svc.pokeguessteam.model.enums.MatchPlayerSide;
 import com.svc.pokeguessteam.model.enums.MatchPlayerSideConverter;
-import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
-import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
@@ -13,7 +11,6 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.OrderColumn;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import jakarta.persistence.UniqueConstraint;
@@ -47,13 +44,8 @@ public class ActiveMatchPlayerModel {
     @Column(name = "PLAYER_SIDE", nullable = false, length = 10)
     private MatchPlayerSide side;
 
-    @ElementCollection(fetch = FetchType.EAGER)
-    @CollectionTable(
-            name = "TB_ACTIVE_MATCH_PLAYER_TEAM",
-            joinColumns = @JoinColumn(name = "FK_ACTIVE_MATCH_PLAYER_ID")
-    )
-    @OrderColumn(name = "SLOT_INDEX")
-    @Column(name = "POKEDEX_NUMBER", nullable = false)
+    /** Carregado/gravado via {@link com.svc.pokeguessteam.service.ActiveMatchTeamService}. */
+    @Transient
     private List<Integer> team;
 
     /** Carregado/gravado via {@link com.svc.pokeguessteam.service.ActiveMatchHitsService}. */
@@ -69,6 +61,10 @@ public class ActiveMatchPlayerModel {
 
     public String getId() {
         return id;
+    }
+
+    public void setId(String id) {
+        this.id = id;
     }
 
     public ActiveMatchModel getMatch() {
@@ -93,6 +89,10 @@ public class ActiveMatchPlayerModel {
 
     public void setTeam(List<Integer> team) {
         this.team = team != null ? new ArrayList<>(team) : new ArrayList<>();
+    }
+
+    public void loadTeam(List<Integer> loaded) {
+        this.team = loaded != null ? new ArrayList<>(loaded) : new ArrayList<>();
     }
 
     public Set<Integer> getHits() {
