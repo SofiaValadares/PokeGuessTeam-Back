@@ -4,6 +4,7 @@ set -eu
 export PORT="${PORT:-8080}"
 export SPRING_PORT="${SPRING_PORT:-8081}"
 export SOCKETIO_PORT="${SOCKETIO_PORT:-9092}"
+export INTERNAL_API_BASE_URL="${INTERNAL_API_BASE_URL:-http://127.0.0.1:${SPRING_PORT}}"
 
 envsubst '${PORT} ${SPRING_PORT} ${SOCKETIO_PORT}' \
   < /app/nginx.conf.template > /tmp/nginx.conf

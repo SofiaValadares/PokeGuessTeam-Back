@@ -15,11 +15,11 @@ public class SocketSessionAuthService {
     private final ObjectMapper objectMapper;
 
     public SocketSessionAuthService(
-            @Value("${server.port:8080}") int serverPort,
+            @Value("${app.internal-api.base-url:http://127.0.0.1:8080}") String internalApiBaseUrl,
             ObjectMapper objectMapper
     ) {
         this.restClient = RestClient.builder()
-                .baseUrl("http://127.0.0.1:" + serverPort)
+                .baseUrl(internalApiBaseUrl.replaceAll("/$", ""))
                 .build();
         this.objectMapper = objectMapper;
     }
