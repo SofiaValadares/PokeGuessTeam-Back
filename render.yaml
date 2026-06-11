@@ -22,7 +22,7 @@ services:
       - key: RESEND_API_KEY
         sync: false
       - key: APP_MAIL_FROM
-        value: PokeTeamGuess <onboarding@resend.dev>
+        value: PokeTeamGuess <noreply@sofiavcav.dev>
       - key: APP_MAIL_DEV_LOG_ONLY
         value: "false"
       - key: DEV_TOOLS_ENABLED
