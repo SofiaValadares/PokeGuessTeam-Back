@@ -86,6 +86,7 @@ public class FriendMatchService {
     @Transactional
     public FriendMatchStateDto startMatch(String userId, BotMatchTeamRequest request) {
         ProfileModel profile = profileService.ensureProfileWithStarters(userId);
+        activeMatchConstraintService.clearStaleClientSideMatches(profile.getId());
         activeMatchConstraintService.ensureCanStartNewMatch(profile.getId());
 
         List<Integer> team = duelTeamService.validateTeamFromRegisteredPokedex(userId, request.team());
@@ -152,6 +153,7 @@ public class FriendMatchService {
 
         List<Integer> team = duelTeamService.validateTeamFromRegisteredPokedex(userId, request.team());
 
+        activeMatchConstraintService.clearStaleClientSideMatches(guestProfile.getId());
         activeMatchConstraintService.ensureCanStartNewMatch(guestProfile.getId());
         match.setGuestProfile(guestProfile);
         match.getOpponentPlayer().setTeam(team);
@@ -293,8 +295,13 @@ public class FriendMatchService {
     public Optional<FriendMatchStateDto> findActiveMatch(String userId) {
         ProfileModel profile = profileService.ensureProfileWithStarters(userId);
         return friendMatchStore.findActiveForProfile(profile.getId())
-                .filter(match -> match.getStatus() != MatchStatus.FINISHED)
-                .map(match -> toStateDto(match, profile, null));
+                .flatMap(match -> {
+                    if (match.getStatus() == MatchStatus.FINISHED) {
+                        friendMatchStore.remove(match.getId());
+                        return Optional.empty();
+                    }
+                    return Optional.of(toStateDto(match, profile, null));
+                });
     }
 
     @Transactional(readOnly = true)
@@ -416,16 +423,35 @@ public class FriendMatchService {
 
     @Transactional
     public void abandonSetupMatch(String userId) {
+        leaveMatch(userId);
+    }
+
+    /**
+     * Sai da partida amigo em memória (sala, jogo ativo ou resíduo terminado) e remove
+     * registos bot/local órfãos na BD que bloqueiam uma nova partida.
+     */
+    @Transactional
+    public void leaveMatch(String userId) {
         ProfileModel profile = profileService.ensureProfileWithStarters(userId);
-        ActiveMatchModel match = requireActiveFriendMatch(profile);
-        if (match.getStatus() != MatchStatus.SETUP) {
-            throw new ApiBusinessException(
-                    HttpStatus.BAD_REQUEST,
-                    ErrorCodes.GAME_MATCH_INVALID_PHASE,
-                    MessageKeys.GAME_MATCH_INVALID_PHASE
-            );
+        Optional<ActiveMatchModel> memoryMatch = friendMatchStore.findActiveForProfile(profile.getId());
+
+        if (memoryMatch.isPresent()) {
+            ActiveMatchModel match = memoryMatch.get();
+            if (match.getStatus() == MatchStatus.SETUP) {
+                friendMatchStore.remove(match.getId());
+                return;
+            }
+            if (match.getStatus() == MatchStatus.ACTIVE) {
+                surrender(userId);
+                return;
+            }
+            if (match.getStatus() == MatchStatus.FINISHED) {
+                friendMatchStore.remove(match.getId());
+                return;
+            }
         }
-        friendMatchStore.remove(match.getId());
+
+        activeMatchConstraintService.clearStaleClientSideMatches(profile.getId());
     }
 
     private GameHistoryEntryDto finalizeIfFinished(ActiveMatchModel match, MatchPlayerSide surrenderSide) {

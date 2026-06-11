@@ -6,9 +6,9 @@ import com.svc.pokeguessteam.model.enums.GameModes;
 import com.svc.pokeguessteam.model.enums.MatchStatus;
 import com.svc.pokeguessteam.model.game.ActiveMatchModel;
 import com.svc.pokeguessteam.repository.game.ActiveMatchRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -26,8 +26,20 @@ class ActiveMatchConstraintServiceTest {
     @Mock
     private ActiveMatchRepository activeMatchRepository;
 
-    @InjectMocks
+    @Mock
+    private ActiveMatchRemovalService activeMatchRemovalService;
+
+    private final FriendMatchStore friendMatchStore = new FriendMatchStore();
     private ActiveMatchConstraintService service;
+
+    @BeforeEach
+    void setUp() {
+        service = new ActiveMatchConstraintService(
+                activeMatchRepository,
+                friendMatchStore,
+                activeMatchRemovalService
+        );
+    }
 
     @Test
     void blocksWhenUnfinishedMatchExistsInAnyMode() {

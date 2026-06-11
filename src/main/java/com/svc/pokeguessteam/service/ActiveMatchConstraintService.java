@@ -3,6 +3,7 @@ package com.svc.pokeguessteam.service;
 import com.svc.pokeguessteam.exception.ApiBusinessException;
 import com.svc.pokeguessteam.exception.ErrorCodes;
 import com.svc.pokeguessteam.messages.MessageKeys;
+import com.svc.pokeguessteam.model.enums.GameModes;
 import com.svc.pokeguessteam.model.enums.MatchStatus;
 import com.svc.pokeguessteam.model.game.ActiveMatchModel;
 import com.svc.pokeguessteam.repository.game.ActiveMatchRepository;
@@ -19,13 +20,29 @@ public class ActiveMatchConstraintService {
 
     private final ActiveMatchRepository activeMatchRepository;
     private final FriendMatchStore friendMatchStore;
+    private final ActiveMatchRemovalService activeMatchRemovalService;
 
     public ActiveMatchConstraintService(
             ActiveMatchRepository activeMatchRepository,
-            FriendMatchStore friendMatchStore
+            FriendMatchStore friendMatchStore,
+            ActiveMatchRemovalService activeMatchRemovalService
     ) {
         this.activeMatchRepository = activeMatchRepository;
         this.friendMatchStore = friendMatchStore;
+        this.activeMatchRemovalService = activeMatchRemovalService;
+    }
+
+    /**
+     * Partidas bot/local antigas na BD (motor no cliente) não deviam bloquear modo amigo.
+     */
+    public void clearStaleClientSideMatches(String profileId) {
+        for (GameModes mode : new GameModes[] { GameModes.BOT, GameModes.LOCAL }) {
+            activeMatchRepository.findAllActiveByProfileIdAndGameModeOrderByCreatedAtDesc(
+                    profileId,
+                    mode,
+                    MatchStatus.FINISHED
+            ).forEach(match -> activeMatchRemovalService.deleteByMatchId(match.getId()));
+        }
     }
 
     public void ensureCanStartNewMatch(String profileId) {

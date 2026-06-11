@@ -92,9 +92,9 @@ public class FriendMatchController {
     }
 
     @DeleteMapping
-    public ResponseEntity<Void> abandonSetup(HttpSession session) {
+    public ResponseEntity<Void> leave(HttpSession session) {
         String userId = currentUserService.requireUserId(session);
-        friendMatchService.abandonSetupMatch(userId);
+        friendMatchService.leaveMatch(userId);
         return ResponseEntity.noContent().build();
     }
 }
