@@ -27,15 +27,18 @@ public class PokedexService {
     public static final int DEFAULT_PAGE_SIZE = 20;
     public static final int MAX_PAGE_SIZE = 100;
 
+    private final NationalPokedexCatalog nationalPokedexCatalog;
     private final PokemonRepository pokemonRepository;
     private final ProfileRepository profileRepository;
     private final UserPokedexService userPokedexService;
 
     public PokedexService(
+            NationalPokedexCatalog nationalPokedexCatalog,
             PokemonRepository pokemonRepository,
             ProfileRepository profileRepository,
             UserPokedexService userPokedexService
     ) {
+        this.nationalPokedexCatalog = nationalPokedexCatalog;
         this.pokemonRepository = pokemonRepository;
         this.profileRepository = profileRepository;
         this.userPokedexService = userPokedexService;
@@ -46,7 +49,7 @@ public class PokedexService {
         ProfileModel profile = requireProfile(userId);
         userPokedexService.syncFromOwnership(profile);
         Set<Integer> registered = userPokedexService.findRegisteredPokedexNumbers(userId);
-        return pokemonRepository.findAllByOrderByPokedexNumberAsc().stream()
+        return nationalPokedexCatalog.allSpeciesOrdered().stream()
                 .map(p -> PokedexEntryDto.from(p, registered.contains(p.getPokedexNumber())))
                 .toList();
     }
@@ -57,9 +60,11 @@ public class PokedexService {
     @Transactional
     public PokedexEntryPageResponse listPageForUser(String userId, int page, int size) {
         ProfileModel profile = requireProfile(userId);
-        userPokedexService.syncFromOwnership(profile);
-        Set<Integer> registered = userPokedexService.findRegisteredPokedexNumbers(userId);
         int safePage = Math.max(page, 0);
+        if (safePage == 0) {
+            userPokedexService.syncFromOwnership(profile);
+        }
+        Set<Integer> registered = userPokedexService.findRegisteredPokedexNumbers(userId);
         int safeSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
         Pageable pageable = PageRequest.of(
                 safePage,
