@@ -2,7 +2,6 @@ package com.svc.pokeguessteam.realtime;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.svc.pokeguessteam.dto.game.BotMatchGuessFeedbackDto;
-import com.svc.pokeguessteam.dto.game.BotMatchStateDto;
 import com.svc.pokeguessteam.dto.game.FriendMatchStateDto;
 import com.svc.pokeguessteam.model.enums.MatchPlayerSide;
 
@@ -12,14 +11,11 @@ import java.time.LocalDateTime;
 public record MatchRealtimeMessage(
         MatchRealtimeEventType type,
         String matchId,
-        BotMatchStateDto botMatch,
         FriendMatchStateDto friendMatch,
         BotMatchGuessFeedbackDto feedback,
         MatchPlayerSide currentTurn,
         LocalDateTime turnDeadlineAt,
         Integer turnTimeoutSeconds,
-        Integer timeoutPenalties,
-        Integer maxTimeoutPenalties,
         String message
 ) {
     public static MatchRealtimeMessage friendPlayerGuess(
@@ -30,11 +26,8 @@ public record MatchRealtimeMessage(
         return new MatchRealtimeMessage(
                 MatchRealtimeEventType.PLAYER_GUESS,
                 matchId,
-                null,
                 match,
                 feedback,
-                null,
-                null,
                 null,
                 null,
                 null,
@@ -46,10 +39,7 @@ public record MatchRealtimeMessage(
         return new MatchRealtimeMessage(
                 MatchRealtimeEventType.MATCH_STATE,
                 matchId,
-                null,
                 match,
-                null,
-                null,
                 null,
                 null,
                 null,
@@ -68,52 +58,12 @@ public record MatchRealtimeMessage(
         return new MatchRealtimeMessage(
                 MatchRealtimeEventType.TURN_TIMER,
                 matchId,
-                null,
                 match,
                 null,
                 currentTurn,
                 deadlineAt,
                 seconds,
-                null,
-                null,
                 null
-        );
-    }
-
-    public static MatchRealtimeMessage timeoutPenalty(
-            String matchId,
-            FriendMatchStateDto match,
-            int penalties,
-            int maxPenalties
-    ) {
-        return new MatchRealtimeMessage(
-                MatchRealtimeEventType.TIMEOUT_PENALTY,
-                matchId,
-                null,
-                match,
-                null,
-                null,
-                null,
-                null,
-                penalties,
-                maxPenalties,
-                "Palpite automático por tempo esgotado."
-        );
-    }
-
-    public static MatchRealtimeMessage opponentReplacedByBot(String matchId, FriendMatchStateDto match) {
-        return new MatchRealtimeMessage(
-                MatchRealtimeEventType.OPPONENT_REPLACED_BY_BOT,
-                matchId,
-                null,
-                match,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                "Adversário substituído por bot após 3 penalidades."
         );
     }
 
@@ -121,10 +71,7 @@ public record MatchRealtimeMessage(
         return new MatchRealtimeMessage(
                 MatchRealtimeEventType.MATCH_FINISHED,
                 matchId,
-                null,
                 match,
-                null,
-                null,
                 null,
                 null,
                 null,

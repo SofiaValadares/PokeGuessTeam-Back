@@ -351,17 +351,6 @@ public class ProfileService {
     }
 
     @Transactional(readOnly = true)
-    public List<ProfileInventoryItemModel> getItemInventory(String userId) {
-        ProfileModel profile = profileRepository.findByUser_IdUser(userId)
-                .orElseThrow(() -> new ApiBusinessException(
-                        HttpStatus.NOT_FOUND,
-                        ErrorCodes.PROFILE_NOT_FOUND,
-                        MessageKeys.PROFILE_NOT_FOUND
-                ));
-        return listInventoryItemsOrdered(profile.getId());
-    }
-
-    @Transactional(readOnly = true)
     public List<ProfileInventoryItemModel> getItemInventoryByProfileId(String profileId) {
         return listInventoryItemsOrdered(profileId);
     }

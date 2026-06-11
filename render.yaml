@@ -1,0 +1,35 @@
+# Blueprint Render — importe no dashboard ou use "New > Blueprint".
+# Ajuste APP_CORS_ALLOWED_ORIGIN_PATTERNS para a URL do frontend (Vercel).
+
+services:
+  - type: web
+    name: pokeguessteam-api
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/meta
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: SPRING_DATASOURCE_URL
+        sync: false
+      - key: SPRING_DATASOURCE_USERNAME
+        sync: false
+      - key: SPRING_DATASOURCE_PASSWORD
+        sync: false
+      - key: AUTH_CODE_SECRET
+        generateValue: true
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
+      - key: RESEND_API_KEY
+        sync: false
+      - key: APP_MAIL_FROM
+        value: PokeTeamGuess <onboarding@resend.dev>
+      - key: APP_MAIL_DEV_LOG_ONLY
+        value: "false"
+      - key: DEV_TOOLS_ENABLED
+        value: "false"
+      - key: SOCKETIO_HOST
+        value: 0.0.0.0
+      - key: SOCKETIO_PORT
+        value: "9092"
+      - key: APP_CORS_ALLOWED_ORIGIN_PATTERNS
+        sync: false

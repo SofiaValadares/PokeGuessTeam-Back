@@ -52,8 +52,6 @@ E-mails transacionais via **Resend** (`RESEND_API_KEY` no `.env`). Sem chave con
 
 Login sem e-mail verificado → **403** `AUTH_EMAIL_NOT_VERIFIED`.
 
-Prompt para implementação no frontend: `docs/frontend-auth-flows-prompt.md`.
-
 ### Rotas públicas (sem cookie inicial)
 
 | Método | Rota | Body | Descrição |
@@ -185,6 +183,48 @@ Valores em `GET /api/meta` → `matchRewards`.
 ## Postman
 
 `postman/pokeguessteam-passwordless.postman_collection.json` — fluxos Auth, Bot, Local, Friend e histórico.
+
+## Deploy (produção)
+
+### Variáveis de ambiente
+
+Copie `.env.example` para `.env` em desenvolvimento. Em produção, defina as variáveis no painel do host (Render, Fly.io, etc.).
+
+| Variável | Obrigatória | Descrição |
+|----------|-------------|-----------|
+| `SPRING_DATASOURCE_URL` | Sim | JDBC PostgreSQL (ex.: Neon com `?sslmode=require`) |
+| `SPRING_DATASOURCE_USERNAME` | Sim | Utilizador do banco |
+| `SPRING_DATASOURCE_PASSWORD` | Sim | Senha do banco |
+| `AUTH_CODE_SECRET` | Sim | Segredo longo para códigos de e-mail |
+| `RESEND_API_KEY` | Sim* | API Resend (*sem chave, códigos só no log) |
+| `SESSION_COOKIE_SECURE` | Sim | `true` em HTTPS |
+| `APP_CORS_ALLOWED_ORIGIN_PATTERNS` | Sim | URL do frontend (ex.: `https://app.vercel.app`) |
+| `APP_MAIL_DEV_LOG_ONLY` | Sim | `false` em produção |
+| `DEV_TOOLS_ENABLED` | Sim | `false` em produção |
+| `PORT` | Auto | Definida pelo host (Render/Fly) |
+
+### Render (recomendado)
+
+1. Conecte o repositório GitHub.
+2. Importe `render.yaml` ou crie **Web Service** com **Docker**.
+3. Preencha as variáveis marcadas `sync: false` no blueprint (Neon, Resend, CORS).
+4. Health check: `GET /api/meta`.
+
+Build manual (sem Docker):
+
+```bash
+./mvnw clean package -DskipTests
+java -jar target/pokeguessteam-0.0.1-SNAPSHOT.jar
+```
+
+### Docker local
+
+```bash
+docker build -t pokeguessteam-api .
+docker run --env-file .env -p 8080:8080 -p 9092:9092 pokeguessteam-api
+```
+
+**Socket.io:** o modo amigo online usa a porta `9092`. Em hosts que só expõem uma porta (ex.: Render free), o realtime pode precisar de proxy ou Fly.io.
 
 ## Integração React (AV2)
 

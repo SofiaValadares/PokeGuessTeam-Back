@@ -13,7 +13,6 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -145,75 +144,5 @@ public final class OpponentKnowledgeBuilder {
         }
 
         return hints;
-    }
-
-    /** Pontuação para IA do bot (compatível com pistas parciais). */
-    public static int scoreCandidateForSlot(PokemonModel pokemon, OpponentSlotKnowledgeDto slot) {
-        if (slot == null || slot.adivinhado()) {
-            return 0;
-        }
-        DiscoveredPokemonHintsDto info = slot.informacoes();
-        if (info == null) {
-            return 0;
-        }
-        int score = 0;
-
-        if (info.tipoPrimario() != null) {
-            if (!pokemon.getPrimaryType().name().equalsIgnoreCase(info.tipoPrimario())) {
-                return -1;
-            }
-            score += 4;
-        }
-        if (info.tipoSecundario() != null) {
-            String normalized = DiscoveredPokemonHintsDto.formatSecondaryType(pokemon.getSecondaryType());
-            if (!normalized.equalsIgnoreCase(info.tipoSecundario())) {
-                return -1;
-            }
-            score += 4;
-        }
-        if (info.cor() != null) {
-            if (pokemon.getColor() == null || !pokemon.getColor().name().equalsIgnoreCase(info.cor())) {
-                return -1;
-            }
-            score += 3;
-        }
-        if (info.geracao() != null) {
-            if (!Objects.equals(pokemon.getGeneration(), info.geracao())) {
-                return -1;
-            }
-            score += 2;
-        }
-        if (info.altura() != null) {
-            if (!Objects.equals(pokemon.getHeightM(), info.altura())) {
-                return -1;
-            }
-            score += 2;
-        }
-        if (info.peso() != null) {
-            if (!Objects.equals(pokemon.getWeightKg(), info.peso())) {
-                return -1;
-            }
-            score += 2;
-        }
-        if (info.estagioEvolutivo() != null) {
-            if (pokemon.getEvolutionStage() == null
-                    || !pokemon.getEvolutionStage().name().equalsIgnoreCase(info.estagioEvolutivo())) {
-                return -1;
-            }
-            score += 2;
-        }
-        return score + countKnownFields(info);
-    }
-
-    private static int countKnownFields(DiscoveredPokemonHintsDto info) {
-        int count = 0;
-        if (info.tipoPrimario() != null) count++;
-        if (info.tipoSecundario() != null) count++;
-        if (info.cor() != null) count++;
-        if (info.geracao() != null) count++;
-        if (info.altura() != null) count++;
-        if (info.peso() != null) count++;
-        if (info.estagioEvolutivo() != null) count++;
-        return count;
     }
 }

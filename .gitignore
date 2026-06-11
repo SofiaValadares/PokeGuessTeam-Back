@@ -32,6 +32,11 @@ build/
 ### VS Code ###
 .vscode/
 
-### Segredos locais (opcional; não versionar) ###
+### Segredos locais (não versionar) ###
+.env
 local.env
 **/application-local.properties
+
+### Artefactos locais / IDE ###
+tmp-gdd/
+poke-team.code-workspace

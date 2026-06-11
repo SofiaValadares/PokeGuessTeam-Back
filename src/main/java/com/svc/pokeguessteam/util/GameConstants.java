@@ -2,8 +2,6 @@ package com.svc.pokeguessteam.util;
 
 import com.svc.pokeguessteam.model.user.TrainingTeamModel;
 
-import java.util.List;
-
 /**
  * Regras partilhadas com a beta (equipa de 6, palpites corretos = acertos no time adversário).
  */
@@ -17,22 +15,6 @@ public final class GameConstants {
 
     /** Tempo por turno no modo amigo (segundos). */
     public static final int FRIEND_TURN_TIMEOUT_SECONDS = 50;
-
-    /** Penalidades na última hora → ban temporário do modo amigo (legado; não usado no modo amigo). */
-    public static final int FRIEND_TIMEOUT_BAN_THRESHOLD = 5;
-
-    public static final int FRIEND_TIMEOUT_BAN_HOURS = 72;
-
-    /** Penalidades visíveis no perfil (dias). */
-    public static final int FRIEND_PENALTY_PROFILE_RETENTION_DAYS = 7;
-
-    /** Atraso entre palpites do bot enviados por WebSocket (ms). */
-    public static final long BOT_GUESS_WS_DELAY_MS = 5000L;
-
-    /**
-     * Equipa fixa do bot (temporário): linha Bulbasaur e linha Charmander.
-     */
-    public static final List<Integer> BOT_FIXED_TEAM = List.of(1, 2, 3, 4, 5, 6);
 
     private GameConstants() {
     }

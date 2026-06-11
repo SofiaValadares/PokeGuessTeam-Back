@@ -386,15 +386,6 @@ public class FriendMatchService {
     }
 
     @Transactional
-    public void completeFinishedMatch(String matchId, MatchPlayerSide surrenderSide) {
-        ActiveMatchModel match = requireMatchById(matchId);
-        if (match.getStatus() != MatchStatus.FINISHED) {
-            return;
-        }
-        completeIfFinished(match, surrenderSide, null);
-    }
-
-    @Transactional
     public FriendMatchActionResponse surrender(String userId) {
         ProfileModel profile = profileService.ensureProfileWithStarters(userId);
         String matchId = requireActiveFriendMatch(profile).getId();

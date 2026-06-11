@@ -44,11 +44,9 @@ public class ActiveMatchPlayerModel {
     @Column(name = "PLAYER_SIDE", nullable = false, length = 10)
     private MatchPlayerSide side;
 
-    /** Carregado/gravado via {@link com.svc.pokeguessteam.service.ActiveMatchTeamService}. */
     @Transient
     private List<Integer> team;
 
-    /** Carregado/gravado via {@link com.svc.pokeguessteam.service.ActiveMatchHitsService}. */
     @Transient
     private Set<Integer> hits;
 
