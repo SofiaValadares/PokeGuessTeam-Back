@@ -85,6 +85,12 @@ public class FriendMatchController {
         return ResponseEntity.ok(friendMatchService.submitGuess(userId, request));
     }
 
+    @PostMapping("/skip")
+    public ResponseEntity<FriendMatchActionResponse> skip(HttpSession session) {
+        String userId = currentUserService.requireUserId(session);
+        return ResponseEntity.ok(friendMatchService.skipTurn(userId));
+    }
+
     @PostMapping("/surrender")
     public ResponseEntity<FriendMatchActionResponse> surrender(HttpSession session) {
         String userId = currentUserService.requireUserId(session);

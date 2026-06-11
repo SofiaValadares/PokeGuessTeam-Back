@@ -66,7 +66,6 @@ public class MatchRewardService {
                 return emptyReward();
             }
             GrantedFriendRewards granted = grantFriendMatch(match, surrenderSide);
-            friendMatchStore.remove(match.getId());
             if (rewardForUserId == null) {
                 return emptyReward();
             }

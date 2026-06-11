@@ -13,9 +13,6 @@ public final class GameConstants {
     public static final int OPPONENT_NAME_MAX_LENGTH = 120;
     public static final int FRIEND_JOIN_CODE_LENGTH = 6;
 
-    /** Tempo por turno no modo amigo (segundos). */
-    public static final int FRIEND_TURN_TIMEOUT_SECONDS = 50;
-
     private GameConstants() {
     }
 }

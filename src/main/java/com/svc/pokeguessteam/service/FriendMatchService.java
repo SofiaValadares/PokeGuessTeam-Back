@@ -25,14 +25,11 @@ import com.svc.pokeguessteam.repository.pokemon.PokemonRepository;
 import com.svc.pokeguessteam.util.GameConstants;
 import com.svc.pokeguessteam.util.JoinCodeGenerator;
 import com.svc.pokeguessteam.util.MatchEngine;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -50,7 +47,6 @@ public class FriendMatchService {
     private final MatchRewardService matchRewardService;
     private final MatchKnowledgeService matchKnowledgeService;
     private final ActiveMatchConstraintService activeMatchConstraintService;
-    private final FriendMatchTurnCoordinator friendMatchTurnCoordinator;
     private final DuelTeamService duelTeamService;
     private final FriendMatchStore friendMatchStore;
 
@@ -61,7 +57,6 @@ public class FriendMatchService {
             MatchRewardService matchRewardService,
             MatchKnowledgeService matchKnowledgeService,
             ActiveMatchConstraintService activeMatchConstraintService,
-            @Lazy FriendMatchTurnCoordinator friendMatchTurnCoordinator,
             DuelTeamService duelTeamService,
             FriendMatchStore friendMatchStore
     ) {
@@ -71,16 +66,8 @@ public class FriendMatchService {
         this.matchRewardService = matchRewardService;
         this.matchKnowledgeService = matchKnowledgeService;
         this.activeMatchConstraintService = activeMatchConstraintService;
-        this.friendMatchTurnCoordinator = friendMatchTurnCoordinator;
         this.duelTeamService = duelTeamService;
         this.friendMatchStore = friendMatchStore;
-    }
-
-    public record TurnTimeoutStep(
-            FriendMatchStateDto hostView,
-            FriendMatchStateDto guestView,
-            BotMatchGuessFeedbackDto feedback
-    ) {
     }
 
     @Transactional
@@ -160,16 +147,6 @@ public class FriendMatchService {
         MatchEngine.tryStartIfBothTeamsReady(match, GameConstants.TEAM_SIZE);
         ActiveMatchModel saved = saveMatch(match);
 
-        String hostUserId = saved.getProfile().getUser().getIdUser();
-        String guestUserId = guestProfile.getUser().getIdUser();
-        if (saved.getStatus() == MatchStatus.ACTIVE) {
-            friendMatchTurnCoordinator.afterTeamReady(
-                    saved.getId(),
-                    hostUserId,
-                    guestUserId,
-                    toStateDto(saved, saved.getProfile(), null)
-            );
-        }
         return toStateDto(saved, guestProfile, null);
     }
 
@@ -217,16 +194,6 @@ public class FriendMatchService {
         saveMatch(match);
 
         FriendMatchStateDto viewerState = toStateDto(match, profile, null);
-        if (match.getGuestProfile() != null) {
-            String hostUserId = match.getProfile().getUser().getIdUser();
-            String guestUserId = match.getGuestProfile().getUser().getIdUser();
-            friendMatchTurnCoordinator.afterTeamReady(
-                    match.getId(),
-                    hostUserId,
-                    guestUserId,
-                    toStateDto(match, match.getProfile(), null)
-            );
-        }
         return new FriendMatchActionResponse(viewerState, List.of());
     }
 
@@ -235,6 +202,13 @@ public class FriendMatchService {
         ProfileModel profile = profileService.ensureProfileWithStarters(userId);
         String matchId = requireActiveFriendMatch(profile).getId();
         return friendMatchStore.callExclusive(matchId, () -> submitGuessLocked(userId, request, profile, matchId));
+    }
+
+    @Transactional
+    public FriendMatchActionResponse skipTurn(String userId) {
+        ProfileModel profile = profileService.ensureProfileWithStarters(userId);
+        String matchId = requireActiveFriendMatch(profile).getId();
+        return friendMatchStore.callExclusive(matchId, () -> skipTurnLocked(userId, profile, matchId));
     }
 
     private FriendMatchActionResponse submitGuessLocked(
@@ -274,20 +248,64 @@ public class FriendMatchService {
 
         List<BotMatchGuessFeedbackDto> feedbacks = List.of(toFeedback(result, pokemonByDex));
         FriendMatchStateDto state = toStateDto(match, profile, history, null);
-        String hostUserId = match.getProfile().getUser().getIdUser();
-        String guestUserId = match.getGuestProfile().getUser().getIdUser();
-        FriendMatchStateDto hostView = toStateDto(match, match.getProfile(), history, null);
-        FriendMatchStateDto guestView = toStateDto(match, match.getGuestProfile(), history, null);
 
         MatchRewardDto reward = null;
         if (match.getStatus() == MatchStatus.FINISHED) {
             reward = completeIfFinished(match, null, userId);
             state = toStateDto(match, profile, history, null);
-            hostView = toStateDto(match, match.getProfile(), history, null);
-            guestView = toStateDto(match, match.getGuestProfile(), history, null);
         }
 
-        friendMatchTurnCoordinator.afterHumanGuess(match.getId(), hostUserId, guestUserId, hostView);
+        return new FriendMatchActionResponse(state, feedbacks, reward);
+    }
+
+    private FriendMatchActionResponse skipTurnLocked(String userId, ProfileModel profile, String matchId) {
+        ActiveMatchModel match = requireMatchById(matchId);
+        ensureGuestJoined(match);
+
+        if (match.getStatus() != MatchStatus.ACTIVE) {
+            throw new ApiBusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    ErrorCodes.GAME_MATCH_NOT_ACTIVE,
+                    MessageKeys.GAME_MATCH_NOT_ACTIVE
+            );
+        }
+
+        MatchPlayerSide side = resolveSide(match, profile);
+        if (match.getCurrentTurn() != side) {
+            throw new ApiBusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    ErrorCodes.GAME_MATCH_WRONG_TURN,
+                    MessageKeys.GAME_MATCH_WRONG_TURN
+            );
+        }
+
+        List<PokemonModel> allPokemon = pokemonRepository.findAllByOrderByPokedexNumberAsc();
+        PokemonModel autoGuess = pickRandomUnusedGuess(match, side, allPokemon);
+        if (autoGuess == null) {
+            throw new ApiBusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    ErrorCodes.GAME_MATCH_INVALID_ACTION,
+                    MessageKeys.GAME_MATCH_INVALID_ACTION
+            );
+        }
+
+        Map<Integer, PokemonModel> pokemonByDex = loadPokemonByDex();
+        MatchEngine.ApplyGuessResult result = applyGuessSafe(match, side, autoGuess, pokemonByDex);
+        result.guess().setTimedOut(true);
+        result.guess().setAutoSelected(true);
+
+        saveMatch(match);
+        GameHistoryEntryDto history = finalizeIfFinished(match, null);
+
+        List<BotMatchGuessFeedbackDto> feedbacks = List.of(toFeedback(result, pokemonByDex));
+        FriendMatchStateDto state = toStateDto(match, profile, history, null);
+
+        MatchRewardDto reward = null;
+        if (match.getStatus() == MatchStatus.FINISHED) {
+            reward = completeIfFinished(match, null, userId);
+            state = toStateDto(match, profile, history, null);
+        }
+
         return new FriendMatchActionResponse(state, feedbacks, reward);
     }
 
@@ -295,12 +313,12 @@ public class FriendMatchService {
     public Optional<FriendMatchStateDto> findActiveMatch(String userId) {
         ProfileModel profile = profileService.ensureProfileWithStarters(userId);
         return friendMatchStore.findActiveForProfile(profile.getId())
-                .flatMap(match -> {
+                .map(match -> {
+                    GameHistoryEntryDto history = null;
                     if (match.getStatus() == MatchStatus.FINISHED) {
-                        friendMatchStore.remove(match.getId());
-                        return Optional.empty();
+                        history = friendMatchStore.findFinishedHistory(match.getId()).orElse(null);
                     }
-                    return Optional.of(toStateDto(match, profile, null));
+                    return toStateDto(match, profile, history);
                 });
     }
 
@@ -309,72 +327,6 @@ public class FriendMatchService {
         ActiveMatchModel match = requireMatchById(matchId);
         ProfileModel profile = profileService.ensureProfileWithStarters(userId);
         return toStateDto(match, profile, null);
-    }
-
-    @Transactional
-    public void armTurnDeadline(String matchId) {
-        ActiveMatchModel match = requireMatchById(matchId);
-        if (match.getStatus() != MatchStatus.ACTIVE || match.getCurrentTurn() == null) {
-            return;
-        }
-        if (!match.isHumanTurn(match.getCurrentTurn())) {
-            match.setTurnDeadlineAt(null);
-            saveMatch(match);
-            return;
-        }
-        match.setTurnSequence(match.getTurnSequence() + 1);
-        match.setTurnDeadlineAt(LocalDateTime.now().plusSeconds(GameConstants.FRIEND_TURN_TIMEOUT_SECONDS));
-        saveMatch(match);
-    }
-
-    @Transactional(readOnly = true)
-    public long currentTurnSequence(String matchId) {
-        return requireMatchById(matchId).getTurnSequence();
-    }
-
-    @Transactional(readOnly = true)
-    public LocalDateTime turnDeadline(String matchId) {
-        return requireMatchById(matchId).getTurnDeadlineAt();
-    }
-
-    @Transactional
-    public TurnTimeoutStep processTurnTimeout(String matchId, long expectedSequence) {
-        return friendMatchStore.callExclusive(matchId, () -> processTurnTimeoutLocked(matchId, expectedSequence));
-    }
-
-    private TurnTimeoutStep processTurnTimeoutLocked(String matchId, long expectedSequence) {
-        ActiveMatchModel match = requireMatchById(matchId);
-        if (match.getStatus() != MatchStatus.ACTIVE) {
-            return null;
-        }
-        if (match.getTurnSequence() != expectedSequence) {
-            return null;
-        }
-        MatchPlayerSide side = match.getCurrentTurn();
-        if (side == null || match.isSideControlledByBot(side)) {
-            return null;
-        }
-
-        Map<Integer, PokemonModel> pokemonByDex = loadPokemonByDex();
-        List<PokemonModel> allPokemon = pokemonRepository.findAllByOrderByPokedexNumberAsc();
-        PokemonModel autoGuess = pickRandomUnusedGuess(match, side, allPokemon);
-        if (autoGuess == null) {
-            return null;
-        }
-
-        MatchEngine.ApplyGuessResult result = applyGuessSafe(match, side, autoGuess, pokemonByDex);
-        result.guess().setTimedOut(true);
-        result.guess().setAutoSelected(true);
-        saveMatch(match);
-
-        GameHistoryEntryDto history = finalizeIfFinished(match, null);
-        if (match.getStatus() == MatchStatus.FINISHED) {
-            completeIfFinished(match, null, null);
-        }
-        FriendMatchStateDto hostView = toStateDto(match, match.getProfile(), history, null);
-        FriendMatchStateDto guestView = toStateDto(match, match.getGuestProfile(), history, null);
-        BotMatchGuessFeedbackDto feedback = toFeedback(result, pokemonByDex);
-        return new TurnTimeoutStep(hostView, guestView, feedback);
     }
 
     @Transactional
@@ -409,14 +361,9 @@ public class FriendMatchService {
         saveMatch(match);
 
         GameHistoryEntryDto history = finalizeIfFinished(match, side);
-        String hostUserId = match.getProfile().getUser().getIdUser();
-        String guestUserId = match.getGuestProfile().getUser().getIdUser();
-        FriendMatchStateDto hostView = toStateDto(match, match.getProfile(), history, side);
-        FriendMatchStateDto guestView = toStateDto(match, match.getGuestProfile(), history, side);
         FriendMatchStateDto surrendererView = toStateDto(match, profile, history, side);
 
         MatchRewardDto reward = completeIfFinished(match, side, userId);
-        friendMatchTurnCoordinator.afterSurrender(matchId);
 
         return new FriendMatchActionResponse(surrendererView, List.of(), reward);
     }
@@ -458,7 +405,9 @@ public class FriendMatchService {
         if (match.getStatus() != MatchStatus.FINISHED) {
             return null;
         }
-        return gameHistoryService.saveFriendGameFromActiveMatch(match, surrenderSide);
+        GameHistoryEntryDto history = gameHistoryService.saveFriendGameFromActiveMatch(match, surrenderSide);
+        friendMatchStore.rememberFinishedHistory(match.getId(), history);
+        return history;
     }
 
     private MatchRewardDto completeIfFinished(
