@@ -1,234 +1,247 @@
 # PokeTeamGuess — Backend (Spring Boot)
 
-API REST do **PokeTeamGuess** ([GDD](https://github.com/SofiaValadares/PokeGuessTeam)): dedução de equipas secretas de 6 Pokémon, inventário, gacha e partidas (motor no **cliente** para bot/local; no **servidor** para amigo online).
+API REST do **PokeTeamGuess**: dedução de equipas secretas de 6 Pokémon, inventário, gacha e partidas.
 
-Frontend de referência (AV1): [PokeGuessTeam](https://github.com/SofiaValadares/PokeGuessTeam) — [produção](https://poke-guess-team.vercel.app/).
+Frontend: repositório React `pokeguessteam` (WebStorm / Vercel).
+
+---
 
 ## Stack
 
-- Java 17, Spring Boot 3, Maven
+- Java 17 · Spring Boot 3 · Maven
 - PostgreSQL + JPA
-- Socket.io (porta `9092`, partidas amigo)
 - Sessão HTTP (`JSESSIONID`) + session binding (`User-Agent` + IP)
-- CORS para dev: `localhost:5173`, `3000`, `5500`
+- E-mail transacional via Resend
+
+---
 
 ## Como rodar
 
 ```bash
 docker compose up -d db
-./mvn spring-boot:run
+./mvnw spring-boot:run
 ```
 
 API: `http://localhost:8080`
 
-## Autenticação
+---
 
-Todos os pedidos à API devem usar `credentials: 'include'` (cookie `JSESSIONID` + session binding por `User-Agent`).
+## Arquitetura
 
-E-mails transacionais via **Resend** (`RESEND_API_KEY` no `.env`). Sem chave configurada, o código aparece no **log do servidor**.
+### Fluxo de pedido
 
-### Fluxos suportados
-
-| Fluxo | Passos | Sessão ao final |
-|-------|--------|-----------------|
-| **Cadastro** | register → confirmar e-mail | Sim (confirm cria sessão) |
-| **Login sem e-mail verificado** | login (`403`) → confirmar e-mail | Sim (confirm cria sessão) |
-| **Login verificado** | login | Sim |
-| **Troca de senha** | pedir código → confirmar nova senha | Não → redirecionar para login |
-
-`POST /auth/login` e `POST /auth/email/verification/confirm` devolvem `AuthSessionResponse`:
-
-```json
-{
-  "userId": "...",
-  "email": "...",
-  "username": "...",
-  "emailVerified": true,
-  "message": "..." 
-}
+```
+HTTP Request
+  → SecurityFilterChain (sessão, CORS)
+  → SessionBindingInterceptor
+  → Controller (validação @Valid)
+  → Service (@Transactional)
+  → Repository (JPA) ou FriendMatchStore (memória)
+  → DTO de resposta
 ```
 
-(`message` só vem preenchido na confirmação de e-mail; no login é `null`.)
+Erros de negócio: `ApiBusinessException` → `GlobalExceptionHandler` → JSON com `code` + mensagem em `messages.properties` (pt_BR).
 
-Login sem e-mail verificado → **403** `AUTH_EMAIL_NOT_VERIFIED`.
+### Pacotes (`com.svc.pokeguessteam`)
 
-### Rotas públicas (sem cookie inicial)
+```
+src/main/java/com/svc/pokeguessteam/
+├── controller/          REST — um ficheiro por área (auth, profile, game, …)
+├── service/             Lógica de negócio e orquestração
+├── repository/          Spring Data JPA, agrupado por domínio
+│   ├── auth/
+│   ├── game/
+│   ├── pokemon/
+│   └── user/
+├── model/               Entidades JPA (*Model) + enums
+│   ├── auth/, game/, pokemon/, user/, enums/
+├── dto/                 Contratos HTTP (records), por domínio
+├── config/              Security, CORS, properties, seed Pokémon, migrations ad-hoc
+├── security/            Session binding, entry point 401
+├── exception/           ApiBusinessException, ErrorCodes, handler global
+├── messages/            MessageKeys (chaves i18n)
+└── util/                Motor de jogo puro (MatchEngine, BotAiOpponent, recompensas)
+```
 
-| Método | Rota | Body | Descrição |
-|--------|------|------|-----------|
-| POST | `/auth/register` | `{ username, email, password }` | Cadastro; envia código de verificação |
-| POST | `/auth/email/verification/send` | `{ email }` | Reenvia código (cooldown 60s) |
-| POST | `/auth/email/verification/confirm` | `{ email, code }` | Confirma e-mail e **cria sessão** |
-| POST | `/auth/verification/resend` | `{ email }` | Alias de `.../send` |
-| POST | `/auth/verification/confirm` | `{ email, code }` | Alias de `.../confirm` |
-| POST | `/auth/password-reset/request` | `{ email }` | Pedir código de redefinição (só se e-mail já verificado) |
-| POST | `/auth/password-reset/confirm` | `{ email, code, newPassword }` | Redefinir senha (**sem** sessão) |
-| POST | `/auth/login` | `{ login, password }` | Login; exige e-mail verificado |
-| GET | `/auth/session` | — | Estado da sessão (`authenticated`, `emailVerified`) |
-| POST | `/auth/logout` | — | Logout |
+### Onde mexer (guia rápido)
 
-### Rotas autenticadas (sessão + session binding)
+| Quero alterar… | Ficheiro / pasta |
+|----------------|------------------|
+| Nova rota REST | `controller/*Controller.java` |
+| Regra de negócio | `service/*Service.java` |
+| Query à BD | `repository/**/*Repository.java` |
+| Tabela / coluna | `model/**/*Model.java` + migration em `config/*Migration*.java` |
+| Contrato JSON | `dto/**/*Dto.java` ou `*Request.java` |
+| Código de erro | `exception/ErrorCodes.java` + `messages.properties` |
+| Regras de turno / palpite | `util/MatchEngine.java` |
+| Partida amigo (online) | `service/FriendMatchService.java`, `FriendMatchStore.java` |
+| Partida bot/local | `service/BotMatchService.java`, `LocalMatchService.java` |
+| Histórico / recompensas | `GameHistoryService.java`, `MatchRewardService.java` |
+| Autenticação | `service/AuthService.java`, `config/SecurityConfig.java` |
+| Seed Gen 1–9 | `config/seed/Generation*Seed.java` |
+| CORS / env | `config/AppCorsProperties.java`, `.env` |
 
-| Método | Rota | Body | Descrição |
-|--------|------|------|-----------|
-| PATCH | `/auth/password` | `{ currentPassword, newPassword }` | Trocar senha |
-| PATCH | `/auth/username` | `{ newUsername, password }` | Trocar username |
-| GET | `/api/me` | — | Utilizador autenticado |
+### Domínios
 
-## Meta e Pokédex
+| Domínio | Serviços principais | Persistência |
+|---------|---------------------|--------------|
+| **Auth** | `AuthService`, `AuthCodeService`, `TransactionalEmailService` | `UserModel`, `AuthCodeModel` |
+| **Perfil** | `ProfileService`, `UserPokedexService`, `PokeballDrawService` | `ProfileModel`, inventário, Pokédex |
+| **Pokémon** | `PokedexService`, `NationalPokedexCatalog` | `PokemonModel`, seed |
+| **Bot** | `BotMatchService` | `ActiveMatchModel` na BD (setup/validação) |
+| **Local** | `LocalMatchService` | `ActiveMatchModel` na BD |
+| **Amigo** | `FriendMatchService` | **`FriendMatchStore` em memória** (não sobrevive a restart) |
+| **Histórico** | `GameHistoryService` | `HistoryGameModel` |
 
-| GET | `/api/meta` | Regras globais (tamanho de equipa, modos, resultados) — **público** |
-| GET | `/api/pokedex` | Pokédex nacional (paginada ou completa) |
-| GET | `/api/pokemon/search?q=` | Autocomplete de espécies para palpites |
-| GET | `/api/pokemon/species/{dex}` | Detalhe de uma espécie |
+### Partidas — modelos mentais
 
-## Perfil e progressão
+| Modo | Onde corre o motor | Onde está o estado ativo |
+|------|-------------------|-------------------------|
+| **Bot** | Frontend | BD só valida equipa e regista fim |
+| **Local** | Frontend | BD só valida setup e regista fim |
+| **Amigo** | **Backend** (`MatchEngine` no servidor) | `FriendMatchStore` (RAM) |
 
-| GET | `/api/profile/me` | Perfil |
-| GET | `/api/profile/training-team` | Time de treino (6 linhas evolutivas do PC) |
-| PUT ou POST | `/api/profile/training-team` | Atualizar time (`slots`: 6 `evolutionLineKey` ou `null`) |
-| GET | `/api/profile/pokemon` | PC / inventário por linha evolutiva |
-| GET | `/api/profile/collection` | Pokébolas e fragmentos |
-| POST | `/api/pokemon/draw` | Gacha (consome Pokébola) |
+**Amigo:** sem WebSocket/Socket.io. O cliente faz polling manual (`GET /match`) e timer local; ao expirar o tempo chama `POST /skip` (palpite aleatório).
 
-## Partidas
+**Uma partida por conta:** `ActiveMatchConstraintService` bloqueia nova partida se já existir amigo ativo ou registo órfão bot/local na BD.
 
-Alinhado ao GDD e à [beta](https://poke-guess-team.vercel.app/): turnos, pistas (tipo, geração, cor, altura, peso), jogada extra, rodada de empate, histórico automático e **recompensas** (XP no time de treino + fragmentos de Pokébola).
+### Testes
 
-### Arquitetura
+```
+src/test/java/.../service/   fluxos amigo, constraints
+src/test/java/.../util/      MatchEngine, recompensas, conhecimento adversário
+```
 
-| Modo | Motor | API |
-|------|-------|-----|
-| **Bot** | Cliente (frontend) | Valida equipa + regista resultado |
-| **Local** | Cliente (frontend) | Valida setup + regista resultado |
-| **Amigo** | Servidor | Fluxo completo + Socket.io |
+---
 
-Socket.io (`http://localhost:9092`, evento `match:event`) **só no modo amigo**. Cookie `JSESSIONID` na handshake.
+## Autenticação
 
-### Bot (client-side)
+Todos os pedidos autenticados: `credentials: 'include'` (cookie `JSESSIONID`).
 
-| Método | Rota | Body |
-|--------|------|------|
-| PUT | `/api/game/bot/match/team` | `{ "team": [6 dex] }` → `{ hostTeam, opponentTeam }` |
-| POST | `/api/game/bot/match/finish` | `{ userCorrectGuesses, opponentCorrectGuesses, result }` → `{ historyEntry, reward }` |
+E-mails via **Resend** (`RESEND_API_KEY`). Sem chave, o código aparece no log.
 
-Requer ≥12 espécies registadas no PC. Limpa partidas bot antigas em `TB_ACTIVE_MATCH` ao validar ou terminar.
+### Rotas públicas
 
-### Local (client-side, pass-and-play)
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| POST | `/auth/register` | Cadastro |
+| POST | `/auth/login` | Login (exige e-mail verificado) |
+| POST | `/auth/email/verification/confirm` | Confirma e-mail + cria sessão |
+| POST | `/auth/password-reset/request` | Pedir código |
+| POST | `/auth/password-reset/confirm` | Nova senha |
+| GET | `/auth/session` | Estado da sessão |
+| GET | `/api/meta` | Metadados do jogo (público) |
 
-| Método | Rota | Body |
-|--------|------|------|
-| PUT | `/api/game/local/match/setup` | `{ opponentName, hostTeam, opponentTeam }` → `204` |
-| POST | `/api/game/local/match/finish` | `{ opponentName, userCorrectGuesses, opponentCorrectGuesses, result }` |
+### Rotas autenticadas (resumo)
 
-### Amigo remoto (motor no servidor)
+| Área | Prefixo |
+|------|---------|
+| Utilizador | `GET /api/me` |
+| Perfil | `/api/profile/*` |
+| Pokémon / gacha | `/api/pokemon/*` |
+| Pokédex nacional | `/api/pokedex` |
+| Partidas | `/api/game/*` |
 
-**Uma partida por conta:** com partida amigo não terminada (`SETUP` ou `ACTIVE`), não é possível iniciar outra até vitória, derrota, empate ou desistência (`409 GAME_MATCH_ALREADY_IN_PROGRESS`).
+---
+
+## Partidas — API
+
+### Bot (motor no cliente)
 
 | Método | Rota |
 |--------|------|
-| POST | `/api/game/friend/match` — gera `joinCode` (6 caracteres) |
-| POST | `/api/game/friend/match/join` — `{ "joinCode": "ABC123" }` |
-| GET | `/api/game/friend/match` |
-| PUT | `/api/game/friend/match/team` |
-| POST | `/api/game/friend/match/guess` |
-| POST | `/api/game/friend/match/surrender` |
-| GET | `/api/game/friend/match/opponent-knowledge` |
+| PUT | `/api/game/bot/match/team` |
+| POST | `/api/game/bot/match/finish` |
 
-### Socket.io — amigo
+### Local (motor no cliente)
 
-- Conectar: `http://localhost:9092` (porta `SOCKETIO_PORT`, default `9092`) com cookie `JSESSIONID`
-- Entrar na sala: emit `match:join` `{ "mode": "friend", "matchId": "..." }` → room `match:friend:{matchId}:user:{userId}`
-- Palpite: emit `match:friend:guess` `{ "pokedexNumber": 25 }` (alternativa ao HTTP)
-- Sair: emit `match:leave` ou desconectar
+| Método | Rota |
+|--------|------|
+| PUT | `/api/game/local/match/setup` |
+| POST | `/api/game/local/match/finish` |
 
-Eventos recebidos (`match:event`, campo `type`):
+### Amigo (motor no servidor)
 
-| Tipo | Uso |
-|------|-----|
-| `PLAYER_GUESS` | Palpite + estado atualizado |
-| `MATCH_STATE` / `MATCH_FINISHED` | Estado ou fim da partida |
-| `TURN_TIMER` | Prazo de 50s |
-| `TIMEOUT_PENALTY` | Palpite automático + penalidade |
-| `OPPONENT_REPLACED_BY_BOT` | 3 penalidades → adversário vira bot |
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| POST | `/api/game/friend/match` | Criar sala (`joinCode`) |
+| POST | `/api/game/friend/match/join` | Entrar com código |
+| GET | `/api/game/friend/match` | Estado ativo (204 se nenhum) |
+| PUT | `/api/game/friend/match/team` | Confirmar equipa |
+| POST | `/api/game/friend/match/guess` | Palpite |
+| POST | `/api/game/friend/match/skip` | Tempo esgotado — palpite aleatório |
+| POST | `/api/game/friend/match/surrender` | Desistir |
+| DELETE | `/api/game/friend/match` | Abandonar sala / limpar órfãos |
+| GET | `/api/game/friend/match/opponent-knowledge` | Pistas do turno atual |
 
-**Amigo:** 50s por turno; timeout = palpite aleatório + penalidade (`turnTimeoutPenalties` no histórico). 3 penalidades na mesma partida = desistência desse jogador; o outro termina vs IA. 5 penalidades na última hora = ban de 3 dias do modo amigo (`403 GAME_FRIEND_ONLINE_BANNED`). Penalidades ficam no perfil por 7 dias (`TB_FRIEND_ONLINE_PENALTIES`).
+Conflito com partida ativa: `409 GAME_MATCH_ALREADY_IN_PROGRESS`.
+
+**Timer:** 50s por turno no **frontend**; últimos 10s mostram contagem; ao zero o cliente chama `/skip`.
 
 ### Histórico
 
 | GET | `/api/game/history?page=0&size=20` |
 
-### Utilitários
+---
 
-| GET | `/api/users/search?q=` | Pesquisar treinadores (mín. 2 caracteres) |
+## Meta, perfil, Pokédex
 
-## Recompensas pós-partida (GDD)
+| GET | `/api/meta` | Regras globais |
+| GET | `/api/profile/me` | Perfil |
+| GET | `/api/profile/training-team` | Equipa de treino |
+| PUT | `/api/profile/training-team` | Atualizar equipa |
+| GET | `/api/profile/pokemon` | PC |
+| POST | `/api/pokemon/draw` | Gacha |
+| GET | `/api/pokemon/search?q=` | Autocomplete palpites |
+
+---
+
+## Recompensas pós-partida
 
 Valores em `GET /api/meta` → `matchRewards`.
 
-**Bot / local:**
+**Bot / local:** WIN 150 XP + 5 fragmentos; outros 75 XP.
 
-| Resultado | XP (time de treino) | Fragmentos |
-|-----------|---------------------|------------|
-| WIN | 150 | 5 |
-| DRAW, LOSE, DESISTENCE | 75 | 0 |
+**Amigo:** WIN 300 XP; DRAW/LOSE/DESISTENCE 150 XP + 5 fragmentos.
 
-**Amigo** (cada jogador na sua perspetiva):
-
-| Resultado | XP | Fragmentos |
-|-----------|-----|------------|
-| WIN | 300 | 0 |
-| DRAW, LOSE, DESISTENCE | 150 | 5 |
+---
 
 ## Postman
 
-`postman/pokeguessteam-passwordless.postman_collection.json` — fluxos Auth, Bot, Local, Friend e histórico.
+`postman/pokeguessteam-passwordless.postman_collection.json`
+
+---
 
 ## Deploy (produção)
 
-### Variáveis de ambiente
+### Variáveis essenciais
 
-Copie `.env.example` para `.env` em desenvolvimento. Em produção, defina as variáveis no painel do host (Render, Fly.io, etc.).
+| Variável | Descrição |
+|----------|-----------|
+| `SPRING_DATASOURCE_URL` | JDBC PostgreSQL |
+| `SPRING_DATASOURCE_USERNAME` / `PASSWORD` | Credenciais BD |
+| `AUTH_CODE_SECRET` | Segredo códigos e-mail |
+| `RESEND_API_KEY` | E-mail |
+| `SESSION_COOKIE_SECURE` | `true` em HTTPS |
+| `APP_CORS_ALLOWED_ORIGIN_PATTERNS` | URL do frontend |
+| `DEV_TOOLS_ENABLED` | `false` em produção |
 
-| Variável | Obrigatória | Descrição |
-|----------|-------------|-----------|
-| `SPRING_DATASOURCE_URL` | Sim | JDBC PostgreSQL (ex.: Neon com `?sslmode=require`) |
-| `SPRING_DATASOURCE_USERNAME` | Sim | Utilizador do banco |
-| `SPRING_DATASOURCE_PASSWORD` | Sim | Senha do banco |
-| `AUTH_CODE_SECRET` | Sim | Segredo longo para códigos de e-mail |
-| `RESEND_API_KEY` | Sim* | API Resend (*sem chave, códigos só no log) |
-| `SESSION_COOKIE_SECURE` | Sim | `true` em HTTPS |
-| `APP_CORS_ALLOWED_ORIGIN_PATTERNS` | Sim | URL do frontend (ex.: `https://app.vercel.app`) |
-| `APP_MAIL_DEV_LOG_ONLY` | Sim | `false` em produção |
-| `DEV_TOOLS_ENABLED` | Sim | `false` em produção |
-| `PORT` | Auto | Definida pelo host (Render/Fly) |
+### Render
 
-### Render (recomendado)
-
-1. Conecte o repositório GitHub.
-2. Importe `render.yaml` ou crie **Web Service** com **Docker**.
-3. Preencha as variáveis marcadas `sync: false` no blueprint (Neon, Resend, CORS).
-4. Health check: `GET /api/meta`.
-
-Build manual (sem Docker):
+1. Web Service com Docker (`render.yaml` ou Dockerfile)
+2. Health check: `GET /api/meta`
+3. **Nota:** partidas amigo em memória perdem-se se o serviço reiniciar (plano free do Render).
 
 ```bash
 ./mvnw clean package -DskipTests
 java -jar target/pokeguessteam-0.0.1-SNAPSHOT.jar
 ```
 
-### Docker local
+---
 
-```bash
-docker build -t pokeguessteam-api .
-docker run --env-file .env -p 8080:8080 -p 9092:9092 pokeguessteam-api
-```
+## Integração com o frontend React
 
-**Socket.io:** o modo amigo online usa a porta `9092`. Em hosts que só expõem uma porta (ex.: Render free), o realtime pode precisar de proxy ou Fly.io.
-
-## Integração React (AV2)
-
-1. `credentials: 'include'` em todos os pedidos à API.
-2. **Bot/local:** motor no cliente; chamar `PUT .../team` ou `PUT .../setup` antes de jogar e `POST .../finish` ao terminar.
-3. **Amigo:** polling ou Socket.io em `GET .../match` / eventos `match:event`.
-4. Usar `GET /api/pokemon/search` no campo de palpite.
+1. `credentials: 'include'` em todos os pedidos.
+2. **Bot/local:** motor em `lib/game/`; chamar setup/team + finish.
+3. **Amigo:** estado via `FriendMatchProvider`; sincronização manual; timer + `/skip`.
+4. Pesquisa de palpites: espécies do cache Redux ou `GET /api/pokemon/search`.

@@ -1,5 +1,6 @@
 package com.svc.pokeguessteam.service;
 
+import com.svc.pokeguessteam.dto.game.GameHistoryEntryDto;
 import com.svc.pokeguessteam.model.enums.MatchStatus;
 import com.svc.pokeguessteam.model.game.ActiveMatchGuessModel;
 import com.svc.pokeguessteam.model.game.ActiveMatchModel;
@@ -25,6 +26,9 @@ public class FriendMatchStore {
     private final ConcurrentHashMap<String, String> profileToMatchId = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Object> matchLocks = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Object> completionLocks = new ConcurrentHashMap<>();
+    /** Histórico em memória até o jogador sair (GET/sync após o adversário terminar). */
+    private final ConcurrentHashMap<String, GameHistoryEntryDto> finishedHistoryByMatchId =
+            new ConcurrentHashMap<>();
 
     public void save(ActiveMatchModel match) {
         if (match == null || match.getId() == null) {
@@ -107,8 +111,23 @@ public class FriendMatchStore {
             if (match.getGuestProfile() != null) {
                 profileToMatchId.remove(match.getGuestProfile().getId(), matchId);
             }
+            finishedHistoryByMatchId.remove(matchId);
         }
         matchLocks.remove(matchId);
+    }
+
+    public void rememberFinishedHistory(String matchId, GameHistoryEntryDto history) {
+        if (matchId == null || history == null) {
+            return;
+        }
+        finishedHistoryByMatchId.put(matchId, history);
+    }
+
+    public Optional<GameHistoryEntryDto> findFinishedHistory(String matchId) {
+        if (matchId == null || matchId.isBlank()) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(finishedHistoryByMatchId.get(matchId));
     }
 
     public void removeForProfile(String profileId) {
