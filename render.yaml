@@ -27,13 +27,5 @@ services:
         value: "false"
       - key: DEV_TOOLS_ENABLED
         value: "false"
-      - key: SOCKETIO_HOST
-        value: 0.0.0.0
-      - key: SOCKETIO_PORT
-        value: "9092"
-      - key: SPRING_PORT
-        value: "8081"
-      - key: INTERNAL_API_BASE_URL
-        value: "http://127.0.0.1:8081"
       - key: APP_CORS_ALLOWED_ORIGIN_PATTERNS
         sync: false

@@ -50,7 +50,7 @@ public class FriendMatchService {
     private final MatchRewardService matchRewardService;
     private final MatchKnowledgeService matchKnowledgeService;
     private final ActiveMatchConstraintService activeMatchConstraintService;
-    private final FriendMatchRealtimeCoordinator friendMatchRealtimeCoordinator;
+    private final FriendMatchTurnCoordinator friendMatchTurnCoordinator;
     private final DuelTeamService duelTeamService;
     private final FriendMatchStore friendMatchStore;
 
@@ -61,7 +61,7 @@ public class FriendMatchService {
             MatchRewardService matchRewardService,
             MatchKnowledgeService matchKnowledgeService,
             ActiveMatchConstraintService activeMatchConstraintService,
-            @Lazy FriendMatchRealtimeCoordinator friendMatchRealtimeCoordinator,
+            @Lazy FriendMatchTurnCoordinator friendMatchTurnCoordinator,
             DuelTeamService duelTeamService,
             FriendMatchStore friendMatchStore
     ) {
@@ -71,7 +71,7 @@ public class FriendMatchService {
         this.matchRewardService = matchRewardService;
         this.matchKnowledgeService = matchKnowledgeService;
         this.activeMatchConstraintService = activeMatchConstraintService;
-        this.friendMatchRealtimeCoordinator = friendMatchRealtimeCoordinator;
+        this.friendMatchTurnCoordinator = friendMatchTurnCoordinator;
         this.duelTeamService = duelTeamService;
         this.friendMatchStore = friendMatchStore;
     }
@@ -161,18 +161,11 @@ public class FriendMatchService {
         String hostUserId = saved.getProfile().getUser().getIdUser();
         String guestUserId = guestProfile.getUser().getIdUser();
         if (saved.getStatus() == MatchStatus.ACTIVE) {
-            friendMatchRealtimeCoordinator.publishAfterTeamReady(
+            friendMatchTurnCoordinator.afterTeamReady(
                     saved.getId(),
                     hostUserId,
                     guestUserId,
-                    toStateDto(saved, saved.getProfile(), null),
-                    toStateDto(saved, guestProfile, null)
-            );
-        } else {
-            friendMatchRealtimeCoordinator.publishAfterGuestJoin(
-                    saved.getId(),
-                    hostUserId,
-                    guestUserId
+                    toStateDto(saved, saved.getProfile(), null)
             );
         }
         return toStateDto(saved, guestProfile, null);
@@ -225,12 +218,11 @@ public class FriendMatchService {
         if (match.getGuestProfile() != null) {
             String hostUserId = match.getProfile().getUser().getIdUser();
             String guestUserId = match.getGuestProfile().getUser().getIdUser();
-            friendMatchRealtimeCoordinator.publishAfterTeamReady(
+            friendMatchTurnCoordinator.afterTeamReady(
                     match.getId(),
                     hostUserId,
                     guestUserId,
-                    toStateDto(match, match.getProfile(), null),
-                    toStateDto(match, match.getGuestProfile(), null)
+                    toStateDto(match, match.getProfile(), null)
             );
         }
         return new FriendMatchActionResponse(viewerState, List.of());
@@ -293,14 +285,7 @@ public class FriendMatchService {
             guestView = toStateDto(match, match.getGuestProfile(), history, null);
         }
 
-        friendMatchRealtimeCoordinator.publishAfterHumanGuess(
-                match.getId(),
-                hostUserId,
-                guestUserId,
-                hostView,
-                guestView,
-                feedbacks.get(0)
-        );
+        friendMatchTurnCoordinator.afterHumanGuess(match.getId(), hostUserId, guestUserId, hostView);
         return new FriendMatchActionResponse(state, feedbacks, reward);
     }
 
@@ -424,7 +409,7 @@ public class FriendMatchService {
         FriendMatchStateDto surrendererView = toStateDto(match, profile, history, side);
 
         MatchRewardDto reward = completeIfFinished(match, side, userId);
-        friendMatchRealtimeCoordinator.publishAfterSurrender(matchId, hostUserId, guestUserId, hostView, guestView);
+        friendMatchTurnCoordinator.afterSurrender(matchId);
 
         return new FriendMatchActionResponse(surrendererView, List.of(), reward);
     }

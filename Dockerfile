@@ -10,14 +10,11 @@ RUN mvn -q package -DskipTests
 FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
 
-RUN apk add --no-cache nginx gettext wget \
-    && addgroup -S app && adduser -S app -G app
+RUN addgroup -S app && adduser -S app -G app
+USER app
 
 COPY --from=build /app/target/pokeguessteam-*.jar app.jar
-COPY docker/nginx.conf.template /app/nginx.conf.template
-COPY docker/start.sh /app/start.sh
-RUN chmod +x /app/start.sh
 
 EXPOSE 8080
 
-ENTRYPOINT ["/app/start.sh"]
+ENTRYPOINT ["java", "-jar", "app.jar"]

@@ -116,7 +116,7 @@ public class FriendMatchStore {
     }
 
     /**
-     * Serializa leituras/escritas da mesma partida (palpite + socket + timeout).
+     * Serializa leituras/escritas da mesma partida (palpite + timeout).
      */
     public <T> T callExclusive(String matchId, Supplier<T> action) {
         synchronized (matchLock(matchId)) {
@@ -131,7 +131,7 @@ public class FriendMatchStore {
     }
 
     /**
-     * Garante que recompensas/remoção da partida correm uma única vez (ex.: desistência + socket).
+     * Garante que recompensas/remoção da partida correm uma única vez (ex.: desistência concorrente).
      */
     public <T> T completeOnce(String matchId, Supplier<T> action) {
         Object lock = completionLocks.computeIfAbsent(matchId, ignored -> new Object());

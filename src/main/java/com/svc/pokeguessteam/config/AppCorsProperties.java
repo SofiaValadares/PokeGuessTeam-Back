@@ -9,7 +9,7 @@ import java.util.List;
 public class AppCorsProperties {
 
     /**
-     * Padrões de origem para CORS HTTP e handshake SockJS.
+     * Padrões de origem para CORS HTTP.
      * Em produção: {@code APP_CORS_ALLOWED_ORIGIN_PATTERNS=https://app.seudominio.com}.
      */
     private List<String> allowedOriginPatterns = new ArrayList<>(List.of(
