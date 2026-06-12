@@ -85,6 +85,13 @@ public class BotMatchService {
         return new GameFinishResponse(history, reward);
     }
 
+    /** Remove bloqueio de partida bot não terminada (ex.: saída da rota no cliente). */
+    @Transactional
+    public void abandonClientMatch(String userId) {
+        ProfileModel profile = profileService.ensureProfileWithStarters(userId);
+        clearStaleBotMatches(profile.getId());
+    }
+
     private void clearStaleBotMatches(String profileId) {
         activeMatchRepository.findAllActiveByProfileIdAndGameModeOrderByCreatedAtDesc(
                 profileId,

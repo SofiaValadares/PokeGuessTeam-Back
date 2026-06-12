@@ -8,6 +8,7 @@ import com.svc.pokeguessteam.service.LocalMatchService;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -46,5 +47,13 @@ public class LocalMatchController {
     ) {
         String userId = currentUserService.requireUserId(session);
         return ResponseEntity.ok(localMatchService.finishClientMatch(userId, request));
+    }
+
+    /** Abandona partida local ativa no servidor (motor no cliente). */
+    @DeleteMapping
+    public ResponseEntity<Void> abandon(HttpSession session) {
+        String userId = currentUserService.requireUserId(session);
+        localMatchService.abandonClientMatch(userId);
+        return ResponseEntity.noContent().build();
     }
 }

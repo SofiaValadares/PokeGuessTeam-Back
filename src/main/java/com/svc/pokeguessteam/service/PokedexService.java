@@ -18,6 +18,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 
@@ -45,6 +46,20 @@ public class PokedexService {
     }
 
     @Transactional
+    public List<PokedexEntryDto> listRegisteredForUser(String userId) {
+        ProfileModel profile = requireProfile(userId);
+        userPokedexService.syncFromOwnership(profile);
+        Set<Integer> registered = userPokedexService.findRegisteredPokedexNumbers(userId);
+        if (registered.isEmpty()) {
+            return List.of();
+        }
+        return pokemonRepository.findByPokedexNumberIn(registered).stream()
+                .sorted(Comparator.comparingInt(PokemonModel::getPokedexNumber))
+                .map(p -> PokedexEntryDto.from(p, true))
+                .toList();
+    }
+
+    @Transactional
     public List<PokedexEntryDto> listAllForUser(String userId) {
         ProfileModel profile = requireProfile(userId);
         userPokedexService.syncFromOwnership(profile);
@@ -58,7 +73,7 @@ public class PokedexService {
      * Sincroniza a Pokédex pessoal e devolve a página nacional (mesma transação de escrita).
      */
     @Transactional
-    public PokedexEntryPageResponse listPageForUser(String userId, int page, int size) {
+    public PokedexEntryPageResponse listPageForUser(String userId, int page, int size, String query) {
         ProfileModel profile = requireProfile(userId);
         int safePage = Math.max(page, 0);
         if (safePage == 0) {
@@ -71,7 +86,7 @@ public class PokedexService {
                 safeSize,
                 Sort.by(Sort.Direction.ASC, "pokedexNumber")
         );
-        Page<PokemonModel> speciesPage = pokemonRepository.findAll(pageable);
+        Page<PokemonModel> speciesPage = searchSpeciesPage(query, pageable);
         List<PokedexEntryDto> content = speciesPage.getContent().stream()
                 .map(p -> PokedexEntryDto.from(p, registered.contains(p.getPokedexNumber())))
                 .toList();
@@ -81,6 +96,20 @@ public class PokedexService {
                 speciesPage.getTotalElements()
         );
         return PokedexEntryPageResponse.from(entryPage);
+    }
+
+    private Page<PokemonModel> searchSpeciesPage(String query, Pageable pageable) {
+        String trimmed = query != null ? query.trim() : "";
+        if (trimmed.isEmpty()) {
+            return pokemonRepository.findAll(pageable);
+        }
+
+        String dexPart = trimmed.startsWith("#") ? trimmed.substring(1).trim() : trimmed;
+        if (!dexPart.isEmpty() && dexPart.chars().allMatch(Character::isDigit)) {
+            return pokemonRepository.searchByPokedexNumberPrefix(dexPart, pageable);
+        }
+
+        return pokemonRepository.findByNameContainingIgnoreCase(trimmed, pageable);
     }
 
     private ProfileModel requireProfile(String userId) {

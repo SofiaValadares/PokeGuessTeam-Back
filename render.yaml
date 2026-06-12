@@ -29,3 +29,9 @@ services:
         value: "false"
       - key: APP_CORS_ALLOWED_ORIGIN_PATTERNS
         sync: false
+      - key: SPRING_PORT
+        value: "8081"
+      - key: SOCKETIO_PORT
+        value: "9092"
+      - key: APP_INTERNAL_API_BASE_URL
+        value: "http://127.0.0.1:8081"

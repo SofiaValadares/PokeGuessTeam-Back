@@ -25,6 +25,7 @@ import com.svc.pokeguessteam.repository.pokemon.PokemonRepository;
 import com.svc.pokeguessteam.util.GameConstants;
 import com.svc.pokeguessteam.util.JoinCodeGenerator;
 import com.svc.pokeguessteam.util.MatchEngine;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -47,6 +48,7 @@ public class FriendMatchService {
     private final MatchRewardService matchRewardService;
     private final MatchKnowledgeService matchKnowledgeService;
     private final ActiveMatchConstraintService activeMatchConstraintService;
+    private final FriendMatchRealtimeCoordinator friendMatchRealtimeCoordinator;
     private final DuelTeamService duelTeamService;
     private final FriendMatchStore friendMatchStore;
 
@@ -57,6 +59,7 @@ public class FriendMatchService {
             MatchRewardService matchRewardService,
             MatchKnowledgeService matchKnowledgeService,
             ActiveMatchConstraintService activeMatchConstraintService,
+            @Lazy FriendMatchRealtimeCoordinator friendMatchRealtimeCoordinator,
             DuelTeamService duelTeamService,
             FriendMatchStore friendMatchStore
     ) {
@@ -66,6 +69,7 @@ public class FriendMatchService {
         this.matchRewardService = matchRewardService;
         this.matchKnowledgeService = matchKnowledgeService;
         this.activeMatchConstraintService = activeMatchConstraintService;
+        this.friendMatchRealtimeCoordinator = friendMatchRealtimeCoordinator;
         this.duelTeamService = duelTeamService;
         this.friendMatchStore = friendMatchStore;
     }
@@ -147,6 +151,25 @@ public class FriendMatchService {
         MatchEngine.tryStartIfBothTeamsReady(match, GameConstants.TEAM_SIZE);
         ActiveMatchModel saved = saveMatch(match);
 
+        String hostUserId = saved.getProfile().getUser().getIdUser();
+        String guestUserId = guestProfile.getUser().getIdUser();
+        if (saved.getStatus() == MatchStatus.ACTIVE) {
+            friendMatchRealtimeCoordinator.publishAfterTeamReady(
+                    saved.getId(),
+                    hostUserId,
+                    guestUserId,
+                    toStateDto(saved, saved.getProfile(), null),
+                    toStateDto(saved, guestProfile, null)
+            );
+        } else {
+            friendMatchRealtimeCoordinator.publishAfterTeamReady(
+                    saved.getId(),
+                    hostUserId,
+                    guestUserId,
+                    toStateDto(saved, saved.getProfile(), null),
+                    toStateDto(saved, guestProfile, null)
+            );
+        }
         return toStateDto(saved, guestProfile, null);
     }
 
@@ -194,6 +217,17 @@ public class FriendMatchService {
         saveMatch(match);
 
         FriendMatchStateDto viewerState = toStateDto(match, profile, null);
+        if (match.getGuestProfile() != null) {
+            String hostUserId = match.getProfile().getUser().getIdUser();
+            String guestUserId = match.getGuestProfile().getUser().getIdUser();
+            friendMatchRealtimeCoordinator.publishAfterTeamReady(
+                    match.getId(),
+                    hostUserId,
+                    guestUserId,
+                    toStateDto(match, match.getProfile(), null),
+                    toStateDto(match, match.getGuestProfile(), null)
+            );
+        }
         return new FriendMatchActionResponse(viewerState, List.of());
     }
 
@@ -248,13 +282,27 @@ public class FriendMatchService {
 
         List<BotMatchGuessFeedbackDto> feedbacks = List.of(toFeedback(result, pokemonByDex));
         FriendMatchStateDto state = toStateDto(match, profile, history, null);
+        String hostUserId = match.getProfile().getUser().getIdUser();
+        String guestUserId = match.getGuestProfile().getUser().getIdUser();
+        FriendMatchStateDto hostView = toStateDto(match, match.getProfile(), history, null);
+        FriendMatchStateDto guestView = toStateDto(match, match.getGuestProfile(), history, null);
 
         MatchRewardDto reward = null;
         if (match.getStatus() == MatchStatus.FINISHED) {
             reward = completeIfFinished(match, null, userId);
             state = toStateDto(match, profile, history, null);
+            hostView = toStateDto(match, match.getProfile(), history, null);
+            guestView = toStateDto(match, match.getGuestProfile(), history, null);
         }
 
+        friendMatchRealtimeCoordinator.publishAfterHumanGuess(
+                match.getId(),
+                hostUserId,
+                guestUserId,
+                hostView,
+                guestView,
+                feedbacks.get(0)
+        );
         return new FriendMatchActionResponse(state, feedbacks, reward);
     }
 
@@ -299,13 +347,27 @@ public class FriendMatchService {
 
         List<BotMatchGuessFeedbackDto> feedbacks = List.of(toFeedback(result, pokemonByDex));
         FriendMatchStateDto state = toStateDto(match, profile, history, null);
+        String hostUserId = match.getProfile().getUser().getIdUser();
+        String guestUserId = match.getGuestProfile().getUser().getIdUser();
+        FriendMatchStateDto hostView = toStateDto(match, match.getProfile(), history, null);
+        FriendMatchStateDto guestView = toStateDto(match, match.getGuestProfile(), history, null);
 
         MatchRewardDto reward = null;
         if (match.getStatus() == MatchStatus.FINISHED) {
             reward = completeIfFinished(match, null, userId);
             state = toStateDto(match, profile, history, null);
+            hostView = toStateDto(match, match.getProfile(), history, null);
+            guestView = toStateDto(match, match.getGuestProfile(), history, null);
         }
 
+        friendMatchRealtimeCoordinator.publishAfterHumanGuess(
+                match.getId(),
+                hostUserId,
+                guestUserId,
+                hostView,
+                guestView,
+                feedbacks.get(0)
+        );
         return new FriendMatchActionResponse(state, feedbacks, reward);
     }
 
@@ -326,7 +388,11 @@ public class FriendMatchService {
     public FriendMatchStateDto getStateForUser(String matchId, String userId) {
         ActiveMatchModel match = requireMatchById(matchId);
         ProfileModel profile = profileService.ensureProfileWithStarters(userId);
-        return toStateDto(match, profile, null);
+        GameHistoryEntryDto history = null;
+        if (match.getStatus() == MatchStatus.FINISHED) {
+            history = friendMatchStore.findFinishedHistory(matchId).orElse(null);
+        }
+        return toStateDto(match, profile, history);
     }
 
     @Transactional
@@ -364,6 +430,12 @@ public class FriendMatchService {
         FriendMatchStateDto surrendererView = toStateDto(match, profile, history, side);
 
         MatchRewardDto reward = completeIfFinished(match, side, userId);
+
+        String hostUserId = match.getProfile().getUser().getIdUser();
+        String guestUserId = match.getGuestProfile().getUser().getIdUser();
+        FriendMatchStateDto hostView = toStateDto(match, match.getProfile(), history, side);
+        FriendMatchStateDto guestView = toStateDto(match, match.getGuestProfile(), history, side);
+        friendMatchRealtimeCoordinator.publishAfterSurrender(matchId, hostUserId, guestUserId, hostView, guestView);
 
         return new FriendMatchActionResponse(surrendererView, List.of(), reward);
     }

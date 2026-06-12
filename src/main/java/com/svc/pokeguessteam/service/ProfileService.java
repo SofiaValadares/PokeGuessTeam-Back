@@ -457,11 +457,11 @@ public class ProfileService {
     }
 
     /**
-     * Distribui XP de partida pelas linhas evolutivas do time de treino.
+     * Concede o mesmo XP de partida a cada linha evolutiva ocupada no time de treino.
      */
     @Transactional
-    public void grantTrainingTeamMatchXp(String userId, int totalXp) {
-        if (totalXp <= 0) {
+    public void grantTrainingTeamMatchXp(String userId, int xpPerSlot) {
+        if (xpPerSlot <= 0) {
             return;
         }
         ProfileModel profile = ensureProfileWithStarters(userId);
@@ -479,11 +479,8 @@ public class ProfileService {
         if (lineKeys.isEmpty()) {
             return;
         }
-        int perSlot = totalXp / lineKeys.size();
-        int remainder = totalXp % lineKeys.size();
-        for (int i = 0; i < lineKeys.size(); i++) {
-            int grant = perSlot + (i == 0 ? remainder : 0);
-            addXpToInventoryLine(profile, lineKeys.get(i), grant);
+        for (Integer lineKey : lineKeys) {
+            addXpToInventoryLine(profile, lineKey, xpPerSlot);
         }
     }
 
@@ -527,9 +524,7 @@ public class ProfileService {
         }
         inventoryRepository.findByProfile_IdAndEvolutionLine_LineKey(profile.getId(), lineKey)
                 .ifPresent(row -> {
-                    PokemonInventoryXp.addXpAndSyncLevel(row, xp);
-                    inventoryRepository.save(row);
-                    userPokedexService.registerUnlockedSpeciesForInventoryLine(profile, row);
+                    applyXpGainAndRegister(profile, row, () -> PokemonInventoryXp.addXpAndSyncLevel(row, xp));
                 });
     }
 
@@ -539,10 +534,18 @@ public class ProfileService {
         }
         inventoryRepository.findByProfile_IdAndEvolutionLine_LineKey(profile.getId(), lineKey)
                 .ifPresent(row -> {
-                    PokemonInventoryXp.applyXpDeltaAndSyncLevel(row, xpDelta);
-                    inventoryRepository.save(row);
-                    userPokedexService.registerUnlockedSpeciesForInventoryLine(profile, row);
+                    applyXpGainAndRegister(profile, row, () -> PokemonInventoryXp.applyXpDeltaAndSyncLevel(row, xpDelta));
                 });
+    }
+
+    private void applyXpGainAndRegister(
+            ProfileModel profile,
+            UserPokemonInventoryModel row,
+            Runnable xpMutator
+    ) {
+        xpMutator.run();
+        inventoryRepository.save(row);
+        userPokedexService.registerUnlockedSpeciesForInventoryLine(profile, row);
     }
 
     /** Constantes partilhadas com {@link com.svc.pokeguessteam.controller.PokemonController} (PC). */

@@ -33,6 +33,16 @@ public class PokedexController {
     }
 
     /**
+     * Entradas da Pokédex pessoal (apenas espécies registadas).
+     */
+    @GetMapping("/registered")
+    public ResponseEntity<List<PokedexEntryDto>> listRegistered(HttpSession session) {
+        String userId = currentUserService.requireUserId(session);
+        profileService.ensureProfileWithStarters(userId);
+        return ResponseEntity.ok(pokedexService.listRegisteredForUser(userId));
+    }
+
+    /**
      * Lista completa da Pokédex nacional com flag de registo na Pokédex pessoal.
      */
     @GetMapping("/all")
@@ -53,10 +63,11 @@ public class PokedexController {
     public ResponseEntity<PokedexEntryPageResponse> listPage(
             HttpSession session,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "" + PokedexService.DEFAULT_PAGE_SIZE) int size
+            @RequestParam(defaultValue = "" + PokedexService.DEFAULT_PAGE_SIZE) int size,
+            @RequestParam(required = false) String q
     ) {
         String userId = currentUserService.requireUserId(session);
         profileService.ensureProfileWithStarters(userId);
-        return ResponseEntity.ok(pokedexService.listPageForUser(userId, page, size));
+        return ResponseEntity.ok(pokedexService.listPageForUser(userId, page, size, q));
     }
 }

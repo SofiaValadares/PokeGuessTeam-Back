@@ -21,6 +21,11 @@ public final class PokeballGachaRules {
         body.put("endpoint", "/api/pokemon/draw");
         body.put("requestBody", Map.of("pokeballType", "POKE_BALL | GREAT_BALL | ULTRA_BALL | MASTER_BALL"));
         body.put("consumesOneBallPerDraw", true);
+        body.put("drawsBaseFormOnly", true);
+        body.put(
+                "drawPoolNote",
+                "Cada sorteio devolve a primeira forma (estágio BASE) de uma linha evolutiva com a raridade rolada."
+        );
         body.put("rarities", List.of("COMMON", "RARE", "LEGENDARY", "MYTHICAL"));
         body.put("balls", Map.of(
                 PokeballType.POKE_BALL.name(), pokeBallRules(),

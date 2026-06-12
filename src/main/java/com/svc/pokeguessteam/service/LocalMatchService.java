@@ -19,7 +19,6 @@ public class LocalMatchService {
     private final ActiveMatchRepository activeMatchRepository;
     private final ProfileService profileService;
     private final GameHistoryService gameHistoryService;
-    private final MatchRewardService matchRewardService;
     private final ActiveMatchConstraintService activeMatchConstraintService;
     private final DuelTeamService duelTeamService;
     private final ActiveMatchRemovalService activeMatchRemovalService;
@@ -28,7 +27,6 @@ public class LocalMatchService {
             ActiveMatchRepository activeMatchRepository,
             ProfileService profileService,
             GameHistoryService gameHistoryService,
-            MatchRewardService matchRewardService,
             ActiveMatchConstraintService activeMatchConstraintService,
             DuelTeamService duelTeamService,
             ActiveMatchRemovalService activeMatchRemovalService
@@ -36,7 +34,6 @@ public class LocalMatchService {
         this.activeMatchRepository = activeMatchRepository;
         this.profileService = profileService;
         this.gameHistoryService = gameHistoryService;
-        this.matchRewardService = matchRewardService;
         this.activeMatchConstraintService = activeMatchConstraintService;
         this.duelTeamService = duelTeamService;
         this.activeMatchRemovalService = activeMatchRemovalService;
@@ -53,14 +50,20 @@ public class LocalMatchService {
         duelTeamService.validateTeamFromRegisteredPokedex(userId, request.opponentTeam());
     }
 
-    /** Persiste histórico e recompensas após partida resolvida no cliente. */
+    /** Persiste histórico após partida resolvida no cliente (sem recompensas). */
     @Transactional
     public GameFinishResponse finishClientMatch(String userId, GameLocalFinishRequest request) {
         ProfileModel profile = profileService.ensureProfileWithStarters(userId);
         clearStaleLocalMatches(profile.getId());
         GameHistoryEntryDto history = gameHistoryService.saveLocalFinish(userId, request);
-        MatchRewardDto reward = matchRewardService.grantForUser(userId, GameModes.LOCAL, request.result());
-        return new GameFinishResponse(history, reward);
+        return new GameFinishResponse(history, new MatchRewardDto(0, 0, 0));
+    }
+
+    /** Remove bloqueio de partida local não terminada (ex.: saída da rota no cliente). */
+    @Transactional
+    public void abandonClientMatch(String userId) {
+        ProfileModel profile = profileService.ensureProfileWithStarters(userId);
+        clearStaleLocalMatches(profile.getId());
     }
 
     private void clearStaleLocalMatches(String profileId) {

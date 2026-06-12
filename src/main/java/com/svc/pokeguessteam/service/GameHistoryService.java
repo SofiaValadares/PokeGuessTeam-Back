@@ -17,6 +17,7 @@ import com.svc.pokeguessteam.model.game.HistoryGamePlayerModel;
 import com.svc.pokeguessteam.model.user.ProfileModel;
 import com.svc.pokeguessteam.repository.game.HistoryGameRepository;
 import com.svc.pokeguessteam.util.GameFinishValidation;
+import com.svc.pokeguessteam.util.GameHistoryOpponentTeamBuilder;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -24,6 +25,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
 
 @Service
 public class GameHistoryService {
@@ -97,8 +100,24 @@ public class GameHistoryService {
 
         HistoryGameModel game = new HistoryGameModel();
         game.setGameMode(GameModes.FRIEND);
-        addProfilePlayer(game, match.getProfile(), USER_SLOT, hostHits, hostResult, match.getHostPlayer().getTurnTimeoutPenalties());
-        addProfilePlayer(game, guest, OPPONENT_SLOT, guestHits, guestResult, match.getOpponentPlayer().getTurnTimeoutPenalties());
+        addProfilePlayer(
+                game,
+                match.getProfile(),
+                USER_SLOT,
+                hostHits,
+                hostResult,
+                match.getHostPlayer().getTurnTimeoutPenalties(),
+                GameHistoryOpponentTeamBuilder.fromActiveMatch(match, MatchPlayerSide.HOST)
+        );
+        addProfilePlayer(
+                game,
+                guest,
+                OPPONENT_SLOT,
+                guestHits,
+                guestResult,
+                match.getOpponentPlayer().getTurnTimeoutPenalties(),
+                GameHistoryOpponentTeamBuilder.fromActiveMatch(match, MatchPlayerSide.OPPONENT)
+        );
         return GameHistoryEntryDto.from(historyGameRepository.save(game));
     }
 
@@ -196,7 +215,9 @@ public class GameHistoryService {
                 userProfile,
                 USER_SLOT,
                 request.userCorrectGuesses(),
-                request.result()
+                request.result(),
+                0,
+                snapshotFromFinishRequest(request)
         );
 
         if (opponentProfile != null) {
@@ -205,17 +226,51 @@ public class GameHistoryService {
                     opponentProfile,
                     OPPONENT_SLOT,
                     request.opponentCorrectGuesses(),
-                    GameFinishValidation.opponentResult(request.result())
+                    GameFinishValidation.opponentResult(request.result()),
+                    0,
+                    List.of()
             );
         } else {
             addGuestPlayer(
                     game,
                     OPPONENT_SLOT,
                     request.opponentCorrectGuesses(),
-                    GameFinishValidation.opponentResult(request.result())
+                    GameFinishValidation.opponentResult(request.result()),
+                    List.of()
             );
         }
         return game;
+    }
+
+    private static List<com.svc.pokeguessteam.dto.game.GameHistoryOpponentSlotDto> snapshotFromFinishRequest(
+            GameFinishRequest request
+    ) {
+        if (request instanceof GameBotFinishRequest botRequest) {
+            return botRequest.opponentTeam() != null ? botRequest.opponentTeam() : List.of();
+        }
+        if (request instanceof GameLocalFinishRequest localRequest) {
+            return localRequest.opponentTeam() != null ? localRequest.opponentTeam() : List.of();
+        }
+        return List.of();
+    }
+
+    private void addProfilePlayer(
+            HistoryGameModel game,
+            ProfileModel profile,
+            int slot,
+            int correctGuesses,
+            GameResults result,
+            int turnTimeoutPenalties,
+            List<com.svc.pokeguessteam.dto.game.GameHistoryOpponentSlotDto> opponentTeam
+    ) {
+        HistoryGamePlayerModel player = new HistoryGamePlayerModel();
+        player.setSlot(slot);
+        player.setProfile(profile);
+        player.setCorrectGuesses(correctGuesses);
+        player.setResult(result);
+        player.setTurnTimeoutPenalties(turnTimeoutPenalties);
+        player.setOpponentTeamSnapshot(opponentTeam);
+        game.addPlayer(player);
     }
 
     private void addProfilePlayer(
@@ -226,13 +281,7 @@ public class GameHistoryService {
             GameResults result,
             int turnTimeoutPenalties
     ) {
-        HistoryGamePlayerModel player = new HistoryGamePlayerModel();
-        player.setSlot(slot);
-        player.setProfile(profile);
-        player.setCorrectGuesses(correctGuesses);
-        player.setResult(result);
-        player.setTurnTimeoutPenalties(turnTimeoutPenalties);
-        game.addPlayer(player);
+        addProfilePlayer(game, profile, slot, correctGuesses, result, turnTimeoutPenalties, List.of());
     }
 
     private void addProfilePlayer(
@@ -242,7 +291,23 @@ public class GameHistoryService {
             int correctGuesses,
             GameResults result
     ) {
-        addProfilePlayer(game, profile, slot, correctGuesses, result, 0);
+        addProfilePlayer(game, profile, slot, correctGuesses, result, 0, List.of());
+    }
+
+    private void addGuestPlayer(
+            HistoryGameModel game,
+            int slot,
+            int correctGuesses,
+            GameResults result,
+            List<com.svc.pokeguessteam.dto.game.GameHistoryOpponentSlotDto> opponentTeam
+    ) {
+        HistoryGamePlayerModel player = new HistoryGamePlayerModel();
+        player.setSlot(slot);
+        player.setProfile(null);
+        player.setCorrectGuesses(correctGuesses);
+        player.setResult(result);
+        player.setOpponentTeamSnapshot(opponentTeam);
+        game.addPlayer(player);
     }
 
     private void addGuestPlayer(
@@ -251,11 +316,6 @@ public class GameHistoryService {
             int correctGuesses,
             GameResults result
     ) {
-        HistoryGamePlayerModel player = new HistoryGamePlayerModel();
-        player.setSlot(slot);
-        player.setProfile(null);
-        player.setCorrectGuesses(correctGuesses);
-        player.setResult(result);
-        game.addPlayer(player);
+        addGuestPlayer(game, slot, correctGuesses, result, List.of());
     }
 }

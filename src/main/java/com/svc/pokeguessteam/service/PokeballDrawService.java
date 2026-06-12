@@ -5,6 +5,7 @@ import com.svc.pokeguessteam.dto.pokemon.PokemonDto;
 import com.svc.pokeguessteam.exception.ApiBusinessException;
 import com.svc.pokeguessteam.exception.ErrorCodes;
 import com.svc.pokeguessteam.messages.MessageKeys;
+import com.svc.pokeguessteam.model.enums.EvolutionStage;
 import com.svc.pokeguessteam.model.enums.PokeballType;
 import com.svc.pokeguessteam.model.enums.PokemonRarity;
 import com.svc.pokeguessteam.model.pokemon.PokemonModel;
@@ -138,7 +139,10 @@ public class PokeballDrawService {
     }
 
     private PokemonModel pickRandomPokemon(PokemonRarity rarity) {
-        List<PokemonModel> pool = pokemonRepository.findByEvolutionLine_Rarity(rarity);
+        List<PokemonModel> pool = pokemonRepository.findByEvolutionLine_RarityAndEvolutionStage(
+                rarity,
+                EvolutionStage.BASE
+        );
         if (pool.isEmpty()) {
             throw new ApiBusinessException(
                     HttpStatus.INTERNAL_SERVER_ERROR,

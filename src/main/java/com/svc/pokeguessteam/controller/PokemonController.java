@@ -142,16 +142,21 @@ public class PokemonController {
             @RequestParam("q") String query,
             @RequestParam(defaultValue = "30") int limit
     ) {
-        String trimmed = query != null ? query.trim() : "";
-        if (trimmed.isEmpty()) {
-            return ResponseEntity.ok(List.of());
-        }
         int safeLimit = Math.min(Math.max(limit, 1), 50);
-        List<PokemonDto> results = pokemonRepository
-                .findByNameContainingIgnoreCaseOrderByPokedexNumberAsc(trimmed, PageRequest.of(0, safeLimit))
-                .stream()
-                .map(PokemonDto::from)
-                .toList();
+        String trimmed = query != null ? query.trim() : "";
+        List<PokemonDto> results;
+        if (trimmed.isEmpty()) {
+            results = pokemonRepository.findAllByOrderByPokedexNumberAsc().stream()
+                    .limit(safeLimit)
+                    .map(PokemonDto::from)
+                    .toList();
+        } else {
+            results = pokemonRepository
+                    .findByNameContainingIgnoreCaseOrderByPokedexNumberAsc(trimmed, PageRequest.of(0, safeLimit))
+                    .stream()
+                    .map(PokemonDto::from)
+                    .toList();
+        }
         return ResponseEntity.ok(results);
     }
 }

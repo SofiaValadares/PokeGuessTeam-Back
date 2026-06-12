@@ -5,6 +5,7 @@ import com.svc.pokeguessteam.config.AppCorsProperties;
 import com.svc.pokeguessteam.config.AppDevToolsProperties;
 import com.svc.pokeguessteam.config.AppMailProperties;
 import com.svc.pokeguessteam.config.AppResendProperties;
+import com.svc.pokeguessteam.config.AppSocketIoProperties;
 import com.svc.pokeguessteam.config.DotenvEnvironmentLoader;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -18,7 +19,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
         AppCorsProperties.class,
         AppDevToolsProperties.class,
         AppMailProperties.class,
-        AppResendProperties.class
+        AppResendProperties.class,
+        AppSocketIoProperties.class
 })
 @EnableAsync
 @EnableScheduling

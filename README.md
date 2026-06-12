@@ -200,9 +200,13 @@ Conflito com partida ativa: `409 GAME_MATCH_ALREADY_IN_PROGRESS`.
 
 Valores em `GET /api/meta` → `matchRewards`.
 
-**Bot / local:** WIN 150 XP + 5 fragmentos; outros 75 XP.
+**Bot:** WIN 700 XP por Pokémon + 5 fragmentos; outros 350 XP cada.
 
-**Amigo:** WIN 300 XP; DRAW/LOSE/DESISTENCE 150 XP + 5 fragmentos.
+**Local:** WIN 500 XP por Pokémon + 5 fragmentos; outros 250 XP cada.
+
+**Amigo:** WIN 1000 XP por Pokémon do time; DRAW/LOSE/DESISTENCE 500 XP cada + 5 fragmentos.
+
+Cada slot ocupado do time de treino recebe o valor integral — o XP não é dividido.
 
 ---
 
