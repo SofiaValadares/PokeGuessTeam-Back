@@ -331,9 +331,13 @@ public class ProfileService {
         if (frags < FRAGMENTS_PER_POKE_BALL) {
             return;
         }
+        ensurePokeballInventoryIfMissing(profile);
         ProfileInventoryItemModel pokeRow = profileInventoryItemRepository
                 .findByProfile_IdAndPokeballType(profile.getId(), PokeballType.POKE_BALL)
-                .orElseThrow();
+                .orElse(null);
+        if (pokeRow == null) {
+            return;
+        }
         int newBalls = frags / FRAGMENTS_PER_POKE_BALL;
         int remainder = frags % FRAGMENTS_PER_POKE_BALL;
         int qty = pokeRow.getQuantity() != null ? pokeRow.getQuantity() : 0;
