@@ -23,11 +23,15 @@ import com.svc.pokeguessteam.service.AuthCodeService;
 import com.svc.pokeguessteam.service.AuthService;
 import com.svc.pokeguessteam.service.CurrentUserService;
 import com.svc.pokeguessteam.service.ProfileService;
+import com.svc.pokeguessteam.service.UserRoleService;
+import com.svc.pokeguessteam.exception.ApiBusinessException;
+import com.svc.pokeguessteam.exception.ErrorCodes;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import org.springframework.context.MessageSource;
 import org.springframework.context.i18n.LocaleContextHolder;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -38,6 +42,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -53,6 +58,7 @@ public class AuthController {
     private final AccountDeletionService accountDeletionService;
     private final ProfileService profileService;
     private final CurrentUserService currentUserService;
+    private final UserRoleService userRoleService;
     private final MessageSource messageSource;
 
     public AuthController(
@@ -61,6 +67,7 @@ public class AuthController {
             AccountDeletionService accountDeletionService,
             ProfileService profileService,
             CurrentUserService currentUserService,
+            UserRoleService userRoleService,
             MessageSource messageSource
     ) {
         this.authService = authService;
@@ -68,6 +75,7 @@ public class AuthController {
         this.accountDeletionService = accountDeletionService;
         this.profileService = profileService;
         this.currentUserService = currentUserService;
+        this.userRoleService = userRoleService;
         this.messageSource = messageSource;
     }
 
@@ -263,6 +271,15 @@ public class AuthController {
     }
 
     private void establishSession(UserModel user, HttpServletRequest httpRequest) {
+        user = userRoleService.syncMasterFromEnv(user);
+        if (user.isSiteBannedNow()) {
+            throw new ApiBusinessException(
+                    HttpStatus.FORBIDDEN,
+                    ErrorCodes.AUTH_USER_SITE_BANNED,
+                    MessageKeys.AUTH_USER_SITE_BANNED
+            );
+        }
+
         profileService.ensureProfileWithStarters(user.getIdUser());
 
         HttpSession session = httpRequest.getSession(true);
@@ -272,11 +289,20 @@ public class AuthController {
                 DeviceFingerprintUtil.generateDeviceId(httpRequest)
         );
 
+        List<SimpleGrantedAuthority> authorities = new ArrayList<>();
+        authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
+        if (user.getRole().isAdminOrAbove()) {
+            authorities.add(new SimpleGrantedAuthority("ROLE_ADMIN"));
+        }
+        if (user.getRole().isMaster()) {
+            authorities.add(new SimpleGrantedAuthority("ROLE_MASTER_ADMIN"));
+        }
+
         UsernamePasswordAuthenticationToken authentication =
                 new UsernamePasswordAuthenticationToken(
                         user.getEmail(),
                         null,
-                        List.of(new SimpleGrantedAuthority("ROLE_USER"))
+                        authorities
                 );
 
         SecurityContext securityContext = SecurityContextHolder.createEmptyContext();

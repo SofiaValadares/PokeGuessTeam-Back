@@ -16,16 +16,22 @@ public class MatchRewardService {
 
     private final ProfileService profileService;
     private final FriendMatchStore friendMatchStore;
+    private final BonusEventService bonusEventService;
 
-    public MatchRewardService(ProfileService profileService, FriendMatchStore friendMatchStore) {
+    public MatchRewardService(
+            ProfileService profileService,
+            FriendMatchStore friendMatchStore,
+            BonusEventService bonusEventService
+    ) {
         this.profileService = profileService;
         this.friendMatchStore = friendMatchStore;
+        this.bonusEventService = bonusEventService;
     }
 
     @Transactional
     public MatchRewardDto grantForUser(String userId, GameModes mode, GameResults result) {
         ProfileModel profile = profileService.ensureProfileWithStarters(userId);
-        return grantForProfile(profile, mode, result);
+        return grantForProfile(profile, mode, result, false);
     }
 
     /**
@@ -38,7 +44,18 @@ public class MatchRewardService {
     ) {
         MatchPlayerSide side = resolveParticipantSide(match, profile);
         GameResults result = resolveParticipantResult(match, side, surrenderSide);
-        return toRewardDto(GameMatchRewards.payout(GameModes.FRIEND, result));
+        GameMatchRewards.MatchRewardPayout payout = GameMatchRewards.payout(GameModes.FRIEND, result);
+        double multiplier = match.isEventMode()
+                ? bonusEventService.resolveActiveEventXpMultiplier()
+                : bonusEventService.resolveXpMultiplier(profile);
+        int xp = (int) Math.round(payout.trainingTeamXp() * multiplier);
+        PokeballType ballType = resolveGrantedBallType(payout.pokeBalls());
+        return MatchRewardDto.of(
+                xp,
+                payout.pokeBalls(),
+                payout.pokeballFragments(),
+                ballType != null ? ballType.name() : null
+        );
     }
 
     @Transactional
@@ -63,11 +80,11 @@ public class MatchRewardService {
 
         return friendMatchStore.completeOnce(match.getId(), () -> {
             if (!friendMatchStore.exists(match.getId())) {
-                return emptyReward();
+                return MatchRewardDto.empty();
             }
             GrantedFriendRewards granted = grantFriendMatch(match, surrenderSide);
             if (rewardForUserId == null) {
-                return emptyReward();
+                return MatchRewardDto.empty();
             }
             if (match.getProfile().getUser().getIdUser().equals(rewardForUserId)) {
                 return granted.hostReward();
@@ -76,7 +93,7 @@ public class MatchRewardService {
                     && match.getGuestProfile().getUser().getIdUser().equals(rewardForUserId)) {
                 return granted.guestReward();
             }
-            return emptyReward();
+            return MatchRewardDto.empty();
         });
     }
 
@@ -84,39 +101,57 @@ public class MatchRewardService {
     }
 
     private GrantedFriendRewards grantFriendMatch(ActiveMatchModel match, MatchPlayerSide surrenderSide) {
+        boolean eventMatch = match.isEventMode();
         GameResults hostResult = resolveParticipantResult(match, MatchPlayerSide.HOST, surrenderSide);
-        MatchRewardDto hostReward = grantForProfile(match.getProfile(), GameModes.FRIEND, hostResult);
-        MatchRewardDto guestReward = emptyReward();
+        MatchRewardDto hostReward = grantForProfile(match.getProfile(), GameModes.FRIEND, hostResult, eventMatch);
+        MatchRewardDto guestReward = MatchRewardDto.empty();
         if (match.getGuestProfile() != null) {
             GameResults guestResult = resolveParticipantResult(match, MatchPlayerSide.OPPONENT, surrenderSide);
-            guestReward = grantForProfile(match.getGuestProfile(), GameModes.FRIEND, guestResult);
+            guestReward = grantForProfile(match.getGuestProfile(), GameModes.FRIEND, guestResult, eventMatch);
         }
         return new GrantedFriendRewards(hostReward, guestReward);
     }
 
-    private MatchRewardDto grantForProfile(ProfileModel profile, GameModes mode, GameResults result) {
+    /**
+     * @param forceEventXpMultiplier se true (partida de evento), aplica o ×XP do evento ativo sem exigir time de treino.
+     */
+    private MatchRewardDto grantForProfile(
+            ProfileModel profile,
+            GameModes mode,
+            GameResults result,
+            boolean forceEventXpMultiplier
+    ) {
         String userId = profile.getUser().getIdUser();
         GameMatchRewards.MatchRewardPayout payout = GameMatchRewards.payout(mode, result);
-        profileService.grantTrainingTeamMatchXp(userId, payout.trainingTeamXp());
-        if (payout.pokeBalls() > 0) {
-            profileService.addPokeballs(userId, PokeballType.POKE_BALL, payout.pokeBalls());
+        double multiplier = forceEventXpMultiplier
+                ? bonusEventService.resolveActiveEventXpMultiplier()
+                : bonusEventService.resolveXpMultiplier(profile);
+        int trainingTeamXp = (int) Math.round(payout.trainingTeamXp() * multiplier);
+        profileService.grantTrainingTeamMatchXp(userId, trainingTeamXp);
+
+        PokeballType ballType = resolveGrantedBallType(payout.pokeBalls());
+        if (ballType != null) {
+            profileService.addPokeballs(userId, ballType, payout.pokeBalls());
         }
         if (payout.pokeballFragments() > 0) {
             profileService.addPokeballFragments(userId, payout.pokeballFragments());
         }
-        return toRewardDto(payout);
-    }
-
-    private static MatchRewardDto toRewardDto(GameMatchRewards.MatchRewardPayout payout) {
-        return new MatchRewardDto(
-                payout.trainingTeamXp(),
+        return MatchRewardDto.of(
+                trainingTeamXp,
                 payout.pokeBalls(),
-                payout.pokeballFragments()
+                payout.pokeballFragments(),
+                ballType != null ? ballType.name() : null
         );
     }
 
-    private static MatchRewardDto emptyReward() {
-        return new MatchRewardDto(0, 0, 0);
+    /** Com evento ativo, a vitória online dá Friend Ball em vez da Pokébola normal. */
+    private PokeballType resolveGrantedBallType(int pokeBalls) {
+        if (pokeBalls <= 0) {
+            return null;
+        }
+        return bonusEventService.findActive().isPresent()
+                ? PokeballType.FRIEND_BALL
+                : PokeballType.POKE_BALL;
     }
 
     private static MatchPlayerSide resolveParticipantSide(ActiveMatchModel match, ProfileModel profile) {

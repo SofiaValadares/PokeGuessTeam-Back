@@ -11,4 +11,11 @@ public interface HistoryGamePlayerRepository extends JpaRepository<HistoryGamePl
     @Modifying
     @Query("UPDATE HistoryGamePlayerModel p SET p.profile = null WHERE p.profile.id = :profileId")
     void clearProfileReferences(@Param("profileId") String profileId);
+
+    @Query("""
+            SELECT COUNT(p) FROM HistoryGamePlayerModel p
+            WHERE p.profile.user.idUser = :userId
+              AND p.result = com.svc.pokeguessteam.model.enums.GameResults.DESISTENCE
+            """)
+    long countAbandonedByUserId(@Param("userId") String userId);
 }

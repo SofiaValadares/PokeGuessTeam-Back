@@ -1,5 +1,6 @@
 package com.svc.pokeguessteam.model.user;
 
+import com.svc.pokeguessteam.model.enums.UserRole;
 import org.hibernate.annotations.ColumnDefault;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
@@ -33,12 +34,43 @@ public class UserModel {
     @ColumnDefault("false")
     private Boolean hasLoggedIn = false;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "USER_ROLE", nullable = false, length = 20)
+    @ColumnDefault("'USER'")
+    private UserRole role = UserRole.USER;
+
+    @Column(name = "SITE_BANNED_PERMANENT", nullable = false)
+    @ColumnDefault("false")
+    private Boolean siteBannedPermanent = false;
+
+    @Column(name = "SITE_BANNED_UNTIL")
+    private LocalDateTime siteBannedUntil;
+
+    @Column(name = "ONLINE_BANNED_PERMANENT", nullable = false)
+    @ColumnDefault("false")
+    private Boolean onlineBannedPermanent = false;
+
+    @Column(name = "ONLINE_BANNED_UNTIL")
+    private LocalDateTime onlineBannedUntil;
+
+    @Column(name = "BAN_REASON", length = 500)
+    private String banReason;
+
     @PrePersist
     protected void onCreate() {
         this.registerDate = LocalDateTime.now();
         this.emailVerify = false;
         if (this.hasLoggedIn == null) {
             this.hasLoggedIn = false;
+        }
+        if (this.role == null) {
+            this.role = UserRole.USER;
+        }
+        if (this.siteBannedPermanent == null) {
+            this.siteBannedPermanent = false;
+        }
+        if (this.onlineBannedPermanent == null) {
+            this.onlineBannedPermanent = false;
         }
     }
 
@@ -89,5 +121,67 @@ public class UserModel {
 
     public void setHasLoggedIn(Boolean hasLoggedIn) {
         this.hasLoggedIn = hasLoggedIn;
+    }
+
+    public UserRole getRole() {
+        return role != null ? role : UserRole.USER;
+    }
+
+    public void setRole(UserRole role) {
+        this.role = role != null ? role : UserRole.USER;
+    }
+
+    public Boolean getSiteBannedPermanent() {
+        return Boolean.TRUE.equals(siteBannedPermanent);
+    }
+
+    public void setSiteBannedPermanent(Boolean siteBannedPermanent) {
+        this.siteBannedPermanent = Boolean.TRUE.equals(siteBannedPermanent);
+    }
+
+    public LocalDateTime getSiteBannedUntil() {
+        return siteBannedUntil;
+    }
+
+    public void setSiteBannedUntil(LocalDateTime siteBannedUntil) {
+        this.siteBannedUntil = siteBannedUntil;
+    }
+
+    public Boolean getOnlineBannedPermanent() {
+        return Boolean.TRUE.equals(onlineBannedPermanent);
+    }
+
+    public void setOnlineBannedPermanent(Boolean onlineBannedPermanent) {
+        this.onlineBannedPermanent = Boolean.TRUE.equals(onlineBannedPermanent);
+    }
+
+    public LocalDateTime getOnlineBannedUntil() {
+        return onlineBannedUntil;
+    }
+
+    public void setOnlineBannedUntil(LocalDateTime onlineBannedUntil) {
+        this.onlineBannedUntil = onlineBannedUntil;
+    }
+
+    public String getBanReason() {
+        return banReason;
+    }
+
+    public void setBanReason(String banReason) {
+        this.banReason = banReason;
+    }
+
+    public boolean isSiteBannedNow() {
+        if (Boolean.TRUE.equals(siteBannedPermanent)) {
+            return true;
+        }
+        return siteBannedUntil != null && siteBannedUntil.isAfter(LocalDateTime.now());
+    }
+
+    public boolean isOnlineBannedNow() {
+        if (Boolean.TRUE.equals(onlineBannedPermanent)) {
+            return true;
+        }
+        return onlineBannedUntil != null && onlineBannedUntil.isAfter(LocalDateTime.now());
     }
 }

@@ -52,6 +52,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/auth/password-reset/confirm").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/meta").permitAll()
                         .requestMatchers("/public/**").permitAll()
+                        .requestMatchers("/api/admin/**").hasAnyRole("ADMIN", "MASTER_ADMIN")
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(ex -> ex
