@@ -87,6 +87,13 @@ public class AuthService {
                     MessageKeys.AUTH_EMAIL_NOT_VERIFIED
             );
         }
+        if (user.isSiteBannedNow()) {
+            throw new ApiBusinessException(
+                    HttpStatus.FORBIDDEN,
+                    ErrorCodes.AUTH_USER_SITE_BANNED,
+                    MessageKeys.AUTH_USER_SITE_BANNED
+            );
+        }
         return user;
     }
 

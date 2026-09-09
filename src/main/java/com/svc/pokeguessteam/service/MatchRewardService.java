@@ -16,10 +16,16 @@ public class MatchRewardService {
 
     private final ProfileService profileService;
     private final FriendMatchStore friendMatchStore;
+    private final BonusEventService bonusEventService;
 
-    public MatchRewardService(ProfileService profileService, FriendMatchStore friendMatchStore) {
+    public MatchRewardService(
+            ProfileService profileService,
+            FriendMatchStore friendMatchStore,
+            BonusEventService bonusEventService
+    ) {
         this.profileService = profileService;
         this.friendMatchStore = friendMatchStore;
+        this.bonusEventService = bonusEventService;
     }
 
     @Transactional
@@ -97,14 +103,20 @@ public class MatchRewardService {
     private MatchRewardDto grantForProfile(ProfileModel profile, GameModes mode, GameResults result) {
         String userId = profile.getUser().getIdUser();
         GameMatchRewards.MatchRewardPayout payout = GameMatchRewards.payout(mode, result);
-        profileService.grantTrainingTeamMatchXp(userId, payout.trainingTeamXp());
+        double multiplier = bonusEventService.resolveXpMultiplier(profile);
+        int trainingTeamXp = (int) Math.round(payout.trainingTeamXp() * multiplier);
+        profileService.grantTrainingTeamMatchXp(userId, trainingTeamXp);
         if (payout.pokeBalls() > 0) {
             profileService.addPokeballs(userId, PokeballType.POKE_BALL, payout.pokeBalls());
         }
         if (payout.pokeballFragments() > 0) {
             profileService.addPokeballFragments(userId, payout.pokeballFragments());
         }
-        return toRewardDto(payout);
+        return new MatchRewardDto(
+                trainingTeamXp,
+                payout.pokeBalls(),
+                payout.pokeballFragments()
+        );
     }
 
     private static MatchRewardDto toRewardDto(GameMatchRewards.MatchRewardPayout payout) {

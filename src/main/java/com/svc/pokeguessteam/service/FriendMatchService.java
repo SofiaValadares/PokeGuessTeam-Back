@@ -73,6 +73,13 @@ public class FriendMatchService {
     @Transactional
     public FriendMatchStateDto startMatch(String userId, BotMatchTeamRequest request) {
         ProfileModel profile = profileService.ensureProfileWithStarters(userId);
+        if (profile.getUser().isOnlineBannedNow()) {
+            throw new ApiBusinessException(
+                    HttpStatus.FORBIDDEN,
+                    ErrorCodes.AUTH_USER_ONLINE_BANNED,
+                    MessageKeys.AUTH_USER_ONLINE_BANNED
+            );
+        }
         activeMatchConstraintService.clearStaleClientSideMatches(profile.getId());
         activeMatchConstraintService.ensureCanStartNewMatch(profile.getId());
 
@@ -95,6 +102,13 @@ public class FriendMatchService {
     @Transactional
     public FriendMatchStateDto joinMatch(String userId, FriendMatchJoinRequest request) {
         ProfileModel guestProfile = profileService.ensureProfileWithStarters(userId);
+        if (guestProfile.getUser().isOnlineBannedNow()) {
+            throw new ApiBusinessException(
+                    HttpStatus.FORBIDDEN,
+                    ErrorCodes.AUTH_USER_ONLINE_BANNED,
+                    MessageKeys.AUTH_USER_ONLINE_BANNED
+            );
+        }
         String joinCode = JoinCodeGenerator.normalize(request.joinCode());
         if (joinCode == null || joinCode.length() < GameConstants.FRIEND_JOIN_CODE_LENGTH) {
             throw new ApiBusinessException(

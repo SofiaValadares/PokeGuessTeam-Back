@@ -61,4 +61,14 @@ public final class ErrorCodes {
     public static final String GAME_MATCH_FULL = "GAME_MATCH_FULL";
     public static final String GAME_MATCH_GUEST_REQUIRED = "GAME_MATCH_GUEST_REQUIRED";
     public static final String GAME_LOCAL_MATCH_NOT_FOUND = "GAME_LOCAL_MATCH_NOT_FOUND";
+
+    public static final String AUTH_USER_SITE_BANNED = "AUTH_USER_SITE_BANNED";
+    public static final String AUTH_USER_ONLINE_BANNED = "AUTH_USER_ONLINE_BANNED";
+    public static final String ADMIN_FORBIDDEN = "ADMIN_FORBIDDEN";
+    public static final String ADMIN_EVENT_ACTIVE = "ADMIN_EVENT_ACTIVE";
+    public static final String ADMIN_EVENT_NOT_FOUND = "ADMIN_EVENT_NOT_FOUND";
+    public static final String ADMIN_USER_NOT_FOUND = "ADMIN_USER_NOT_FOUND";
+    public static final String ADMIN_CANNOT_MODIFY_MASTER = "ADMIN_CANNOT_MODIFY_MASTER";
+    public static final String ADMIN_INVALID_BAN_DURATION = "ADMIN_INVALID_BAN_DURATION";
+    public static final String ADMIN_EVENT_ALREADY_ACTIVE = "ADMIN_EVENT_ALREADY_ACTIVE";
 }

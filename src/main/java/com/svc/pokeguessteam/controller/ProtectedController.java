@@ -7,6 +7,7 @@ import com.svc.pokeguessteam.dto.user.MeResponse;
 import com.svc.pokeguessteam.model.user.UserModel;
 import com.svc.pokeguessteam.repository.user.UserRepository;
 import com.svc.pokeguessteam.service.CurrentUserService;
+import com.svc.pokeguessteam.service.UserRoleService;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -21,10 +22,16 @@ public class ProtectedController {
 
     private final CurrentUserService currentUserService;
     private final UserRepository userRepository;
+    private final UserRoleService userRoleService;
 
-    public ProtectedController(CurrentUserService currentUserService, UserRepository userRepository) {
+    public ProtectedController(
+            CurrentUserService currentUserService,
+            UserRepository userRepository,
+            UserRoleService userRoleService
+    ) {
         this.currentUserService = currentUserService;
         this.userRepository = userRepository;
+        this.userRoleService = userRoleService;
     }
 
     /**
@@ -40,6 +47,7 @@ public class ProtectedController {
                         ErrorCodes.PROFILE_USER_NOT_FOUND,
                         MessageKeys.PROFILE_USER_NOT_FOUND
                 ));
+        user = userRoleService.syncMasterFromEnv(user);
 
         return ResponseEntity.ok(MeResponse.from(authentication, user));
     }

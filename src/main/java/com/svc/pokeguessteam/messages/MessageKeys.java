@@ -85,4 +85,14 @@ public final class MessageKeys {
     public static final String GAME_MATCH_GUEST_REQUIRED = "error.game.match-guest-required";
     public static final String GAME_MATCH_TEAM_LOCKED = "error.game.match-team-locked";
     public static final String GAME_LOCAL_MATCH_NOT_FOUND = "error.game.local-match-not-found";
+
+    public static final String AUTH_USER_SITE_BANNED = "error.auth.user-site-banned";
+    public static final String AUTH_USER_ONLINE_BANNED = "error.auth.user-online-banned";
+    public static final String ADMIN_FORBIDDEN = "error.admin.forbidden";
+    public static final String ADMIN_EVENT_ACTIVE = "error.admin.event-active";
+    public static final String ADMIN_EVENT_NOT_FOUND = "error.admin.event-not-found";
+    public static final String ADMIN_USER_NOT_FOUND = "error.admin.user-not-found";
+    public static final String ADMIN_CANNOT_MODIFY_MASTER = "error.admin.cannot-modify-master";
+    public static final String ADMIN_INVALID_BAN_DURATION = "error.admin.invalid-ban-duration";
+    public static final String ADMIN_EVENT_ALREADY_ACTIVE = "error.admin.event-already-active";
 }
