@@ -95,4 +95,9 @@ public final class MessageKeys {
     public static final String ADMIN_CANNOT_MODIFY_MASTER = "error.admin.cannot-modify-master";
     public static final String ADMIN_INVALID_BAN_DURATION = "error.admin.invalid-ban-duration";
     public static final String ADMIN_EVENT_ALREADY_ACTIVE = "error.admin.event-already-active";
+    public static final String ADMIN_EVENT_NOT_ACTIVE = "error.admin.event-not-active";
+    public static final String GAME_EVENT_REQUIRED = "error.game.event-required";
+    public static final String GAME_TEAM_NOT_IN_EVENT = "error.game.team-not-in-event";
+    public static final String GAME_GUESS_NOT_IN_EVENT = "error.game.guess-not-in-event";
+    public static final String GAME_EVENT_POOL_INSUFFICIENT = "error.game.event-pool-insufficient";
 }

@@ -100,6 +100,22 @@ public class BonusEventService {
         return BonusEventDto.from(bonusEventRepository.save(event));
     }
 
+    @Transactional
+    public BonusEventDto end(String masterId, String eventId) {
+        adminAccessService.requireMaster(masterId);
+        BonusEventModel event = requireEvent(eventId);
+        if (event.getStatus() != BonusEventStatus.ACTIVE) {
+            throw new ApiBusinessException(
+                    HttpStatus.CONFLICT,
+                    ErrorCodes.ADMIN_EVENT_NOT_ACTIVE,
+                    MessageKeys.ADMIN_EVENT_NOT_ACTIVE
+            );
+        }
+        event.setStatus(BonusEventStatus.ENDED);
+        event.setEndsAt(LocalDateTime.now());
+        return BonusEventDto.from(bonusEventRepository.save(event));
+    }
+
     @Transactional(readOnly = true)
     public Optional<ActiveBonusEventDto> findActivePublic() {
         return findActiveEntity().map(ActiveBonusEventDto::from);

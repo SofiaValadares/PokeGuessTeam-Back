@@ -74,4 +74,10 @@ public class AdminEventController {
         String adminId = currentUserService.requireUserId(session);
         return ResponseEntity.ok(bonusEventService.start(adminId, eventId));
     }
+
+    @PostMapping("/{eventId}/end")
+    public ResponseEntity<BonusEventDto> end(HttpSession session, @PathVariable String eventId) {
+        String masterId = currentUserService.requireUserId(session);
+        return ResponseEntity.ok(bonusEventService.end(masterId, eventId));
+    }
 }
