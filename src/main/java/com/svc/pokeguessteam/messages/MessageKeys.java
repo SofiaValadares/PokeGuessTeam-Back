@@ -100,4 +100,6 @@ public final class MessageKeys {
     public static final String GAME_TEAM_NOT_IN_EVENT = "error.game.team-not-in-event";
     public static final String GAME_GUESS_NOT_IN_EVENT = "error.game.guess-not-in-event";
     public static final String GAME_EVENT_POOL_INSUFFICIENT = "error.game.event-pool-insufficient";
+    public static final String FRIEND_BALL_NO_EVENT = "error.pokeball.friend-ball-no-event";
+    public static final String FRIEND_BALL_POOL_EMPTY = "error.pokeball.friend-ball-pool-empty";
 }

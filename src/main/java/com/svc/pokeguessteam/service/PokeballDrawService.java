@@ -5,12 +5,16 @@ import com.svc.pokeguessteam.dto.pokemon.PokemonDto;
 import com.svc.pokeguessteam.exception.ApiBusinessException;
 import com.svc.pokeguessteam.exception.ErrorCodes;
 import com.svc.pokeguessteam.messages.MessageKeys;
+import com.svc.pokeguessteam.model.admin.BonusEventModel;
+import com.svc.pokeguessteam.model.enums.EvolutionStage;
 import com.svc.pokeguessteam.model.enums.PokeballType;
 import com.svc.pokeguessteam.model.enums.PokemonRarity;
+import com.svc.pokeguessteam.model.pokemon.EvolutionLineModel;
 import com.svc.pokeguessteam.model.pokemon.PokemonModel;
 import com.svc.pokeguessteam.model.user.ProfileInventoryItemModel;
 import com.svc.pokeguessteam.model.user.ProfileModel;
 import com.svc.pokeguessteam.model.user.UserPokemonInventoryModel;
+import com.svc.pokeguessteam.repository.pokemon.EvolutionLineRepository;
 import com.svc.pokeguessteam.repository.pokemon.PokemonRepository;
 import com.svc.pokeguessteam.repository.user.ProfileInventoryItemRepository;
 import com.svc.pokeguessteam.repository.user.ProfileRepository;
@@ -20,7 +24,13 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 
 @Service
@@ -29,24 +39,30 @@ public class PokeballDrawService {
     private final ProfileRepository profileRepository;
     private final ProfileService profileService;
     private final PokemonRepository pokemonRepository;
+    private final EvolutionLineRepository evolutionLineRepository;
     private final ProfileInventoryItemRepository profileInventoryItemRepository;
     private final UserPokemonInventoryRepository userPokemonInventoryRepository;
     private final UserPokedexService userPokedexService;
+    private final BonusEventService bonusEventService;
 
     public PokeballDrawService(
             ProfileRepository profileRepository,
             ProfileService profileService,
             PokemonRepository pokemonRepository,
+            EvolutionLineRepository evolutionLineRepository,
             ProfileInventoryItemRepository profileInventoryItemRepository,
             UserPokemonInventoryRepository userPokemonInventoryRepository,
-            UserPokedexService userPokedexService
+            UserPokedexService userPokedexService,
+            BonusEventService bonusEventService
     ) {
         this.profileRepository = profileRepository;
         this.profileService = profileService;
         this.pokemonRepository = pokemonRepository;
+        this.evolutionLineRepository = evolutionLineRepository;
         this.profileInventoryItemRepository = profileInventoryItemRepository;
         this.userPokemonInventoryRepository = userPokemonInventoryRepository;
         this.userPokedexService = userPokedexService;
+        this.bonusEventService = bonusEventService;
     }
 
     @Transactional
@@ -60,8 +76,18 @@ public class PokeballDrawService {
         profileService.ensureProfileWithStarters(userId);
         consumePokeball(profile, pokeballType);
 
-        PokemonRarity rolledRarity = rollRarity(pokeballType);
-        PokemonModel pokemon = pickRandomPokemon(rolledRarity);
+        PokemonModel pokemon;
+        PokemonRarity rolledRarity;
+        if (pokeballType == PokeballType.FRIEND_BALL) {
+            pokemon = pickFriendBallPokemon();
+            rolledRarity = pokemon.getEvolutionLine() != null
+                    ? pokemon.getEvolutionLine().getRarity()
+                    : PokemonRarity.COMMON;
+        } else {
+            rolledRarity = rollRarity(pokeballType);
+            pokemon = pickRandomPokemon(rolledRarity);
+        }
+
         GrantResult grant = grantOrIncrementLine(profile, pokemon);
         userPokedexService.registerSpecies(profile, pokemon.getPokedexNumber());
         userPokemonInventoryRepository
@@ -98,6 +124,60 @@ public class PokeballDrawService {
     }
 
     /**
+     * Friend Ball: escolhe uniformemente entre as formas BASE das linhas que intersectam o evento.
+     */
+    private PokemonModel pickFriendBallPokemon() {
+        BonusEventModel event = bonusEventService.findActive()
+                .orElseThrow(() -> new ApiBusinessException(
+                        HttpStatus.CONFLICT,
+                        ErrorCodes.FRIEND_BALL_NO_EVENT,
+                        MessageKeys.FRIEND_BALL_NO_EVENT
+                ));
+        Set<Integer> eventDex = new HashSet<>(event.getPokedexNumbers());
+        if (eventDex.isEmpty()) {
+            throw new ApiBusinessException(
+                    HttpStatus.CONFLICT,
+                    ErrorCodes.FRIEND_BALL_POOL_EMPTY,
+                    MessageKeys.FRIEND_BALL_POOL_EMPTY
+            );
+        }
+
+        Map<Integer, PokemonModel> basesByDex = new LinkedHashMap<>();
+        for (Integer dex : eventDex) {
+            List<EvolutionLineModel> lines = evolutionLineRepository.findAllLinesContainingPokedexNumber(dex);
+            for (EvolutionLineModel line : lines) {
+                List<Integer> members = line.getMemberPokedexNumbers();
+                if (members == null || members.isEmpty()) {
+                    continue;
+                }
+                List<PokemonModel> species = pokemonRepository.findByPokedexNumberIn(members);
+                PokemonModel base = species.stream()
+                        .filter(p -> p.getEvolutionStage() == EvolutionStage.BASE)
+                        .min(Comparator.comparingInt(PokemonModel::getPokedexNumber))
+                        .orElseGet(() -> species.stream()
+                                .min(Comparator.comparingInt(p -> {
+                                    int idx = members.indexOf(p.getPokedexNumber());
+                                    return idx < 0 ? Integer.MAX_VALUE : idx;
+                                }))
+                                .orElse(null));
+                if (base != null) {
+                    basesByDex.putIfAbsent(base.getPokedexNumber(), base);
+                }
+            }
+        }
+
+        List<PokemonModel> pool = new ArrayList<>(basesByDex.values());
+        if (pool.isEmpty()) {
+            throw new ApiBusinessException(
+                    HttpStatus.CONFLICT,
+                    ErrorCodes.FRIEND_BALL_POOL_EMPTY,
+                    MessageKeys.FRIEND_BALL_POOL_EMPTY
+            );
+        }
+        return pool.get(ThreadLocalRandom.current().nextInt(pool.size()));
+    }
+
+    /**
      * Probabilidades por tipo de bola (verificação do tier mais raro primeiro).
      */
     private PokemonRarity rollRarity(PokeballType type) {
@@ -130,6 +210,7 @@ public class PokeballDrawService {
                 }
                 yield PokemonRarity.COMMON;
             }
+            case FRIEND_BALL -> PokemonRarity.COMMON;
         };
     }
 

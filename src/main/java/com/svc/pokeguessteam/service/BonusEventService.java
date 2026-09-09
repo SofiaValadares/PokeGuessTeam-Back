@@ -163,6 +163,14 @@ public class BonusEventService {
         return 1.0;
     }
 
+    /** Multiplicador do evento ativo (sem exigir time de treino) — usado em partidas de evento. */
+    @Transactional(readOnly = true)
+    public double resolveActiveEventXpMultiplier() {
+        return findActiveEntity()
+                .map(event -> event.getXpMultiplier() != null ? event.getXpMultiplier() : 1.0)
+                .orElse(1.0);
+    }
+
     private boolean teamQualifies(ProfileModel profile, BonusEventModel event) {
         TrainingTeamModel team = profile.getTrainingTeam();
         if (team == null) {
