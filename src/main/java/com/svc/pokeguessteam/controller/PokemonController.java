@@ -123,7 +123,7 @@ public class PokemonController {
                 })
                 .filter(n -> n != null && n > 0)
                 .distinct()
-                .limit(100)
+                .limit(500)
                 .toList();
         if (dexList.isEmpty()) {
             return ResponseEntity.ok(List.of());

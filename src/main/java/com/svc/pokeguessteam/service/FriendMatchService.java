@@ -51,6 +51,7 @@ public class FriendMatchService {
     private final DuelTeamService duelTeamService;
     private final FriendMatchStore friendMatchStore;
     private final BonusEventService bonusEventService;
+    private final PusherRealtimeService pusherRealtimeService;
 
     public FriendMatchService(
             PokemonRepository pokemonRepository,
@@ -61,7 +62,8 @@ public class FriendMatchService {
             ActiveMatchConstraintService activeMatchConstraintService,
             DuelTeamService duelTeamService,
             FriendMatchStore friendMatchStore,
-            BonusEventService bonusEventService
+            BonusEventService bonusEventService,
+            PusherRealtimeService pusherRealtimeService
     ) {
         this.pokemonRepository = pokemonRepository;
         this.profileService = profileService;
@@ -72,6 +74,7 @@ public class FriendMatchService {
         this.duelTeamService = duelTeamService;
         this.friendMatchStore = friendMatchStore;
         this.bonusEventService = bonusEventService;
+        this.pusherRealtimeService = pusherRealtimeService;
     }
 
     @Transactional
@@ -621,7 +624,28 @@ public class FriendMatchService {
 
     private ActiveMatchModel saveMatch(ActiveMatchModel match) {
         friendMatchStore.save(match);
+        pushRealtime(match, null);
         return match;
+    }
+
+    private void pushRealtime(ActiveMatchModel match, GameHistoryEntryDto history) {
+        if (!pusherRealtimeService.isEnabled() || match == null) {
+            return;
+        }
+        try {
+            if (match.getProfile() != null && match.getProfile().getUser() != null) {
+                String hostUserId = match.getProfile().getUser().getIdUser();
+                FriendMatchStateDto hostView = toStateDto(match, match.getProfile(), history);
+                pusherRealtimeService.publishMatchState(hostUserId, hostView);
+            }
+            if (match.getGuestProfile() != null && match.getGuestProfile().getUser() != null) {
+                String guestUserId = match.getGuestProfile().getUser().getIdUser();
+                FriendMatchStateDto guestView = toStateDto(match, match.getGuestProfile(), history);
+                pusherRealtimeService.publishMatchState(guestUserId, guestView);
+            }
+        } catch (Exception ignored) {
+            // Realtime é best-effort; REST permanece a fonte de verdade.
+        }
     }
 
     private static PokemonModel pickRandomUnusedGuess(

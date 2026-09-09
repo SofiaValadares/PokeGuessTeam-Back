@@ -17,6 +17,7 @@ import com.svc.pokeguessteam.dto.auth.SessionResponse;
 import com.svc.pokeguessteam.messages.MessageKeys;
 import com.svc.pokeguessteam.model.user.UserModel;
 import com.svc.pokeguessteam.security.DeviceFingerprintUtil;
+import com.svc.pokeguessteam.security.SessionAuthorityService;
 import com.svc.pokeguessteam.security.SessionBindingInterceptor;
 import com.svc.pokeguessteam.service.AccountDeletionService;
 import com.svc.pokeguessteam.service.AuthCodeService;
@@ -34,16 +35,10 @@ import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
@@ -59,6 +54,7 @@ public class AuthController {
     private final ProfileService profileService;
     private final CurrentUserService currentUserService;
     private final UserRoleService userRoleService;
+    private final SessionAuthorityService sessionAuthorityService;
     private final MessageSource messageSource;
 
     public AuthController(
@@ -68,6 +64,7 @@ public class AuthController {
             ProfileService profileService,
             CurrentUserService currentUserService,
             UserRoleService userRoleService,
+            SessionAuthorityService sessionAuthorityService,
             MessageSource messageSource
     ) {
         this.authService = authService;
@@ -76,6 +73,7 @@ public class AuthController {
         this.profileService = profileService;
         this.currentUserService = currentUserService;
         this.userRoleService = userRoleService;
+        this.sessionAuthorityService = sessionAuthorityService;
         this.messageSource = messageSource;
     }
 
@@ -288,30 +286,7 @@ public class AuthController {
                 SessionBindingInterceptor.DEVICE_ID_ATTR,
                 DeviceFingerprintUtil.generateDeviceId(httpRequest)
         );
-
-        List<SimpleGrantedAuthority> authorities = new ArrayList<>();
-        authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
-        if (user.getRole().isAdminOrAbove()) {
-            authorities.add(new SimpleGrantedAuthority("ROLE_ADMIN"));
-        }
-        if (user.getRole().isMaster()) {
-            authorities.add(new SimpleGrantedAuthority("ROLE_MASTER_ADMIN"));
-        }
-
-        UsernamePasswordAuthenticationToken authentication =
-                new UsernamePasswordAuthenticationToken(
-                        user.getEmail(),
-                        null,
-                        authorities
-                );
-
-        SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
-        securityContext.setAuthentication(authentication);
-        SecurityContextHolder.setContext(securityContext);
-        session.setAttribute(
-                HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY,
-                securityContext
-        );
+        sessionAuthorityService.applyToSession(user, session);
     }
 
     private AuthSessionResponse toSessionResponse(UserModel user, String message, boolean firstLogin) {

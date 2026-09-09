@@ -44,7 +44,8 @@ public class MatchRewardService {
     ) {
         MatchPlayerSide side = resolveParticipantSide(match, profile);
         GameResults result = resolveParticipantResult(match, side, surrenderSide);
-        GameMatchRewards.MatchRewardPayout payout = GameMatchRewards.payout(GameModes.FRIEND, result);
+        GameModes mode = onlineRewardMode(match);
+        GameMatchRewards.MatchRewardPayout payout = GameMatchRewards.payout(mode, result);
         double multiplier = match.isEventMode()
                 ? bonusEventService.resolveActiveEventXpMultiplier()
                 : bonusEventService.resolveXpMultiplier(profile);
@@ -74,7 +75,7 @@ public class MatchRewardService {
             MatchPlayerSide surrenderSide,
             String rewardForUserId
     ) {
-        if (match.getGameMode() != GameModes.FRIEND) {
+        if (match.getGameMode() != GameModes.FRIEND && match.getGameMode() != GameModes.COMPETITIVE) {
             throw new IllegalStateException("Partida ativa inesperada: " + match.getGameMode());
         }
 
@@ -82,7 +83,7 @@ public class MatchRewardService {
             if (!friendMatchStore.exists(match.getId())) {
                 return MatchRewardDto.empty();
             }
-            GrantedFriendRewards granted = grantFriendMatch(match, surrenderSide);
+            GrantedFriendRewards granted = grantOnlineMatch(match, surrenderSide);
             if (rewardForUserId == null) {
                 return MatchRewardDto.empty();
             }
@@ -100,16 +101,21 @@ public class MatchRewardService {
     private record GrantedFriendRewards(MatchRewardDto hostReward, MatchRewardDto guestReward) {
     }
 
-    private GrantedFriendRewards grantFriendMatch(ActiveMatchModel match, MatchPlayerSide surrenderSide) {
+    private GrantedFriendRewards grantOnlineMatch(ActiveMatchModel match, MatchPlayerSide surrenderSide) {
         boolean eventMatch = match.isEventMode();
+        GameModes mode = onlineRewardMode(match);
         GameResults hostResult = resolveParticipantResult(match, MatchPlayerSide.HOST, surrenderSide);
-        MatchRewardDto hostReward = grantForProfile(match.getProfile(), GameModes.FRIEND, hostResult, eventMatch);
+        MatchRewardDto hostReward = grantForProfile(match.getProfile(), mode, hostResult, eventMatch);
         MatchRewardDto guestReward = MatchRewardDto.empty();
         if (match.getGuestProfile() != null) {
             GameResults guestResult = resolveParticipantResult(match, MatchPlayerSide.OPPONENT, surrenderSide);
-            guestReward = grantForProfile(match.getGuestProfile(), GameModes.FRIEND, guestResult, eventMatch);
+            guestReward = grantForProfile(match.getGuestProfile(), mode, guestResult, eventMatch);
         }
         return new GrantedFriendRewards(hostReward, guestReward);
+    }
+
+    private static GameModes onlineRewardMode(ActiveMatchModel match) {
+        return match.getGameMode() == GameModes.COMPETITIVE ? GameModes.COMPETITIVE : GameModes.FRIEND;
     }
 
     /**
