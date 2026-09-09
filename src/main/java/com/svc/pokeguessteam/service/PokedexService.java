@@ -44,10 +44,9 @@ public class PokedexService {
         this.userPokedexService = userPokedexService;
     }
 
-    @Transactional
+    @Transactional(readOnly = true)
     public List<PokedexEntryDto> listAllForUser(String userId) {
-        ProfileModel profile = requireProfile(userId);
-        userPokedexService.syncFromOwnership(profile);
+        requireProfile(userId);
         Set<Integer> registered = userPokedexService.findRegisteredPokedexNumbers(userId);
         return nationalPokedexCatalog.allSpeciesOrdered().stream()
                 .map(p -> PokedexEntryDto.from(p, registered.contains(p.getPokedexNumber())))
@@ -55,15 +54,12 @@ public class PokedexService {
     }
 
     /**
-     * Sincroniza a Pokédex pessoal e devolve a página nacional (mesma transação de escrita).
+     * Devolve a página nacional com flags de registo (leitura; sync só em mutações de inventário).
      */
-    @Transactional
+    @Transactional(readOnly = true)
     public PokedexEntryPageResponse listPageForUser(String userId, int page, int size) {
-        ProfileModel profile = requireProfile(userId);
+        requireProfile(userId);
         int safePage = Math.max(page, 0);
-        if (safePage == 0) {
-            userPokedexService.syncFromOwnership(profile);
-        }
         Set<Integer> registered = userPokedexService.findRegisteredPokedexNumbers(userId);
         int safeSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
         Pageable pageable = PageRequest.of(

@@ -13,6 +13,7 @@ import com.svc.pokeguessteam.exception.ErrorCodes;
 import com.svc.pokeguessteam.messages.MessageKeys;
 import com.svc.pokeguessteam.service.CurrentUserService;
 import com.svc.pokeguessteam.service.ProfileService;
+import com.svc.pokeguessteam.service.UserPokedexService;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -36,15 +37,18 @@ import java.util.Map;
 public class ProfileController {
 
     private final ProfileService profileService;
+    private final UserPokedexService userPokedexService;
     private final CurrentUserService currentUserService;
     private final AppDevToolsProperties devToolsProperties;
 
     public ProfileController(
             ProfileService profileService,
+            UserPokedexService userPokedexService,
             CurrentUserService currentUserService,
             AppDevToolsProperties devToolsProperties
     ) {
         this.profileService = profileService;
+        this.userPokedexService = userPokedexService;
         this.currentUserService = currentUserService;
         this.devToolsProperties = devToolsProperties;
     }
@@ -63,6 +67,7 @@ public class ProfileController {
             body.put("favoritePokemonId", null);
             body.put("favoritePokemonName", null);
         }
+        body.put("registeredPokedexCount", userPokedexService.countRegistered(profile.getId()));
         return ResponseEntity.ok(body);
     }
 

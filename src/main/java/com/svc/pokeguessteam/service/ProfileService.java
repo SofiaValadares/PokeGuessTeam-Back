@@ -93,6 +93,19 @@ public class ProfileService {
     @Transactional
     public ProfileModel ensureProfileWithStarters(String userId) {
         ProfileModel profile = profileRepository.findByUser_IdUser(userId).orElseGet(() -> createProfile(userId));
+
+        long inventoryLines = inventoryRepository.countByProfile_Id(profile.getId());
+        long ballRows = profileInventoryItemRepository.countByProfile_Id(profile.getId());
+        boolean hasTrainingTeam = profile.getTrainingTeam() != null;
+
+        // Warm path: perfil já bootstrapado — evita centenas de queries/flushes em cada GET.
+        if (inventoryLines >= STARTER_POKEDEX_NUMBERS.length && hasTrainingTeam) {
+            if (ballRows < PokeballType.values().length) {
+                ensurePokeballInventoryIfMissing(profile);
+            }
+            return profile;
+        }
+
         for (int dex : STARTER_POKEDEX_NUMBERS) {
             grantStarterLineIfMissing(profile, dex);
         }
@@ -274,8 +287,14 @@ public class ProfileService {
      * Garante uma linha por tipo de Pokébola (quantidade inicial 0) quando o registo ainda não existe.
      */
     private void ensurePokeballInventoryIfMissing(ProfileModel profile) {
+        Set<PokeballType> existing = new HashSet<>();
+        for (ProfileInventoryItemModel row : profileInventoryItemRepository.findByProfile_Id(profile.getId())) {
+            if (row.getPokeballType() != null) {
+                existing.add(row.getPokeballType());
+            }
+        }
         for (PokeballType type : PokeballType.values()) {
-            if (profileInventoryItemRepository.findByProfile_IdAndPokeballType(profile.getId(), type).isPresent()) {
+            if (existing.contains(type)) {
                 continue;
             }
             ProfileInventoryItemModel row = new ProfileInventoryItemModel();
@@ -334,8 +353,6 @@ public class ProfileService {
                 line.getLineKey()
         );
         if (existing.isPresent()) {
-            userPokedexService.registerUnlockedSpeciesForInventoryLine(profile, existing.get());
-            userPokedexService.registerSpeciesIfPresent(profile, pokedexNumber);
             return;
         }
         UserPokemonInventoryModel row = new UserPokemonInventoryModel();
