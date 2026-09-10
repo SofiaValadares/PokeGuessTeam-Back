@@ -1,0 +1,260 @@
+package com.svc.pokeguessteam.service;
+
+import com.svc.pokeguessteam.dto.pokemon.PokeballDrawResponse;
+import com.svc.pokeguessteam.dto.pokemon.PokemonDto;
+import com.svc.pokeguessteam.exception.ApiBusinessException;
+import com.svc.pokeguessteam.exception.ErrorCodes;
+import com.svc.pokeguessteam.messages.MessageKeys;
+import com.svc.pokeguessteam.model.admin.BonusEventModel;
+import com.svc.pokeguessteam.model.enums.EvolutionStage;
+import com.svc.pokeguessteam.model.enums.PokeballType;
+import com.svc.pokeguessteam.model.enums.PokemonRarity;
+import com.svc.pokeguessteam.model.pokemon.EvolutionLineModel;
+import com.svc.pokeguessteam.model.pokemon.PokemonModel;
+import com.svc.pokeguessteam.model.user.ProfileInventoryItemModel;
+import com.svc.pokeguessteam.model.user.ProfileModel;
+import com.svc.pokeguessteam.model.user.UserPokemonInventoryModel;
+import com.svc.pokeguessteam.repository.pokemon.EvolutionLineRepository;
+import com.svc.pokeguessteam.repository.pokemon.PokemonRepository;
+import com.svc.pokeguessteam.repository.user.ProfileInventoryItemRepository;
+import com.svc.pokeguessteam.repository.user.ProfileRepository;
+import com.svc.pokeguessteam.repository.user.UserPokemonInventoryRepository;
+import com.svc.pokeguessteam.util.PokemonInventoryXp;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
+
+@Service
+public class PokeballDrawService {
+
+    private final ProfileRepository profileRepository;
+    private final ProfileService profileService;
+    private final PokemonRepository pokemonRepository;
+    private final EvolutionLineRepository evolutionLineRepository;
+    private final ProfileInventoryItemRepository profileInventoryItemRepository;
+    private final UserPokemonInventoryRepository userPokemonInventoryRepository;
+    private final UserPokedexService userPokedexService;
+    private final BonusEventService bonusEventService;
+
+    public PokeballDrawService(
+            ProfileRepository profileRepository,
+            ProfileService profileService,
+            PokemonRepository pokemonRepository,
+            EvolutionLineRepository evolutionLineRepository,
+            ProfileInventoryItemRepository profileInventoryItemRepository,
+            UserPokemonInventoryRepository userPokemonInventoryRepository,
+            UserPokedexService userPokedexService,
+            BonusEventService bonusEventService
+    ) {
+        this.profileRepository = profileRepository;
+        this.profileService = profileService;
+        this.pokemonRepository = pokemonRepository;
+        this.evolutionLineRepository = evolutionLineRepository;
+        this.profileInventoryItemRepository = profileInventoryItemRepository;
+        this.userPokemonInventoryRepository = userPokemonInventoryRepository;
+        this.userPokedexService = userPokedexService;
+        this.bonusEventService = bonusEventService;
+    }
+
+    @Transactional
+    public PokeballDrawResponse draw(String userId, PokeballType pokeballType) {
+        ProfileModel profile = profileRepository.findByUser_IdUser(userId)
+                .orElseThrow(() -> new ApiBusinessException(
+                        HttpStatus.NOT_FOUND,
+                        ErrorCodes.PROFILE_NOT_FOUND,
+                        MessageKeys.PROFILE_NOT_FOUND
+                ));
+        profileService.ensureProfileWithStarters(userId);
+        consumePokeball(profile, pokeballType);
+
+        PokemonModel pokemon;
+        PokemonRarity rolledRarity;
+        if (pokeballType == PokeballType.FRIEND_BALL) {
+            pokemon = pickFriendBallPokemon();
+            rolledRarity = pokemon.getEvolutionLine() != null
+                    ? pokemon.getEvolutionLine().getRarity()
+                    : PokemonRarity.COMMON;
+        } else {
+            rolledRarity = rollRarity(pokeballType);
+            pokemon = pickRandomPokemon(rolledRarity);
+        }
+
+        GrantResult grant = grantOrIncrementLine(profile, pokemon);
+        userPokedexService.registerSpecies(profile, pokemon.getPokedexNumber());
+        userPokemonInventoryRepository
+                .findByProfile_IdAndEvolutionLine_LineKey(profile.getId(), pokemon.getEvolutionLine().getLineKey())
+                .ifPresent(row -> userPokedexService.registerUnlockedSpeciesForInventoryLine(profile, row));
+
+        return new PokeballDrawResponse(
+                pokeballType,
+                rolledRarity,
+                PokemonDto.from(pokemon),
+                grant.newLine(),
+                grant.timesObtained()
+        );
+    }
+
+    private void consumePokeball(ProfileModel profile, PokeballType type) {
+        ProfileInventoryItemModel row = profileInventoryItemRepository
+                .findByProfile_IdAndPokeballType(profile.getId(), type)
+                .orElseThrow(() -> new ApiBusinessException(
+                        HttpStatus.BAD_REQUEST,
+                        ErrorCodes.POKEBALL_INSUFFICIENT,
+                        MessageKeys.POKEBALL_INSUFFICIENT
+                ));
+        int qty = row.getQuantity() != null ? row.getQuantity() : 0;
+        if (qty < 1) {
+            throw new ApiBusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    ErrorCodes.POKEBALL_INSUFFICIENT,
+                    MessageKeys.POKEBALL_INSUFFICIENT
+            );
+        }
+        row.setQuantity(qty - 1);
+        profileInventoryItemRepository.save(row);
+    }
+
+    /**
+     * Friend Ball: escolhe uniformemente entre as formas BASE das linhas que intersectam o evento.
+     */
+    private PokemonModel pickFriendBallPokemon() {
+        BonusEventModel event = bonusEventService.findActive()
+                .orElseThrow(() -> new ApiBusinessException(
+                        HttpStatus.CONFLICT,
+                        ErrorCodes.FRIEND_BALL_NO_EVENT,
+                        MessageKeys.FRIEND_BALL_NO_EVENT
+                ));
+        Set<Integer> eventDex = new HashSet<>(event.getPokedexNumbers());
+        if (eventDex.isEmpty()) {
+            throw new ApiBusinessException(
+                    HttpStatus.CONFLICT,
+                    ErrorCodes.FRIEND_BALL_POOL_EMPTY,
+                    MessageKeys.FRIEND_BALL_POOL_EMPTY
+            );
+        }
+
+        Map<Integer, PokemonModel> basesByDex = new LinkedHashMap<>();
+        for (Integer dex : eventDex) {
+            List<EvolutionLineModel> lines = evolutionLineRepository.findAllLinesContainingPokedexNumber(dex);
+            for (EvolutionLineModel line : lines) {
+                List<Integer> members = line.getMemberPokedexNumbers();
+                if (members == null || members.isEmpty()) {
+                    continue;
+                }
+                List<PokemonModel> species = pokemonRepository.findByPokedexNumberIn(members);
+                PokemonModel base = species.stream()
+                        .filter(p -> p.getEvolutionStage() == EvolutionStage.BASE)
+                        .min(Comparator.comparingInt(PokemonModel::getPokedexNumber))
+                        .orElseGet(() -> species.stream()
+                                .min(Comparator.comparingInt(p -> {
+                                    int idx = members.indexOf(p.getPokedexNumber());
+                                    return idx < 0 ? Integer.MAX_VALUE : idx;
+                                }))
+                                .orElse(null));
+                if (base != null) {
+                    basesByDex.putIfAbsent(base.getPokedexNumber(), base);
+                }
+            }
+        }
+
+        List<PokemonModel> pool = new ArrayList<>(basesByDex.values());
+        if (pool.isEmpty()) {
+            throw new ApiBusinessException(
+                    HttpStatus.CONFLICT,
+                    ErrorCodes.FRIEND_BALL_POOL_EMPTY,
+                    MessageKeys.FRIEND_BALL_POOL_EMPTY
+            );
+        }
+        return pool.get(ThreadLocalRandom.current().nextInt(pool.size()));
+    }
+
+    /**
+     * Probabilidades por tipo de bola (verificação do tier mais raro primeiro).
+     */
+    private PokemonRarity rollRarity(PokeballType type) {
+        return switch (type) {
+            case MASTER_BALL -> PokemonRarity.MYTHICAL;
+            case ULTRA_BALL -> {
+                if (rollOneIn(150)) {
+                    yield PokemonRarity.MYTHICAL;
+                }
+                yield PokemonRarity.LEGENDARY;
+            }
+            case GREAT_BALL -> {
+                if (rollOneIn(300)) {
+                    yield PokemonRarity.MYTHICAL;
+                }
+                if (rollOneIn(50)) {
+                    yield PokemonRarity.LEGENDARY;
+                }
+                yield PokemonRarity.RARE;
+            }
+            case POKE_BALL -> {
+                if (rollOneIn(500)) {
+                    yield PokemonRarity.MYTHICAL;
+                }
+                if (rollOneIn(100)) {
+                    yield PokemonRarity.LEGENDARY;
+                }
+                if (rollOneIn(10)) {
+                    yield PokemonRarity.RARE;
+                }
+                yield PokemonRarity.COMMON;
+            }
+            case FRIEND_BALL -> PokemonRarity.COMMON;
+        };
+    }
+
+    private static boolean rollOneIn(int denominator) {
+        return ThreadLocalRandom.current().nextInt(denominator) == 0;
+    }
+
+    private PokemonModel pickRandomPokemon(PokemonRarity rarity) {
+        List<PokemonModel> pool = pokemonRepository.findByEvolutionLine_Rarity(rarity);
+        if (pool.isEmpty()) {
+            throw new ApiBusinessException(
+                    HttpStatus.INTERNAL_SERVER_ERROR,
+                    ErrorCodes.POKEMON_POOL_EMPTY_FOR_RARITY,
+                    MessageKeys.POKEMON_POOL_EMPTY_FOR_RARITY,
+                    rarity.name()
+            );
+        }
+        return pool.get(ThreadLocalRandom.current().nextInt(pool.size()));
+    }
+
+    private GrantResult grantOrIncrementLine(ProfileModel profile, PokemonModel pokemon) {
+        var line = pokemon.getEvolutionLine();
+        var existing = userPokemonInventoryRepository.findByProfile_IdAndEvolutionLine_LineKey(
+                profile.getId(),
+                line.getLineKey()
+        );
+        if (existing.isPresent()) {
+            UserPokemonInventoryModel row = existing.get();
+            int times = row.getTimesObtained() != null ? row.getTimesObtained() : 0;
+            row.setTimesObtained(times + 1);
+            userPokemonInventoryRepository.save(row);
+            return new GrantResult(false, row.getTimesObtained());
+        }
+        UserPokemonInventoryModel row = new UserPokemonInventoryModel();
+        row.setProfile(profile);
+        row.setEvolutionLine(line);
+        row.setTotalXp(0);
+        row.setTimesObtained(1);
+        row.setClaimedMilestones("");
+        PokemonInventoryXp.syncLevelFromTotalXp(row);
+        userPokemonInventoryRepository.save(row);
+        return new GrantResult(true, 1);
+    }
+
+    private record GrantResult(boolean newLine, int timesObtained) {
+    }
+}
