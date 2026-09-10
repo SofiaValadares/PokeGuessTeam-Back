@@ -4,12 +4,16 @@ import com.svc.pokeguessteam.model.enums.GameResults;
 import com.svc.pokeguessteam.model.game.HistoryGamePlayerModel;
 import com.svc.pokeguessteam.model.user.ProfileModel;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public record GameHistoryPlayerDto(
         int slot,
         String profileId,
         String username,
         int correctGuesses,
-        GameResults result
+        GameResults result,
+        List<Integer> selectedTeam
 ) {
     public static GameHistoryPlayerDto from(HistoryGamePlayerModel player) {
         ProfileModel profile = player.getProfile();
@@ -18,12 +22,27 @@ public record GameHistoryPlayerDto(
         if (profile != null && profile.getUser() != null) {
             username = profile.getUser().getUsername();
         }
+        List<Integer> team = parseSelectedTeam(player.getSelectedTeam());
         return new GameHistoryPlayerDto(
                 player.getSlot(),
                 profileId,
                 username,
                 player.getCorrectGuesses(),
-                player.getResult()
+                player.getResult(),
+                team
         );
+    }
+
+    private static List<Integer> parseSelectedTeam(String encoded) {
+        if (encoded == null || encoded.isBlank()) return List.of();
+        String[] parts = encoded.split(",");
+        List<Integer> out = new ArrayList<>(parts.length);
+        for (String p : parts) {
+            try {
+                out.add(Integer.parseInt(p.trim()));
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return out;
     }
 }

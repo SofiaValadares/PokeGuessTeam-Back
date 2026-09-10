@@ -25,6 +25,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 @Service
 public class GameHistoryService {
 
@@ -46,7 +48,12 @@ public class GameHistoryService {
     }
 
     @Transactional
-    public GameHistoryEntryDto saveBotFinish(String userId, GameBotFinishRequest request) {
+    public GameHistoryEntryDto saveBotFinish(
+            String userId,
+            GameBotFinishRequest request,
+            List<Integer> userTeam,
+            List<Integer> opponentTeam
+    ) {
         ProfileModel profile = profileService.ensureProfileWithStarters(userId);
         validateFinishRequest(request);
         HistoryGameModel game = buildFinishedGame(
@@ -54,13 +61,20 @@ public class GameHistoryService {
                 null,
                 profile,
                 null,
-                request
+                request,
+                userTeam,
+                opponentTeam
         );
         return GameHistoryEntryDto.from(historyGameRepository.save(game));
     }
 
     @Transactional
-    public GameHistoryEntryDto saveLocalFinish(String userId, GameLocalFinishRequest request) {
+    public GameHistoryEntryDto saveLocalFinish(
+            String userId,
+            GameLocalFinishRequest request,
+            List<Integer> userTeam,
+            List<Integer> opponentTeam
+    ) {
         String opponentName = GameFinishValidation.validateAndNormalizeLocalOpponentName(request.opponentName());
         ProfileModel profile = profileService.ensureProfileWithStarters(userId);
         validateFinishRequest(request);
@@ -69,10 +83,12 @@ public class GameHistoryService {
                 opponentName,
                 profile,
                 null,
-                request
+                request,
+                userTeam,
+                opponentTeam
         );
         return GameHistoryEntryDto.from(historyGameRepository.save(game));
-    }
+        }
 
     /**
      * Persiste histórico a partir de partida ativa vs amigo (motor no servidor).
@@ -97,8 +113,24 @@ public class GameHistoryService {
 
         HistoryGameModel game = new HistoryGameModel();
         game.setGameMode(GameModes.FRIEND);
-        addProfilePlayer(game, match.getProfile(), USER_SLOT, hostHits, hostResult, match.getHostPlayer().getTurnTimeoutPenalties());
-        addProfilePlayer(game, guest, OPPONENT_SLOT, guestHits, guestResult, match.getOpponentPlayer().getTurnTimeoutPenalties());
+        addProfilePlayer(
+            game,
+            match.getProfile(),
+            USER_SLOT,
+            hostHits,
+            hostResult,
+            match.getHostPlayer().getTurnTimeoutPenalties(),
+            match.getHostPlayer().getTeam()
+        );
+        addProfilePlayer(
+            game,
+            guest,
+            OPPONENT_SLOT,
+            guestHits,
+            guestResult,
+            match.getOpponentPlayer().getTurnTimeoutPenalties(),
+            match.getOpponentPlayer().getTeam()
+        );
         return GameHistoryEntryDto.from(historyGameRepository.save(game));
     }
 
@@ -185,7 +217,9 @@ public class GameHistoryService {
             String opponentName,
             ProfileModel userProfile,
             ProfileModel opponentProfile,
-            GameFinishRequest request
+            GameFinishRequest request,
+            List<Integer> userTeam,
+            List<Integer> opponentTeam
     ) {
         HistoryGameModel game = new HistoryGameModel();
         game.setGameMode(mode);
@@ -196,7 +230,9 @@ public class GameHistoryService {
                 userProfile,
                 USER_SLOT,
                 request.userCorrectGuesses(),
-                request.result()
+                request.result(),
+                0,
+                userTeam
         );
 
         if (opponentProfile != null) {
@@ -205,14 +241,18 @@ public class GameHistoryService {
                     opponentProfile,
                     OPPONENT_SLOT,
                     request.opponentCorrectGuesses(),
-                    GameFinishValidation.opponentResult(request.result())
+                    GameFinishValidation.opponentResult(request.result()),
+                    0,
+                    opponentTeam
             );
         } else {
             addGuestPlayer(
                     game,
                     OPPONENT_SLOT,
                     request.opponentCorrectGuesses(),
-                    GameFinishValidation.opponentResult(request.result())
+                    GameFinishValidation.opponentResult(request.result()),
+                    0,
+                    opponentTeam
             );
         }
         return game;
@@ -224,7 +264,8 @@ public class GameHistoryService {
             int slot,
             int correctGuesses,
             GameResults result,
-            int turnTimeoutPenalties
+            int turnTimeoutPenalties,
+            List<Integer> selectedTeam
     ) {
         HistoryGamePlayerModel player = new HistoryGamePlayerModel();
         player.setSlot(slot);
@@ -232,30 +273,38 @@ public class GameHistoryService {
         player.setCorrectGuesses(correctGuesses);
         player.setResult(result);
         player.setTurnTimeoutPenalties(turnTimeoutPenalties);
+        player.setSelectedTeam(encodeTeam(selectedTeam));
         game.addPlayer(player);
-    }
-
-    private void addProfilePlayer(
-            HistoryGameModel game,
-            ProfileModel profile,
-            int slot,
-            int correctGuesses,
-            GameResults result
-    ) {
-        addProfilePlayer(game, profile, slot, correctGuesses, result, 0);
     }
 
     private void addGuestPlayer(
             HistoryGameModel game,
             int slot,
             int correctGuesses,
-            GameResults result
+            GameResults result,
+            int turnTimeoutPenalties,
+            List<Integer> selectedTeam
     ) {
         HistoryGamePlayerModel player = new HistoryGamePlayerModel();
         player.setSlot(slot);
         player.setProfile(null);
         player.setCorrectGuesses(correctGuesses);
         player.setResult(result);
+        player.setTurnTimeoutPenalties(turnTimeoutPenalties);
+        player.setSelectedTeam(encodeTeam(selectedTeam));
         game.addPlayer(player);
+    }
+
+    private static String encodeTeam(List<Integer> selectedTeam) {
+        if (selectedTeam == null || selectedTeam.isEmpty()) {
+            return "";
+        }
+        return selectedTeam.stream()
+                .filter(java.util.Objects::nonNull)
+                .map(String::valueOf)
+                .toList()
+                .stream()
+                .reduce((left, right) -> left + "," + right)
+                .orElse("");
     }
 }

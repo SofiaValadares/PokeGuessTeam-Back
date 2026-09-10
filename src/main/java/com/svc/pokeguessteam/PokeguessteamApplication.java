@@ -1,6 +1,7 @@
 package com.svc.pokeguessteam;
 
 import com.svc.pokeguessteam.config.AppAuthProperties;
+import com.svc.pokeguessteam.config.AppAiProperties;
 import com.svc.pokeguessteam.config.AppCorsProperties;
 import com.svc.pokeguessteam.config.AppDevToolsProperties;
 import com.svc.pokeguessteam.config.AppMailProperties;
@@ -15,6 +16,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @SpringBootApplication
 @EnableConfigurationProperties({
         AppAuthProperties.class,
+    AppAiProperties.class,
         AppCorsProperties.class,
         AppDevToolsProperties.class,
         AppMailProperties.class,

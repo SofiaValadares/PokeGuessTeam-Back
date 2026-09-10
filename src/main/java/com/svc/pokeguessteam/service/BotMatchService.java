@@ -10,7 +10,9 @@ import com.svc.pokeguessteam.exception.ApiBusinessException;
 import com.svc.pokeguessteam.exception.ErrorCodes;
 import com.svc.pokeguessteam.messages.MessageKeys;
 import com.svc.pokeguessteam.model.enums.GameModes;
+import com.svc.pokeguessteam.model.enums.MatchPlayerSide;
 import com.svc.pokeguessteam.model.enums.MatchStatus;
+import com.svc.pokeguessteam.model.game.ActiveMatchModel;
 import com.svc.pokeguessteam.model.user.ProfileModel;
 import com.svc.pokeguessteam.repository.game.ActiveMatchRepository;
 import com.svc.pokeguessteam.util.GameConstants;
@@ -32,6 +34,7 @@ public class BotMatchService {
     private final ActiveMatchConstraintService activeMatchConstraintService;
     private final DuelTeamService duelTeamService;
     private final ActiveMatchRemovalService activeMatchRemovalService;
+    private final ActiveMatchTeamService activeMatchTeamService;
 
     public BotMatchService(
             ActiveMatchRepository activeMatchRepository,
@@ -40,7 +43,8 @@ public class BotMatchService {
             MatchRewardService matchRewardService,
             ActiveMatchConstraintService activeMatchConstraintService,
             DuelTeamService duelTeamService,
-            ActiveMatchRemovalService activeMatchRemovalService
+            ActiveMatchRemovalService activeMatchRemovalService,
+            ActiveMatchTeamService activeMatchTeamService
     ) {
         this.activeMatchRepository = activeMatchRepository;
         this.profileService = profileService;
@@ -49,6 +53,7 @@ public class BotMatchService {
         this.activeMatchConstraintService = activeMatchConstraintService;
         this.duelTeamService = duelTeamService;
         this.activeMatchRemovalService = activeMatchRemovalService;
+        this.activeMatchTeamService = activeMatchTeamService;
     }
 
     /** Valida equipa no servidor; o jogo corre no cliente. */
@@ -72,6 +77,10 @@ public class BotMatchService {
         }
         Set<Integer> excluded = new HashSet<>(team);
         List<Integer> botTeam = duelTeamService.buildBotTeamFromUserPokedex(userId, excluded);
+
+        ActiveMatchModel match = createSetupMatch(profile, team, botTeam);
+        ActiveMatchModel saved = activeMatchRepository.save(match);
+        activeMatchTeamService.saveTeams(saved);
         return new BotMatchSetupResponse(team, botTeam);
     }
 
@@ -79,10 +88,36 @@ public class BotMatchService {
     @Transactional
     public GameFinishResponse finishClientMatch(String userId, GameBotFinishRequest request) {
         ProfileModel profile = profileService.ensureProfileWithStarters(userId);
-        clearStaleBotMatches(profile.getId());
-        GameHistoryEntryDto history = gameHistoryService.saveBotFinish(userId, request);
+        ActiveMatchModel match = requireActiveSetupMatch(profile.getId(), GameModes.BOT);
+        List<Integer> userTeam = activeMatchTeamService.loadTeam(match.getHostPlayer().getId());
+        List<Integer> opponentTeam = activeMatchTeamService.loadTeam(match.getOpponentPlayer().getId());
+        GameHistoryEntryDto history = gameHistoryService.saveBotFinish(userId, request, userTeam, opponentTeam);
+        activeMatchRemovalService.deleteByMatchId(match.getId());
         MatchRewardDto reward = matchRewardService.grantForUser(userId, GameModes.BOT, request.result());
         return new GameFinishResponse(history, reward);
+    }
+
+    private ActiveMatchModel createSetupMatch(ProfileModel profile, List<Integer> userTeam, List<Integer> opponentTeam) {
+        ActiveMatchModel match = FriendMatchStore.newMatchShell();
+        match.setProfile(profile);
+        match.setGameMode(GameModes.BOT);
+        match.getHostPlayer().setSide(MatchPlayerSide.HOST);
+        match.getHostPlayer().setTeam(userTeam);
+        match.getOpponentPlayer().setSide(MatchPlayerSide.OPPONENT);
+        match.getOpponentPlayer().setTeam(opponentTeam);
+        return match;
+    }
+
+    private ActiveMatchModel requireActiveSetupMatch(String profileId, GameModes mode) {
+        return activeMatchRepository.findAllUnfinishedForProfileOrderByCreatedAtDesc(profileId, MatchStatus.FINISHED)
+                .stream()
+                .filter(match -> match.getGameMode() == mode)
+                .findFirst()
+                .orElseThrow(() -> new ApiBusinessException(
+                        HttpStatus.NOT_FOUND,
+                    ErrorCodes.GAME_MATCH_NOT_FOUND,
+                    MessageKeys.GAME_MATCH_NOT_FOUND
+                ));
     }
 
     private void clearStaleBotMatches(String profileId) {
