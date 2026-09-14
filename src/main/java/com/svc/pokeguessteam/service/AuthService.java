@@ -24,19 +24,22 @@ public class AuthService {
     private final ProfileService profileService;
     private final AuthCodeService authCodeService;
     private final AppAuthProperties authProperties;
+    private final AuditLogService auditLogService;
 
     public AuthService(
             UserRepository userRepository,
             PasswordEncoder passwordEncoder,
             ProfileService profileService,
             AuthCodeService authCodeService,
-            AppAuthProperties authProperties
+            AppAuthProperties authProperties,
+            AuditLogService auditLogService
     ) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.profileService = profileService;
         this.authCodeService = authCodeService;
         this.authProperties = authProperties;
+        this.auditLogService = auditLogService;
     }
 
     @Transactional
@@ -74,18 +77,37 @@ public class AuthService {
     public UserModel authenticate(String login, String rawPassword) {
         String trimmedLogin = login == null ? "" : login.trim();
         if (trimmedLogin.isEmpty() || rawPassword == null || rawPassword.isEmpty()) {
+            auditLogService.recordSecurity(null, "LOGIN_FAILED", "Credenciais inválidas (campos vazios)");
             throw invalidCredentials();
         }
 
-        UserModel user = findUserByLogin(trimmedLogin)
-                .orElseThrow(this::invalidCredentials);
+        Optional<UserModel> found = findUserByLogin(trimmedLogin);
+        if (found.isEmpty()) {
+            auditLogService.recordSecurity(
+                    null,
+                    "LOGIN_FAILED",
+                    "Utilizador não encontrado login=" + redactLogin(trimmedLogin)
+            );
+            throw invalidCredentials();
+        }
+        UserModel user = found.get();
 
         if (!passwordEncoder.matches(rawPassword, user.getPasswordHash())) {
+            auditLogService.recordSecurity(
+                    user.getIdUser(),
+                    "LOGIN_FAILED",
+                    "Password incorreta userId=" + user.getIdUser()
+            );
             throw invalidCredentials();
         }
         if (authProperties.isRequireEmailVerificationForLogin()
                 && !Boolean.TRUE.equals(user.getEmailVerify())) {
             log.warn("authenticate", "Login bloqueado: e-mail não verificado userId={}", user.getIdUser());
+            auditLogService.recordSecurity(
+                    user.getIdUser(),
+                    "LOGIN_BLOCKED_EMAIL",
+                    "E-mail não verificado userId=" + user.getIdUser()
+            );
             throw new ApiBusinessException(
                     HttpStatus.FORBIDDEN,
                     ErrorCodes.AUTH_EMAIL_NOT_VERIFIED,
@@ -94,6 +116,11 @@ public class AuthService {
         }
         if (user.isSiteBannedNow()) {
             log.warn("authenticate", "Login bloqueado: banimento de site userId={}", user.getIdUser());
+            auditLogService.recordSecurity(
+                    user.getIdUser(),
+                    "LOGIN_BLOCKED_BAN",
+                    "Conta banida de site userId=" + user.getIdUser()
+            );
             throw new ApiBusinessException(
                     HttpStatus.FORBIDDEN,
                     ErrorCodes.AUTH_USER_SITE_BANNED,
@@ -102,6 +129,17 @@ public class AuthService {
         }
         log.info("authenticate", "Autenticação bem-sucedida userId={}", user.getIdUser());
         return user;
+    }
+
+    private static String redactLogin(String login) {
+        if (login.contains("@")) {
+            int at = login.indexOf('@');
+            return "***@" + login.substring(Math.min(at + 1, login.length()));
+        }
+        if (login.length() <= 2) {
+            return "***";
+        }
+        return login.charAt(0) + "***";
     }
 
     @Transactional
