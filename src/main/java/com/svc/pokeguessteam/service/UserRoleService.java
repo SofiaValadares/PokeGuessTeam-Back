@@ -4,34 +4,57 @@ import com.svc.pokeguessteam.config.AppMasterAdminProperties;
 import com.svc.pokeguessteam.model.enums.UserRole;
 import com.svc.pokeguessteam.model.user.UserModel;
 import com.svc.pokeguessteam.repository.user.UserRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * Sincroniza {@link UserRole#MASTER_ADMIN} a partir de {@code app.master-admin.usernames}.
- * Promove quem está na lista; se o user já era MASTER mas saiu do env, deixa como está (mais seguro).
- */
 @Service
 public class UserRoleService {
+
+    private static final Logger log =
+            LoggerFactory.getLogger(UserRoleService.class);
 
     private final AppMasterAdminProperties masterAdminProperties;
     private final UserRepository userRepository;
 
-    public UserRoleService(AppMasterAdminProperties masterAdminProperties, UserRepository userRepository) {
+    public UserRoleService(
+            AppMasterAdminProperties masterAdminProperties,
+            UserRepository userRepository
+    ) {
         this.masterAdminProperties = masterAdminProperties;
         this.userRepository = userRepository;
     }
 
     @Transactional
-    public UserModel syncMasterFromEnv(UserModel user) {
+    public UserModel bootstrapFirstMasterIfNeeded(UserModel user) {
         if (user == null) {
             return null;
         }
-        if (masterAdminProperties.isMasterUsername(user.getUsername())
-                && user.getRole() != UserRole.MASTER_ADMIN) {
-            user.setRole(UserRole.MASTER_ADMIN);
-            return userRepository.save(user);
+
+        // A partir do momento em que existe um master,
+        // o ambiente deixa de ter poder para promover usuários.
+        if (userRepository.existsByRole(UserRole.MASTER_ADMIN)) {
+            return user;
         }
-        return user;
+
+        // Só o username configurado como bootstrap pode ser o primeiro.
+        if (!masterAdminProperties.isBootstrapUsername(user.getUsername())) {
+            return user;
+        }
+
+        UserRole previousRole = user.getRole();
+
+        user.setRole(UserRole.MASTER_ADMIN);
+        UserModel saved = userRepository.save(user);
+
+        log.warn(
+                "BOOTSTRAP MASTER_ADMIN: userId={}, username={}, previousRole={}",
+                saved.getIdUser(),
+                saved.getUsername(),
+                previousRole
+        );
+
+        return saved;
     }
 }

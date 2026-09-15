@@ -78,4 +78,10 @@ public final class ErrorCodes {
     public static final String GAME_EVENT_POOL_INSUFFICIENT = "GAME_EVENT_POOL_INSUFFICIENT";
     public static final String FRIEND_BALL_NO_EVENT = "FRIEND_BALL_NO_EVENT";
     public static final String FRIEND_BALL_POOL_EMPTY = "FRIEND_BALL_POOL_EMPTY";
+
+    public static final String ADMIN_CANNOT_CHANGE_OWN_ROLE = "ADMIN_CANNOT_CHANGE_OWN_ROLE";
+
+    public static final String ADMIN_LAST_MASTER = "ADMIN_LAST_MASTER";
+
+    public static final String ADMIN_TARGET_NOT_VERIFIED = "ADMIN_TARGET_NOT_VERIFIED";
 }
