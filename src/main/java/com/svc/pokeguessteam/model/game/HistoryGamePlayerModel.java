@@ -59,6 +59,9 @@ public class HistoryGamePlayerModel {
     @Column(name = "TURN_TIMEOUT_PENALTIES", nullable = false)
     private int turnTimeoutPenalties;
 
+    @Column(name = "SELECTED_TEAM", length = 255)
+    private String selectedTeam;
+
     public String getId() {
         return id;
     }
@@ -109,5 +112,13 @@ public class HistoryGamePlayerModel {
 
     public void setTurnTimeoutPenalties(int turnTimeoutPenalties) {
         this.turnTimeoutPenalties = turnTimeoutPenalties;
+    }
+
+    public String getSelectedTeam() {
+        return selectedTeam;
+    }
+
+    public void setSelectedTeam(String selectedTeam) {
+        this.selectedTeam = selectedTeam;
     }
 }

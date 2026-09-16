@@ -225,6 +225,23 @@ Valores em `GET /api/meta` → `matchRewards`.
 | `SESSION_COOKIE_SECURE` | `true` em HTTPS |
 | `APP_CORS_ALLOWED_ORIGIN_PATTERNS` | URL do frontend |
 | `DEV_TOOLS_ENABLED` | `false` em produção |
+| `AI_PROVIDER` | `auto`, `openai` ou `gemini` |
+| `AI_API_KEY` | Chave do provedor escolhido |
+| `AI_BASE_URL` | Base URL do provedor, se necessário |
+| `AI_MODEL` | Modelo de chat usado pelo assistente |
+
+### Assistente de histórico
+
+O assistente do histórico chama o backend em `/api/ai/history/chat` e usa os dados reais do histórico para gerar a resposta.
+
+Por defeito, o backend tenta detetar automaticamente o provedor a partir da configuração. Para usar Groq:
+
+```bash
+AI_PROVIDER=openai
+AI_API_KEY=gsk...
+AI_BASE_URL=https://api.groq.com/openai/v1
+AI_MODEL=openai/gpt-oss-20b
+```
 
 ### Render
 

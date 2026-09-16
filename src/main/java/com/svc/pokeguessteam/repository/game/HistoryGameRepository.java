@@ -19,6 +19,17 @@ public interface HistoryGameRepository extends JpaRepository<HistoryGameModel, S
                 SELECT 1 FROM HistoryGamePlayerModel p
                 WHERE p.game = g AND p.profile.id = :profileId
             )
+            ORDER BY g.playedAt DESC
+            """)
+    java.util.List<HistoryGameModel> findAllByProfileIdOrderByPlayedAtDesc(@Param("profileId") String profileId);
+
+    @EntityGraph(attributePaths = {"players", "players.profile", "players.profile.user"})
+    @Query("""
+            SELECT g FROM HistoryGameModel g
+            WHERE EXISTS (
+                SELECT 1 FROM HistoryGamePlayerModel p
+                WHERE p.game = g AND p.profile.id = :profileId
+            )
             """)
     Page<HistoryGameModel> findByProfileId(@Param("profileId") String profileId, Pageable pageable);
 
