@@ -56,6 +56,13 @@ public class HistoryAssistantService {
     }
 
     private String generateAiAnswer(String message, HistorySummaryDto summary) {
+        if (aiProperties.usesGemini()) {
+            return generateGeminiAnswer(message, summary);
+        }
+        return generateOpenAiAnswer(message, summary);
+    }
+
+    private String generateOpenAiAnswer(String message, HistorySummaryDto summary) {
         try {
             String summaryJson = objectMapper.writeValueAsString(summary);
             ChatCompletionRequest request = new ChatCompletionRequest(
@@ -90,6 +97,65 @@ public class HistoryAssistantService {
                 return null;
             }
             return choice.message().content().trim();
+        } catch (JsonProcessingException ex) {
+            return null;
+        } catch (RuntimeException ex) {
+            return null;
+        }
+    }
+
+    private String generateGeminiAnswer(String message, HistorySummaryDto summary) {
+        try {
+            String summaryJson = objectMapper.writeValueAsString(summary);
+            GeminiGenerateContentRequest request = new GeminiGenerateContentRequest(
+                    new GeminiSystemInstruction(List.of(
+                            new GeminiPart(
+                                    "Você é um assistente do histórico de partidas do PokeGuessTeam. Responda em português europeu, com frases curtas e objetivas. Use apenas os dados fornecidos. Nunca invente números. Se um dado não estiver disponível, diga isso claramente."
+                            )
+                    )),
+                    List.of(
+                            new GeminiContent(
+                                    "user",
+                                    List.of(new GeminiPart(
+                                            "Pergunta do utilizador: " + message + "\n\nDados do histórico em JSON:\n" + summaryJson
+                                    ))
+                            )
+                    ),
+                    new GeminiGenerationConfig(0.2)
+            );
+
+            GeminiGenerateContentResponse response = RestClient.builder()
+                    .baseUrl(aiProperties.resolveGeminiBaseUrl())
+                    .build()
+                    .post()
+                    .uri(uriBuilder -> uriBuilder
+                            .path("/v1beta/models/{model}:generateContent")
+                            .queryParam("key", aiProperties.getApiKey())
+                            .build(aiProperties.resolveGeminiModel()))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(request)
+                    .retrieve()
+                    .body(GeminiGenerateContentResponse.class);
+
+            if (response == null || response.candidates() == null || response.candidates().isEmpty()) {
+                return null;
+            }
+
+            GeminiCandidate candidate = response.candidates().get(0);
+            if (candidate.content() == null || candidate.content().parts() == null || candidate.content().parts().isEmpty()) {
+                return null;
+            }
+
+            StringBuilder builder = new StringBuilder();
+            for (GeminiPart part : candidate.content().parts()) {
+                if (StringUtils.hasText(part.text())) {
+                    if (!builder.isEmpty()) {
+                        builder.append(' ');
+                    }
+                    builder.append(part.text().trim());
+                }
+            }
+            return builder.isEmpty() ? null : builder.toString().trim();
         } catch (JsonProcessingException ex) {
             return null;
         } catch (RuntimeException ex) {
@@ -196,5 +262,30 @@ public class HistoryAssistantService {
     }
 
     private record ChatCompletionMessage(String content) {
+    }
+
+    private record GeminiGenerateContentRequest(
+            GeminiSystemInstruction systemInstruction,
+            List<GeminiContent> contents,
+            GeminiGenerationConfig generationConfig
+    ) {
+    }
+
+    private record GeminiSystemInstruction(List<GeminiPart> parts) {
+    }
+
+    private record GeminiContent(String role, List<GeminiPart> parts) {
+    }
+
+    private record GeminiPart(String text) {
+    }
+
+    private record GeminiGenerationConfig(double temperature) {
+    }
+
+    private record GeminiGenerateContentResponse(List<GeminiCandidate> candidates) {
+    }
+
+    private record GeminiCandidate(GeminiContent content) {
     }
 }
