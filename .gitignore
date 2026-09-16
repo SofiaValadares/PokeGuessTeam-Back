@@ -37,6 +37,9 @@ build/
 local.env
 **/application-local.properties
 
+### Logs da aplicação ###
+logs/
+
 ### Artefactos locais / IDE ###
 tmp-gdd/
 poke-team.code-workspace

@@ -17,7 +17,10 @@ import com.svc.pokeguessteam.model.pokemon.PokemonModel;
 import com.svc.pokeguessteam.model.enums.EvolutionStage;
 import com.svc.pokeguessteam.repository.pokemon.EvolutionLineRepository;
 import com.svc.pokeguessteam.repository.pokemon.PokemonRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -26,9 +29,21 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
+/**
+ * Seeds species + evolution lines on startup.
+ * <p>
+ * On Neon / pooled Postgres, per-row lookups for ~1000 species can keep a connection
+ * open long enough for the proxy to close the socket and kill the whole boot.
+ * This runner batches reads/writes and skips work when the catalog is already complete.
+ */
 @Component
 public class PokemonSeedConfig implements CommandLineRunner {
+
+    private static final Logger log = LoggerFactory.getLogger(PokemonSeedConfig.class);
+    private static final int MAX_ATTEMPTS = 3;
 
     private final PokemonRepository pokemonRepository;
     private final EvolutionLineRepository evolutionLineRepository;
@@ -43,34 +58,122 @@ public class PokemonSeedConfig implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        Map<Integer, EvolutionLineModel> linesByKey = seedEvolutionLines();
-        Map<String, PokemonModel> byPokedexKey = new HashMap<>();
-        for (PokemonSeedEntry entry : allPokemonEntries()) {
+        List<PokemonSeedEntry> entries = allPokemonEntries();
+        int expectedPokemon = entries.size();
+        int expectedLines = EvolutionLinesSeed.entries().size();
+
+        for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+            try {
+                long pokemonCount = pokemonRepository.count();
+                long lineCount = evolutionLineRepository.count();
+                if (pokemonCount >= expectedPokemon && lineCount >= expectedLines) {
+                    log.info(
+                            "Pokemon catalog already seeded ({} species, {} lines); skipping",
+                            pokemonCount,
+                            lineCount
+                    );
+                    return;
+                }
+
+                log.info(
+                        "Seeding pokemon catalog (have {}/{} species, {}/{} lines)...",
+                        pokemonCount,
+                        expectedPokemon,
+                        lineCount,
+                        expectedLines
+                );
+                Map<Integer, EvolutionLineModel> linesByKey = seedEvolutionLines();
+                Map<String, PokemonModel> byPokedexKey = seedPokemon(entries, linesByKey);
+                applyEvolutionData(byPokedexKey);
+                log.info("Pokemon catalog seed finished");
+                return;
+            } catch (DataAccessException ex) {
+                log.warn(
+                        "Pokemon seed attempt {}/{} failed: {}",
+                        attempt,
+                        MAX_ATTEMPTS,
+                        ex.getMostSpecificCause() != null
+                                ? ex.getMostSpecificCause().getMessage()
+                                : ex.getMessage()
+                );
+                if (attempt == MAX_ATTEMPTS) {
+                    try {
+                        if (pokemonRepository.count() > 0) {
+                            log.error(
+                                    "Pokemon seed failed after {} attempts, but catalog has data — continuing startup",
+                                    MAX_ATTEMPTS,
+                                    ex
+                            );
+                            return;
+                        }
+                    } catch (DataAccessException countEx) {
+                        log.error("Pokemon seed failed and catalog count is unreachable", countEx);
+                    }
+                    throw ex;
+                }
+                sleepBeforeRetry(attempt);
+            }
+        }
+    }
+
+    private Map<Integer, EvolutionLineModel> seedEvolutionLines() {
+        List<EvolutionLineSeedEntry> seeds = EvolutionLinesSeed.entries();
+        Map<Integer, EvolutionLineModel> existing = evolutionLineRepository.findAll().stream()
+                .collect(Collectors.toMap(EvolutionLineModel::getLineKey, Function.identity(), (a, b) -> a));
+
+        List<EvolutionLineModel> toInsert = new ArrayList<>();
+        for (EvolutionLineSeedEntry seed : seeds) {
+            if (!existing.containsKey(seed.lineKey())) {
+                toInsert.add(seed.toModel());
+            }
+        }
+        if (!toInsert.isEmpty()) {
+            for (EvolutionLineModel saved : evolutionLineRepository.saveAll(toInsert)) {
+                existing.put(saved.getLineKey(), saved);
+            }
+        }
+
+        Map<Integer, EvolutionLineModel> byKey = new HashMap<>(existing.size());
+        for (EvolutionLineSeedEntry seed : seeds) {
+            EvolutionLineModel line = existing.get(seed.lineKey());
+            if (line == null) {
+                throw new IllegalStateException("Failed to seed evolution line key: " + seed.lineKey());
+            }
+            byKey.put(seed.lineKey(), line);
+        }
+        return byKey;
+    }
+
+    private Map<String, PokemonModel> seedPokemon(
+            List<PokemonSeedEntry> entries,
+            Map<Integer, EvolutionLineModel> linesByKey
+    ) {
+        Map<Integer, PokemonModel> existingByNumber = pokemonRepository.findAll().stream()
+                .collect(Collectors.toMap(PokemonModel::getPokedexNumber, Function.identity(), (a, b) -> a));
+
+        List<PokemonModel> toInsert = new ArrayList<>();
+        Map<String, PokemonModel> byPokedexKey = new HashMap<>(entries.size());
+
+        for (PokemonSeedEntry entry : entries) {
             String key = String.valueOf(entry.pokedexNumber());
+            PokemonModel existing = existingByNumber.get(entry.pokedexNumber());
+            if (existing != null) {
+                byPokedexKey.put(key, existing);
+                continue;
+            }
             EvolutionLineModel line = linesByKey.get(entry.evolutionLineKey());
             if (line == null) {
                 throw new IllegalStateException("Unknown evolution line key: " + entry.evolutionLineKey());
             }
-            var existing = pokemonRepository.findByPokedexNumber(entry.pokedexNumber());
-            if (existing.isPresent()) {
-                byPokedexKey.put(key, existing.orElseThrow());
-                continue;
-            }
-            PokemonModel saved = pokemonRepository.save(entry.toModel(line));
-            byPokedexKey.put(key, saved);
+            toInsert.add(entry.toModel(line));
         }
-        applyEvolutionData(byPokedexKey);
-    }
 
-    private Map<Integer, EvolutionLineModel> seedEvolutionLines() {
-        Map<Integer, EvolutionLineModel> byKey = new HashMap<>();
-        for (EvolutionLineSeedEntry seed : EvolutionLinesSeed.entries()) {
-            EvolutionLineModel line = evolutionLineRepository
-                    .findById(seed.lineKey())
-                    .orElseGet(() -> evolutionLineRepository.save(seed.toModel()));
-            byKey.put(seed.lineKey(), line);
+        if (!toInsert.isEmpty()) {
+            for (PokemonModel saved : pokemonRepository.saveAll(toInsert)) {
+                byPokedexKey.put(String.valueOf(saved.getPokedexNumber()), saved);
+            }
         }
-        return byKey;
+        return byPokedexKey;
     }
 
     private static List<PokemonSeedEntry> allPokemonEntries() {
@@ -189,5 +292,13 @@ public class PokemonSeedConfig implements CommandLineRunner {
     ) {
         stageMap.put(pokedexNumber, stage);
         levelMap.put(pokedexNumber, level);
+    }
+
+    private static void sleepBeforeRetry(int attempt) {
+        try {
+            Thread.sleep(500L * attempt);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+        }
     }
 }

@@ -5,6 +5,8 @@ import com.svc.pokeguessteam.config.AppAiProperties;
 import com.svc.pokeguessteam.config.AppCorsProperties;
 import com.svc.pokeguessteam.config.AppDevToolsProperties;
 import com.svc.pokeguessteam.config.AppMailProperties;
+import com.svc.pokeguessteam.config.AppMasterAdminProperties;
+import com.svc.pokeguessteam.config.AppPusherProperties;
 import com.svc.pokeguessteam.config.AppResendProperties;
 import com.svc.pokeguessteam.config.DotenvEnvironmentLoader;
 import org.springframework.boot.SpringApplication;
@@ -20,7 +22,9 @@ import org.springframework.scheduling.annotation.EnableScheduling;
         AppCorsProperties.class,
         AppDevToolsProperties.class,
         AppMailProperties.class,
-        AppResendProperties.class
+        AppMasterAdminProperties.class,
+        AppResendProperties.class,
+        AppPusherProperties.class
 })
 @EnableAsync
 @EnableScheduling
@@ -28,6 +32,7 @@ public class PokeguessteamApplication {
 
     public static void main(String[] args) {
         DotenvEnvironmentLoader.load();
+        // Logback é inicializado automaticamente pelo Spring Boot (logback-spring.xml).
         SpringApplication.run(PokeguessteamApplication.class, args);
     }
 

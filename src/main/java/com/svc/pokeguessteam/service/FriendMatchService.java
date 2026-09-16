@@ -30,6 +30,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -49,6 +50,8 @@ public class FriendMatchService {
     private final ActiveMatchConstraintService activeMatchConstraintService;
     private final DuelTeamService duelTeamService;
     private final FriendMatchStore friendMatchStore;
+    private final BonusEventService bonusEventService;
+    private final PusherRealtimeService pusherRealtimeService;
 
     public FriendMatchService(
             PokemonRepository pokemonRepository,
@@ -58,7 +61,9 @@ public class FriendMatchService {
             MatchKnowledgeService matchKnowledgeService,
             ActiveMatchConstraintService activeMatchConstraintService,
             DuelTeamService duelTeamService,
-            FriendMatchStore friendMatchStore
+            FriendMatchStore friendMatchStore,
+            BonusEventService bonusEventService,
+            PusherRealtimeService pusherRealtimeService
     ) {
         this.pokemonRepository = pokemonRepository;
         this.profileService = profileService;
@@ -68,19 +73,34 @@ public class FriendMatchService {
         this.activeMatchConstraintService = activeMatchConstraintService;
         this.duelTeamService = duelTeamService;
         this.friendMatchStore = friendMatchStore;
+        this.bonusEventService = bonusEventService;
+        this.pusherRealtimeService = pusherRealtimeService;
     }
 
     @Transactional
     public FriendMatchStateDto startMatch(String userId, BotMatchTeamRequest request) {
         ProfileModel profile = profileService.ensureProfileWithStarters(userId);
+        if (profile.getUser().isOnlineBannedNow()) {
+            throw new ApiBusinessException(
+                    HttpStatus.FORBIDDEN,
+                    ErrorCodes.AUTH_USER_ONLINE_BANNED,
+                    MessageKeys.AUTH_USER_ONLINE_BANNED
+            );
+        }
         activeMatchConstraintService.clearStaleClientSideMatches(profile.getId());
         activeMatchConstraintService.ensureCanStartNewMatch(profile.getId());
 
-        List<Integer> team = duelTeamService.validateTeamFromRegisteredPokedex(userId, request.team());
+        boolean eventMode = request.isEventMode();
+        Set<Integer> eventPool = eventMode ? requireActiveEventPool() : null;
+        List<Integer> team = duelTeamService.validateTeamFromRegisteredPokedex(userId, request.team(), eventPool);
 
         ActiveMatchModel match = FriendMatchStore.newMatchShell();
         match.setProfile(profile);
         match.setGameMode(GameModes.FRIEND);
+        match.setEventMode(eventMode);
+        if (eventPool != null) {
+            match.setEventPokedexNumbers(List.copyOf(eventPool));
+        }
         match.setJoinCode(JoinCodeGenerator.generateUnique(friendMatchStore::isJoinCodeTaken));
         match.getHostPlayer().setSide(MatchPlayerSide.HOST);
         match.getHostPlayer().setSkipTurns(0);
@@ -95,6 +115,13 @@ public class FriendMatchService {
     @Transactional
     public FriendMatchStateDto joinMatch(String userId, FriendMatchJoinRequest request) {
         ProfileModel guestProfile = profileService.ensureProfileWithStarters(userId);
+        if (guestProfile.getUser().isOnlineBannedNow()) {
+            throw new ApiBusinessException(
+                    HttpStatus.FORBIDDEN,
+                    ErrorCodes.AUTH_USER_ONLINE_BANNED,
+                    MessageKeys.AUTH_USER_ONLINE_BANNED
+            );
+        }
         String joinCode = JoinCodeGenerator.normalize(request.joinCode());
         if (joinCode == null || joinCode.length() < GameConstants.FRIEND_JOIN_CODE_LENGTH) {
             throw new ApiBusinessException(
@@ -138,7 +165,11 @@ public class FriendMatchService {
             );
         }
 
-        List<Integer> team = duelTeamService.validateTeamFromRegisteredPokedex(userId, request.team());
+        List<Integer> team = duelTeamService.validateTeamFromRegisteredPokedex(
+                userId,
+                request.team(),
+                eventAllowlistOf(match)
+        );
 
         activeMatchConstraintService.clearStaleClientSideMatches(guestProfile.getId());
         activeMatchConstraintService.ensureCanStartNewMatch(guestProfile.getId());
@@ -179,7 +210,11 @@ public class FriendMatchService {
             );
         }
 
-        List<Integer> team = duelTeamService.validateTeamFromRegisteredPokedex(userId, request.team());
+        List<Integer> team = duelTeamService.validateTeamFromRegisteredPokedex(
+                userId,
+                request.team(),
+                eventAllowlistOf(match)
+        );
         ActiveMatchPlayerModel player = getPlayer(match, side);
         if (player.getTeam().size() >= GameConstants.TEAM_SIZE) {
             throw new ApiBusinessException(
@@ -238,6 +273,13 @@ public class FriendMatchService {
         }
 
         PokemonModel guessed = requirePokemon(request.pokedexNumber());
+        if (match.isEventMode() && !match.getEventPokedexNumbers().contains(guessed.getPokedexNumber())) {
+            throw new ApiBusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    ErrorCodes.GAME_GUESS_NOT_IN_EVENT,
+                    MessageKeys.GAME_GUESS_NOT_IN_EVENT
+            );
+        }
         ensureNotAlreadyGuessed(match, side, guessed.getPokedexNumber());
 
         Map<Integer, PokemonModel> pokemonByDex = loadPokemonByDex();
@@ -455,6 +497,33 @@ public class FriendMatchService {
         return FriendMatchStateDto.from(match, viewerSide, knowledge, recentGuesses, history, yourReward);
     }
 
+    private Set<Integer> requireActiveEventPool() {
+        return bonusEventService.findActive()
+                .map(event -> {
+                    List<Integer> numbers = event.getPokedexNumbers();
+                    if (numbers == null || numbers.isEmpty()) {
+                        throw new ApiBusinessException(
+                                HttpStatus.CONFLICT,
+                                ErrorCodes.GAME_EVENT_REQUIRED,
+                                MessageKeys.GAME_EVENT_REQUIRED
+                        );
+                    }
+                    return Set.copyOf(numbers);
+                })
+                .orElseThrow(() -> new ApiBusinessException(
+                        HttpStatus.CONFLICT,
+                        ErrorCodes.GAME_EVENT_REQUIRED,
+                        MessageKeys.GAME_EVENT_REQUIRED
+                ));
+    }
+
+    private static Set<Integer> eventAllowlistOf(ActiveMatchModel match) {
+        if (!match.isEventMode()) {
+            return null;
+        }
+        return new HashSet<>(match.getEventPokedexNumbers());
+    }
+
     private ActiveMatchModel requireActiveFriendMatch(ProfileModel profile) {
         return friendMatchStore.findActiveForProfile(profile.getId())
                 .orElseThrow(() -> new ApiBusinessException(
@@ -555,7 +624,28 @@ public class FriendMatchService {
 
     private ActiveMatchModel saveMatch(ActiveMatchModel match) {
         friendMatchStore.save(match);
+        pushRealtime(match, null);
         return match;
+    }
+
+    private void pushRealtime(ActiveMatchModel match, GameHistoryEntryDto history) {
+        if (!pusherRealtimeService.isEnabled() || match == null) {
+            return;
+        }
+        try {
+            if (match.getProfile() != null && match.getProfile().getUser() != null) {
+                String hostUserId = match.getProfile().getUser().getIdUser();
+                FriendMatchStateDto hostView = toStateDto(match, match.getProfile(), history);
+                pusherRealtimeService.publishMatchState(hostUserId, hostView);
+            }
+            if (match.getGuestProfile() != null && match.getGuestProfile().getUser() != null) {
+                String guestUserId = match.getGuestProfile().getUser().getIdUser();
+                FriendMatchStateDto guestView = toStateDto(match, match.getGuestProfile(), history);
+                pusherRealtimeService.publishMatchState(guestUserId, guestView);
+            }
+        } catch (Exception ignored) {
+            // Realtime é best-effort; REST permanece a fonte de verdade.
+        }
     }
 
     private static PokemonModel pickRandomUnusedGuess(

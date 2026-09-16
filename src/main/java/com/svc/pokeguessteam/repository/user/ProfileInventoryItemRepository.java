@@ -12,4 +12,6 @@ public interface ProfileInventoryItemRepository extends JpaRepository<ProfileInv
     List<ProfileInventoryItemModel> findByProfile_Id(String profileId);
 
     Optional<ProfileInventoryItemModel> findByProfile_IdAndPokeballType(String profileId, PokeballType pokeballType);
+
+    long countByProfile_Id(String profileId);
 }

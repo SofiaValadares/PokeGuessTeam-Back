@@ -36,7 +36,9 @@ public record FriendMatchStateDto(
         int yourTimeoutPenalties,
         boolean opponentReplacedByBot,
         GameHistoryEntryDto historyEntry,
-        MatchRewardDto yourReward
+        MatchRewardDto yourReward,
+        boolean eventMode,
+        List<Integer> eventPokedexNumbers
 ) {
     public static FriendMatchStateDto from(
             ActiveMatchModel match,
@@ -77,7 +79,9 @@ public record FriendMatchStateDto(
                 yours.getTurnTimeoutPenalties(),
                 match.getBotReplacementSide() != null && match.getBotReplacementSide() != viewerSide,
                 historyEntry,
-                yourReward
+                yourReward,
+                match.isEventMode(),
+                List.copyOf(match.getEventPokedexNumbers())
         );
     }
 

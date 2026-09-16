@@ -19,16 +19,26 @@ public final class PokeballGachaRules {
     public static Map<String, Object> meta() {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("endpoint", "/api/pokemon/draw");
-        body.put("requestBody", Map.of("pokeballType", "POKE_BALL | GREAT_BALL | ULTRA_BALL | MASTER_BALL"));
+        body.put("requestBody", Map.of("pokeballType", "POKE_BALL | GREAT_BALL | ULTRA_BALL | MASTER_BALL | FRIEND_BALL"));
         body.put("consumesOneBallPerDraw", true);
         body.put("rarities", List.of("COMMON", "RARE", "LEGENDARY", "MYTHICAL"));
         body.put("balls", Map.of(
                 PokeballType.POKE_BALL.name(), pokeBallRules(),
                 PokeballType.GREAT_BALL.name(), greatBallRules(),
                 PokeballType.ULTRA_BALL.name(), ultraBallRules(),
-                PokeballType.MASTER_BALL.name(), masterBallRules()
+                PokeballType.MASTER_BALL.name(), masterBallRules(),
+                PokeballType.FRIEND_BALL.name(), friendBallRules()
         ));
         return body;
+    }
+
+    private static Map<String, Object> friendBallRules() {
+        return Map.of(
+                "summary", "Só com evento ativo. Sorteia forma BASE das linhas do evento (uniforme).",
+                "requiresActiveBonusEvent", true,
+                "pool", "BASE evolution stage of lines intersecting event pokedexNumbers",
+                "upgradeRolls", List.of()
+        );
     }
 
     private static Map<String, Object> pokeBallRules() {

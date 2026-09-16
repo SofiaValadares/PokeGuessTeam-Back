@@ -21,6 +21,7 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -312,5 +313,28 @@ public class ActiveMatchModel {
     public void addGuess(ActiveMatchGuessModel guess) {
         guess.setMatch(this);
         guesses.add(0, guess);
+    }
+
+    /** Modo amigo limitado ao pool do evento bónus (só em memória no FriendMatchStore). */
+    @Transient
+    private boolean eventMode;
+
+    @Transient
+    private List<Integer> eventPokedexNumbers = new ArrayList<>();
+
+    public boolean isEventMode() {
+        return eventMode;
+    }
+
+    public void setEventMode(boolean eventMode) {
+        this.eventMode = eventMode;
+    }
+
+    public List<Integer> getEventPokedexNumbers() {
+        return eventPokedexNumbers;
+    }
+
+    public void setEventPokedexNumbers(List<Integer> eventPokedexNumbers) {
+        this.eventPokedexNumbers = eventPokedexNumbers != null ? eventPokedexNumbers : new ArrayList<>();
     }
 }

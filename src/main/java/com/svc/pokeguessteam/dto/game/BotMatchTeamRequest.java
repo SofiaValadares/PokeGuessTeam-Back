@@ -9,6 +9,11 @@ import java.util.List;
 public record BotMatchTeamRequest(
         @NotNull
         @Size(min = GameConstants.TEAM_SIZE, max = GameConstants.TEAM_SIZE)
-        List<Integer> team
+        List<Integer> team,
+        /** Quando true, a equipa fica limitada aos Pokémon do evento bónus ativo. */
+        Boolean eventMode
 ) {
+    public boolean isEventMode() {
+        return Boolean.TRUE.equals(eventMode);
+    }
 }

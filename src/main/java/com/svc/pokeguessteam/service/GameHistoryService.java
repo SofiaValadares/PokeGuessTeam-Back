@@ -112,6 +112,7 @@ public class GameHistoryService {
         validateFriendResults(hostHits, guestHits, hostResult, guestResult);
 
         HistoryGameModel game = new HistoryGameModel();
+<<<<<<< HEAD
         game.setGameMode(GameModes.FRIEND);
         addProfilePlayer(
             game,
@@ -131,6 +132,11 @@ public class GameHistoryService {
             match.getOpponentPlayer().getTurnTimeoutPenalties(),
             match.getOpponentPlayer().getTeam()
         );
+=======
+        game.setGameMode(match.getGameMode() != null ? match.getGameMode() : GameModes.FRIEND);
+        addProfilePlayer(game, match.getProfile(), USER_SLOT, hostHits, hostResult, match.getHostPlayer().getTurnTimeoutPenalties());
+        addProfilePlayer(game, guest, OPPONENT_SLOT, guestHits, guestResult, match.getOpponentPlayer().getTurnTimeoutPenalties());
+>>>>>>> main
         return GameHistoryEntryDto.from(historyGameRepository.save(game));
     }
 

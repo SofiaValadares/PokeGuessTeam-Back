@@ -130,19 +130,26 @@ public class UserPokedexService {
 
     private UserPokedexModel registerSpecies(ProfileModel profile, PokemonModel pokemon) {
         int pokedexNumber = pokemon.getPokedexNumber();
-        UserPokedexModel entry = userPokedexRepository
-                .findByProfile_IdAndPokemon_PokedexNumber(profile.getId(), pokedexNumber)
-                .orElseGet(() -> {
-                    UserPokedexModel row = new UserPokedexModel();
-                    row.setProfile(profile);
-                    row.setPokemon(pokemon);
-                    row.setRegistered(true);
-                    return row;
-                });
-        if (!entry.isRegistered()) {
+        var existing = userPokedexRepository
+                .findByProfile_IdAndPokemon_PokedexNumber(profile.getId(), pokedexNumber);
+        if (existing.isPresent()) {
+            UserPokedexModel entry = existing.get();
+            if (entry.isRegistered()) {
+                return entry;
+            }
             entry.setRegistered(true);
+            return userPokedexRepository.save(entry);
         }
-        return userPokedexRepository.saveAndFlush(entry);
+        UserPokedexModel row = new UserPokedexModel();
+        row.setProfile(profile);
+        row.setPokemon(pokemon);
+        row.setRegistered(true);
+        return userPokedexRepository.save(row);
+    }
+
+    @Transactional(readOnly = true)
+    public long countRegistered(String profileId) {
+        return userPokedexRepository.countByProfile_IdAndRegisteredTrue(profileId);
     }
 
     private ProfileModel requireProfile(String userId) {

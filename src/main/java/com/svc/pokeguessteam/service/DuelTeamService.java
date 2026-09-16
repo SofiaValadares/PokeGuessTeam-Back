@@ -46,6 +46,19 @@ public class DuelTeamService {
 
     @Transactional(readOnly = true)
     public List<Integer> validateTeamFromRegisteredPokedex(String userId, List<Integer> team) {
+        return validateTeamFromRegisteredPokedex(userId, team, null);
+    }
+
+    /**
+     * Valida equipa de duelo. Se {@code eventAllowlist} for não-nulo, cada membro tem de estar
+     * registado na Pokédex do user e no pool do evento.
+     */
+    @Transactional(readOnly = true)
+    public List<Integer> validateTeamFromRegisteredPokedex(
+            String userId,
+            List<Integer> team,
+            Set<Integer> eventAllowlist
+    ) {
         if (team == null || team.size() != GameConstants.TEAM_SIZE) {
             throw new ApiBusinessException(
                     HttpStatus.BAD_REQUEST,
@@ -64,7 +77,20 @@ public class DuelTeamService {
         }
 
         Set<Integer> registered = userPokedexService.findRegisteredPokedexNumbers(userId);
-        if (registered.size() < GameConstants.TEAM_SIZE) {
+        Set<Integer> pool = registered;
+        if (eventAllowlist != null) {
+            pool = new HashSet<>(registered);
+            pool.retainAll(eventAllowlist);
+            if (pool.size() < GameConstants.TEAM_SIZE) {
+                throw new ApiBusinessException(
+                        HttpStatus.BAD_REQUEST,
+                        ErrorCodes.GAME_EVENT_POOL_INSUFFICIENT,
+                        MessageKeys.GAME_EVENT_POOL_INSUFFICIENT,
+                        GameConstants.TEAM_SIZE,
+                        pool.size()
+                );
+            }
+        } else if (registered.size() < GameConstants.TEAM_SIZE) {
             throw new ApiBusinessException(
                     HttpStatus.BAD_REQUEST,
                     ErrorCodes.GAME_POKEDEX_INSUFFICIENT,
@@ -80,6 +106,13 @@ public class DuelTeamService {
                         HttpStatus.BAD_REQUEST,
                         ErrorCodes.GAME_TEAM_NOT_IN_POKEDEX,
                         MessageKeys.GAME_TEAM_NOT_IN_POKEDEX
+                );
+            }
+            if (eventAllowlist != null && !eventAllowlist.contains(dex)) {
+                throw new ApiBusinessException(
+                        HttpStatus.BAD_REQUEST,
+                        ErrorCodes.GAME_TEAM_NOT_IN_EVENT,
+                        MessageKeys.GAME_TEAM_NOT_IN_EVENT
                 );
             }
             if (pokemonRepository.findByPokedexNumber(dex).isEmpty()) {
