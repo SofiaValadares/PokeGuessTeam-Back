@@ -32,6 +32,7 @@ public class BotMatchService {
     private final ActiveMatchConstraintService activeMatchConstraintService;
     private final DuelTeamService duelTeamService;
     private final ActiveMatchRemovalService activeMatchRemovalService;
+    private final ClientMatchCommitmentService clientMatchCommitmentService;
 
     public BotMatchService(
             ActiveMatchRepository activeMatchRepository,
@@ -40,7 +41,8 @@ public class BotMatchService {
             MatchRewardService matchRewardService,
             ActiveMatchConstraintService activeMatchConstraintService,
             DuelTeamService duelTeamService,
-            ActiveMatchRemovalService activeMatchRemovalService
+            ActiveMatchRemovalService activeMatchRemovalService,
+            ClientMatchCommitmentService clientMatchCommitmentService
     ) {
         this.activeMatchRepository = activeMatchRepository;
         this.profileService = profileService;
@@ -49,6 +51,7 @@ public class BotMatchService {
         this.activeMatchConstraintService = activeMatchConstraintService;
         this.duelTeamService = duelTeamService;
         this.activeMatchRemovalService = activeMatchRemovalService;
+        this.clientMatchCommitmentService = clientMatchCommitmentService;
     }
 
     /** Valida equipa no servidor; o jogo corre no cliente. */
@@ -72,17 +75,38 @@ public class BotMatchService {
         }
         Set<Integer> excluded = new HashSet<>(team);
         List<Integer> botTeam = duelTeamService.buildBotTeamFromUserPokedex(userId, excluded);
-        return new BotMatchSetupResponse(team, botTeam);
+        ClientMatchCommitmentService.CommittedClientMatch committed =
+                clientMatchCommitmentService.commit(profile, GameModes.BOT, "PokéBot", team, botTeam);
+        return new BotMatchSetupResponse(
+                committed.matchId(),
+                committed.host().team(),
+                committed.opponent().team(),
+                committed.host().commitment(),
+                committed.opponent().commitment()
+        );
     }
 
-    /** Persiste histórico e recompensas após partida resolvida no cliente. */
+    /** Abre os commitments (AES + SHA-256 + HMAC), persiste histórico e recompensas. */
     @Transactional
     public GameFinishResponse finishClientMatch(String userId, GameBotFinishRequest request) {
         ProfileModel profile = profileService.ensureProfileWithStarters(userId);
-        clearStaleBotMatches(profile.getId());
+        ClientMatchCommitmentService.OpenedClientMatch opened = clientMatchCommitmentService.verifyAndConsume(
+                profile.getId(),
+                GameModes.BOT,
+                request.matchId(),
+                request.hostTeam(),
+                request.opponentTeam()
+        );
         GameHistoryEntryDto history = gameHistoryService.saveBotFinish(userId, request);
         MatchRewardDto reward = matchRewardService.grantForUser(userId, GameModes.BOT, request.result());
-        return new GameFinishResponse(history, reward);
+        return new GameFinishResponse(
+                history,
+                reward,
+                opened.hostCommitment(),
+                opened.opponentCommitment(),
+                opened.hostOpening(),
+                opened.opponentOpening()
+        );
     }
 
     private void clearStaleBotMatches(String profileId) {

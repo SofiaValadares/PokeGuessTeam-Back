@@ -85,6 +85,7 @@ public final class MessageKeys {
     public static final String GAME_MATCH_GUEST_REQUIRED = "error.game.match-guest-required";
     public static final String GAME_MATCH_TEAM_LOCKED = "error.game.match-team-locked";
     public static final String GAME_LOCAL_MATCH_NOT_FOUND = "error.game.local-match-not-found";
+    public static final String GAME_TEAM_COMMITMENT_INVALID = "error.game.team-commitment-invalid";
 
     public static final String AUTH_USER_SITE_BANNED = "error.auth.user-site-banned";
     public static final String AUTH_USER_ONLINE_BANNED = "error.auth.user-online-banned";

@@ -88,6 +88,14 @@ public class GameMetaController {
                 "localFinish", "/api/game/local/match/finish",
                 "friend", "/api/game/friend/match"
         ));
+        body.put("teamCommitment", Map.of(
+                "protocol", List.of("commit", "play", "open"),
+                "payload", "v1|<dex,...>|<nonceHex>",
+                "publicCommitment", "SHA-256(payload)",
+                "serverMac", "HMAC-SHA256(serverKey, pgt.team-commit.v1|C)",
+                "sealedOpening", "AES-256-GCM(payload)",
+                "nonceBytes", 32
+        ));
         return ResponseEntity.ok(body);
     }
 

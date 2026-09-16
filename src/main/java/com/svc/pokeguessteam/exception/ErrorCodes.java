@@ -61,6 +61,7 @@ public final class ErrorCodes {
     public static final String GAME_MATCH_FULL = "GAME_MATCH_FULL";
     public static final String GAME_MATCH_GUEST_REQUIRED = "GAME_MATCH_GUEST_REQUIRED";
     public static final String GAME_LOCAL_MATCH_NOT_FOUND = "GAME_LOCAL_MATCH_NOT_FOUND";
+    public static final String GAME_TEAM_COMMITMENT_INVALID = "GAME_TEAM_COMMITMENT_INVALID";
 
     public static final String AUTH_USER_SITE_BANNED = "AUTH_USER_SITE_BANNED";
     public static final String AUTH_USER_ONLINE_BANNED = "AUTH_USER_ONLINE_BANNED";
