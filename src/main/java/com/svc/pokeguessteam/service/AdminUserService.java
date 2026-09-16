@@ -31,17 +31,20 @@ public class AdminUserService {
     private final HistoryGamePlayerRepository historyGamePlayerRepository;
     private final AdminAccessService adminAccessService;
     private final AdminAuditService adminAuditService;
+    private final AuditLogService auditLogService;
 
     public AdminUserService(
             UserRepository userRepository,
             HistoryGamePlayerRepository historyGamePlayerRepository,
             AdminAccessService adminAccessService,
-            AdminAuditService adminAuditService
+            AdminAuditService adminAuditService,
+            AuditLogService auditLogService
     ) {
         this.userRepository = userRepository;
         this.historyGamePlayerRepository = historyGamePlayerRepository;
         this.adminAccessService = adminAccessService;
         this.adminAuditService = adminAuditService;
+        this.auditLogService = auditLogService;
     }
 
     @Transactional(readOnly = true)
@@ -223,6 +226,16 @@ public class AdminUserService {
         UserModel saved =
                 userRepository.save(target);
 
+        auditLogService.recordAdminAction(
+                adminId,
+                "USER_BAN",
+                "scope=" + request.scope()
+                        + " target=" + saved.getIdUser()
+                        + " @" + saved.getUsername()
+                        + " permanent=" + request.permanent()
+                        + " reason=" + request.reason().trim()
+        );
+
         return toListItem(saved);
     }
 
@@ -259,6 +272,12 @@ public class AdminUserService {
 
         UserModel saved =
                 userRepository.save(target);
+
+        auditLogService.recordAdminAction(
+                adminId,
+                "USER_UNBAN",
+                "scope=" + scope + " target=" + saved.getIdUser() + " @" + saved.getUsername()
+        );
 
         return toListItem(saved);
     }
@@ -422,6 +441,21 @@ public class AdminUserService {
                 newRole,
                 ipAddress
         );
+
+        auditLogService.recordAdminAction(
+                masterId,
+                "ROLE_CHANGE",
+                "target=" + saved.getIdUser()
+                        + " @" + saved.getUsername()
+                        + " " + oldRole + " -> " + newRole
+        );
+        if (roleLevel(newRole) > roleLevel(oldRole)) {
+            auditLogService.recordSecurity(
+                    masterId,
+                    "PRIVILEGE_ELEVATION",
+                    "target=" + saved.getIdUser() + " role=" + newRole
+            );
+        }
 
         return toListItem(saved);
     }

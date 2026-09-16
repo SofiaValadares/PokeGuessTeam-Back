@@ -30,6 +30,7 @@ public class PokeguessteamApplication {
 
     public static void main(String[] args) {
         DotenvEnvironmentLoader.load();
+        // Logback é inicializado automaticamente pelo Spring Boot (logback-spring.xml).
         SpringApplication.run(PokeguessteamApplication.class, args);
     }
 

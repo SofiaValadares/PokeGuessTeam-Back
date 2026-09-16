@@ -28,10 +28,16 @@ public class BonusEventService {
 
     private final BonusEventRepository bonusEventRepository;
     private final AdminAccessService adminAccessService;
+    private final AuditLogService auditLogService;
 
-    public BonusEventService(BonusEventRepository bonusEventRepository, AdminAccessService adminAccessService) {
+    public BonusEventService(
+            BonusEventRepository bonusEventRepository,
+            AdminAccessService adminAccessService,
+            AuditLogService auditLogService
+    ) {
         this.bonusEventRepository = bonusEventRepository;
         this.adminAccessService = adminAccessService;
+        this.auditLogService = auditLogService;
     }
 
     @Transactional(readOnly = true)
@@ -55,7 +61,13 @@ public class BonusEventService {
         applyUpsert(event, request);
         event.setStatus(BonusEventStatus.DRAFT);
         event.setCreatedBy(master);
-        return BonusEventDto.from(bonusEventRepository.save(event));
+        BonusEventModel saved = bonusEventRepository.save(event);
+        auditLogService.recordAdminAction(
+                masterId,
+                "EVENT_CREATE",
+                "eventId=" + saved.getId() + " name=" + saved.getName()
+        );
+        return BonusEventDto.from(saved);
     }
 
     @Transactional
@@ -64,7 +76,13 @@ public class BonusEventService {
         BonusEventModel event = requireEvent(eventId);
         assertNotActive(event);
         applyUpsert(event, request);
-        return BonusEventDto.from(bonusEventRepository.save(event));
+        BonusEventModel saved = bonusEventRepository.save(event);
+        auditLogService.recordAdminAction(
+                masterId,
+                "EVENT_UPDATE",
+                "eventId=" + saved.getId() + " name=" + saved.getName()
+        );
+        return BonusEventDto.from(saved);
     }
 
     @Transactional
@@ -72,7 +90,14 @@ public class BonusEventService {
         adminAccessService.requireMaster(masterId);
         BonusEventModel event = requireEvent(eventId);
         assertNotActive(event);
+        String name = event.getName();
+        String id = event.getId();
         bonusEventRepository.delete(event);
+        auditLogService.recordAdminAction(
+                masterId,
+                "EVENT_DELETE",
+                "eventId=" + id + " name=" + name
+        );
     }
 
     @Transactional
@@ -97,7 +122,13 @@ public class BonusEventService {
         event.setStatus(BonusEventStatus.ACTIVE);
         event.setStartedAt(now);
         event.setEndsAt(now.plusHours(event.getDurationHours()));
-        return BonusEventDto.from(bonusEventRepository.save(event));
+        BonusEventModel saved = bonusEventRepository.save(event);
+        auditLogService.recordAdminAction(
+                adminId,
+                "EVENT_START",
+                "eventId=" + saved.getId() + " name=" + saved.getName()
+        );
+        return BonusEventDto.from(saved);
     }
 
     @Transactional
@@ -113,7 +144,13 @@ public class BonusEventService {
         }
         event.setStatus(BonusEventStatus.ENDED);
         event.setEndsAt(LocalDateTime.now());
-        return BonusEventDto.from(bonusEventRepository.save(event));
+        BonusEventModel saved = bonusEventRepository.save(event);
+        auditLogService.recordAdminAction(
+                masterId,
+                "EVENT_END",
+                "eventId=" + saved.getId() + " name=" + saved.getName()
+        );
+        return BonusEventDto.from(saved);
     }
 
     @Transactional(readOnly = true)
