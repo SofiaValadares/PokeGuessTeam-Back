@@ -5,7 +5,6 @@ import com.svc.pokeguessteam.dto.game.GameLocalFinishRequest;
 import com.svc.pokeguessteam.dto.game.LocalMatchSetupRequest;
 import com.svc.pokeguessteam.service.CurrentUserService;
 import com.svc.pokeguessteam.service.LocalMatchService;
-import com.svc.pokeguessteam.logging.AppLogger;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -21,8 +20,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/game/local/match")
 public class LocalMatchController {
-
-    private static final AppLogger log = AppLogger.create(LocalMatchController.class);
 
     private final LocalMatchService localMatchService;
     private final CurrentUserService currentUserService;
@@ -48,7 +45,6 @@ public class LocalMatchController {
             @Valid @RequestBody GameLocalFinishRequest request
     ) {
         String userId = currentUserService.requireUserId(session);
-        log.info("finish", "A finalizar partida local userId={}", userId);
         return ResponseEntity.ok(localMatchService.finishClientMatch(userId, request));
     }
 }

@@ -1,8 +1,9 @@
 package com.svc.pokeguessteam.service;
 
 import com.svc.pokeguessteam.config.AppMailProperties;
-import com.svc.pokeguessteam.logging.AppLogger;
 import com.svc.pokeguessteam.model.auth.AuthCodePurpose;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.mail.MailException;
 import org.springframework.mail.SimpleMailMessage;
@@ -12,7 +13,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class TransactionalEmailService {
 
-    private static final AppLogger log = AppLogger.create(TransactionalEmailService.class);
+    private static final Logger log = LoggerFactory.getLogger(TransactionalEmailService.class);
 
     private final AppMailProperties mailProperties;
     private final ResendEmailSender resendEmailSender;
@@ -80,7 +81,7 @@ public class TransactionalEmailService {
                     %s
                     """.formatted(intendedTo, body);
             if (sendTo(redirectTo, devSubject, devBody)) {
-                log.info("send", "E-mail entregue via redirecionamento de dev para {} (destino original: {})",
+                log.info("E-mail entregue via redirecionamento de dev para {} (destino original: {})",
                         redirectTo, intendedTo);
                 return;
             }
@@ -106,15 +107,15 @@ public class TransactionalEmailService {
 
         try {
             mailSender.send(message);
-            log.info("sendViaSmtp", "E-mail enviado via SMTP para {}", toEmail);
+            log.info("E-mail enviado via SMTP para {}", toEmail);
             return true;
         } catch (MailException ex) {
-            log.error("sendViaSmtp", "Falha ao enviar e-mail SMTP para {}", ex, toEmail);
+            log.error("Falha ao enviar e-mail SMTP para {}", toEmail, ex);
             return false;
         }
     }
 
     private void logDevFallback(String toEmail, String subject, String plainCode, String reason) {
-        log.warn("logDevFallback", "[DEV] {} — destino={} assunto={} código={}", reason, toEmail, subject, plainCode);
+        log.warn("[DEV] {} — destino={} assunto={} código={}", reason, toEmail, subject, plainCode);
     }
 }

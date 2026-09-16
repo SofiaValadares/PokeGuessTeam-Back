@@ -11,7 +11,6 @@ import com.svc.pokeguessteam.model.game.ActiveMatchModel;
 import com.svc.pokeguessteam.model.user.ProfileModel;
 import com.svc.pokeguessteam.util.GameConstants;
 import com.svc.pokeguessteam.util.MatchEngine;
-import com.svc.pokeguessteam.logging.AppLogger;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,7 +30,6 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class CompetitiveMatchService {
 
-    private static final AppLogger log = AppLogger.create(CompetitiveMatchService.class);
     private static final int[] MATCH_RADIUS = {5, 15, 40, Integer.MAX_VALUE};
 
     private final ProfileService profileService;
@@ -95,11 +93,9 @@ public class CompetitiveMatchService {
             QueueEntry other = opponent.get();
             queueByUserId.remove(self.userId(), self);
             queueByUserId.remove(other.userId(), other);
-            log.info("enqueue", "Emparelhamento competitivo userId={} vs={}", userId, other.userId());
             return createMatchedResponse(self, other);
         }
 
-        log.info("enqueue", "A aguardar oponente competitivo userId={}", userId);
         Map<String, Object> waiting = new LinkedHashMap<>();
         waiting.put("status", "WAITING");
         waiting.put("registeredPokedexCount", registered);

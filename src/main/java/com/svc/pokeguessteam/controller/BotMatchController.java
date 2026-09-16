@@ -6,7 +6,6 @@ import com.svc.pokeguessteam.dto.game.GameBotFinishRequest;
 import com.svc.pokeguessteam.dto.game.GameFinishResponse;
 import com.svc.pokeguessteam.service.BotMatchService;
 import com.svc.pokeguessteam.service.CurrentUserService;
-import com.svc.pokeguessteam.logging.AppLogger;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -22,8 +21,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/game/bot/match")
 public class BotMatchController {
-
-    private static final AppLogger log = AppLogger.create(BotMatchController.class);
 
     private final BotMatchService botMatchService;
     private final CurrentUserService currentUserService;
@@ -48,7 +45,6 @@ public class BotMatchController {
             @Valid @RequestBody GameBotFinishRequest request
     ) {
         String userId = currentUserService.requireUserId(session);
-        log.info("finish", "A finalizar partida vs bot userId={}", userId);
         return ResponseEntity.ok(botMatchService.finishClientMatch(userId, request));
     }
 }

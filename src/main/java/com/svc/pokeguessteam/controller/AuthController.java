@@ -27,7 +27,6 @@ import com.svc.pokeguessteam.service.ProfileService;
 import com.svc.pokeguessteam.service.UserRoleService;
 import com.svc.pokeguessteam.exception.ApiBusinessException;
 import com.svc.pokeguessteam.exception.ErrorCodes;
-import com.svc.pokeguessteam.logging.AppLogger;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
@@ -47,7 +46,6 @@ import java.util.Optional;
 @RequestMapping("/auth")
 public class AuthController {
 
-    private static final AppLogger log = AppLogger.create(AuthController.class);
     private static final String USER_ID_ATTR = "USER_ID";
 
     private final AuthService authService;
@@ -88,7 +86,6 @@ public class AuthController {
                 request.email(),
                 request.password()
         );
-        log.info("register", "Utilizador registado id={}", user.getIdUser());
 
         profileService.ensureProfileWithStarters(user.getIdUser());
 
@@ -210,7 +207,6 @@ public class AuthController {
                 request.login(),
                 request.password()
         );
-        log.info("login", "Sessão autenticada userId={}", user.getIdUser());
 
         boolean firstLogin = authService.recordLogin(user);
         establishSession(user, httpRequest);
@@ -229,7 +225,6 @@ public class AuthController {
         }
 
         SecurityContextHolder.clearContext();
-        log.info("logout", "Sessão terminada");
 
         return ResponseEntity.ok().build();
     }

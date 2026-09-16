@@ -8,7 +8,6 @@ import com.svc.pokeguessteam.dto.game.OpponentTeamKnowledgeResponse;
 import com.svc.pokeguessteam.dto.game.FriendMatchStateDto;
 import com.svc.pokeguessteam.service.CurrentUserService;
 import com.svc.pokeguessteam.service.FriendMatchService;
-import com.svc.pokeguessteam.logging.AppLogger;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -27,8 +26,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/game/friend/match")
 public class FriendMatchController {
-
-    private static final AppLogger log = AppLogger.create(FriendMatchController.class);
 
     private final FriendMatchService friendMatchService;
     private final CurrentUserService currentUserService;
@@ -52,7 +49,6 @@ public class FriendMatchController {
             @Valid @RequestBody BotMatchTeamRequest request
     ) {
         String userId = currentUserService.requireUserId(session);
-        log.info("start", "A criar partida de amigo userId={}", userId);
         return ResponseEntity.status(HttpStatus.CREATED).body(friendMatchService.startMatch(userId, request));
     }
 
@@ -62,7 +58,6 @@ public class FriendMatchController {
             @Valid @RequestBody FriendMatchJoinRequest request
     ) {
         String userId = currentUserService.requireUserId(session);
-        log.info("join", "A entrar em partida de amigo userId={}", userId);
         return ResponseEntity.ok(friendMatchService.joinMatch(userId, request));
     }
 
@@ -87,7 +82,6 @@ public class FriendMatchController {
             @Valid @RequestBody BotMatchGuessRequest request
     ) {
         String userId = currentUserService.requireUserId(session);
-        log.info("guess", "Palpite em partida de amigo userId={}", userId);
         return ResponseEntity.ok(friendMatchService.submitGuess(userId, request));
     }
 
@@ -106,7 +100,6 @@ public class FriendMatchController {
     @DeleteMapping
     public ResponseEntity<Void> leave(HttpSession session) {
         String userId = currentUserService.requireUserId(session);
-        log.info("leave", "A sair da partida de amigo userId={}", userId);
         friendMatchService.leaveMatch(userId);
         return ResponseEntity.noContent().build();
     }

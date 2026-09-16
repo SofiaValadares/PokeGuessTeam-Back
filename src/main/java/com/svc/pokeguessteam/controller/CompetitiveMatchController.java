@@ -4,7 +4,6 @@ import com.svc.pokeguessteam.dto.game.BotMatchTeamRequest;
 import com.svc.pokeguessteam.dto.game.FriendMatchStateDto;
 import com.svc.pokeguessteam.service.CompetitiveMatchService;
 import com.svc.pokeguessteam.service.CurrentUserService;
-import com.svc.pokeguessteam.logging.AppLogger;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -21,8 +20,6 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/game/competitive")
 public class CompetitiveMatchController {
-
-    private static final AppLogger log = AppLogger.create(CompetitiveMatchController.class);
 
     private final CompetitiveMatchService competitiveMatchService;
     private final CurrentUserService currentUserService;
@@ -41,7 +38,6 @@ public class CompetitiveMatchController {
             @Valid @RequestBody BotMatchTeamRequest request
     ) {
         String userId = currentUserService.requireUserId(session);
-        log.info("enqueue", "Entrada na fila competitiva userId={}", userId);
         Map<String, Object> raw = competitiveMatchService.enqueue(userId, request);
         return ResponseEntity.ok(normalizeForUser(userId, raw));
     }
@@ -55,7 +51,6 @@ public class CompetitiveMatchController {
     @DeleteMapping("/queue")
     public ResponseEntity<Void> leave(HttpSession session) {
         String userId = currentUserService.requireUserId(session);
-        log.info("leave", "Saída da fila competitiva userId={}", userId);
         competitiveMatchService.leaveQueue(userId);
         return ResponseEntity.noContent().build();
     }

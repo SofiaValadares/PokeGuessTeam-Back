@@ -10,7 +10,6 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import com.svc.pokeguessteam.logging.AppLogger;
 import com.svc.pokeguessteam.messages.MessageKeys;
 
 import java.util.List;
@@ -19,8 +18,6 @@ import java.util.stream.Collectors;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
-
-    private static final AppLogger log = AppLogger.create(GlobalExceptionHandler.class);
 
     private final MessageSource messageSource;
 
@@ -37,7 +34,6 @@ public class GlobalExceptionHandler {
                 ex.getMessageKey(),
                 locale
         );
-        log.warn("handleBusiness", "Regra de negócio: status={} code={}", ex.getStatus().value(), ex.getCode());
         ApiErrorResponse body = ApiErrorResponse.of(ex.getCode(), message);
         return ResponseEntity.status(ex.getStatus()).body(body);
     }
@@ -55,7 +51,6 @@ public class GlobalExceptionHandler {
                 ? messageSource.getMessage(MessageKeys.VALIDATION_SUMMARY, null, locale)
                 : fieldErrors.get(0).message();
 
-        log.warn("handleValidation", "Validação falhou: campos={}", fieldErrors.size());
         ApiErrorResponse body = ApiErrorResponse.of(
                 ErrorCodes.VALIDATION_FAILED,
                 summary,
@@ -68,29 +63,17 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiErrorResponse> handleNotReadable(HttpMessageNotReadableException ex) {
         Locale locale = LocaleContextHolder.getLocale();
         String message = messageSource.getMessage(MessageKeys.VALIDATION_MALFORMED_JSON, null, locale);
-        log.warn("handleNotReadable", "JSON malformado: {}", ex.getMostSpecificCause().getMessage());
         ApiErrorResponse body = ApiErrorResponse.of(ErrorCodes.MALFORMED_JSON, message);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
     }
 
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ApiErrorResponse> handleIllegalState(IllegalStateException ex) {
-        log.error("handleIllegalState", "Estado inválido ao processar pedido", ex);
         ApiErrorResponse body = ApiErrorResponse.of(
                 ErrorCodes.GAME_MATCH_INVALID_ACTION,
                 ex.getMessage() != null && !ex.getMessage().isBlank()
                         ? ex.getMessage()
                         : "Erro interno ao processar a partida."
-        );
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(body);
-    }
-
-    @ExceptionHandler(RuntimeException.class)
-    public ResponseEntity<ApiErrorResponse> handleUnexpected(RuntimeException ex) {
-        log.error("handleUnexpected", "Erro não tratado", ex);
-        ApiErrorResponse body = ApiErrorResponse.of(
-                ErrorCodes.INTERNAL_ERROR,
-                "Erro interno ao processar o pedido."
         );
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(body);
     }

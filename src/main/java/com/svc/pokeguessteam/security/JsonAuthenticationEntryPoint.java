@@ -3,7 +3,6 @@ package com.svc.pokeguessteam.security;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.svc.pokeguessteam.exception.ApiErrorResponse;
 import com.svc.pokeguessteam.exception.ErrorCodes;
-import com.svc.pokeguessteam.logging.AppLogger;
 import com.svc.pokeguessteam.messages.MessageKeys;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -21,8 +20,6 @@ import java.util.Locale;
 @Component
 public class JsonAuthenticationEntryPoint implements AuthenticationEntryPoint {
 
-    private static final AppLogger log = AppLogger.create(JsonAuthenticationEntryPoint.class);
-
     private final ObjectMapper objectMapper;
     private final MessageSource messageSource;
 
@@ -35,7 +32,6 @@ public class JsonAuthenticationEntryPoint implements AuthenticationEntryPoint {
     public void commence(HttpServletRequest request,
                          HttpServletResponse response,
                          AuthenticationException authException) throws IOException {
-        log.warn("commence", "Pedido sem autenticação: {} {}", request.getMethod(), request.getRequestURI());
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);

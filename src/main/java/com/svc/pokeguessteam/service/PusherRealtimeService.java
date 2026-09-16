@@ -5,7 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pusher.rest.Pusher;
 import com.svc.pokeguessteam.config.AppPusherProperties;
 import com.svc.pokeguessteam.dto.game.FriendMatchStateDto;
-import com.svc.pokeguessteam.logging.AppLogger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.util.LinkedHashMap;
@@ -17,7 +18,7 @@ import java.util.Map;
 @Service
 public class PusherRealtimeService {
 
-    private static final AppLogger log = AppLogger.create(PusherRealtimeService.class);
+    private static final Logger log = LoggerFactory.getLogger(PusherRealtimeService.class);
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
     public static final String EVENT_MATCH_STATE = "match-state";
@@ -35,10 +36,10 @@ public class PusherRealtimeService {
             client.setCluster(properties.getCluster());
             client.setEncrypted(true);
             this.pusher = client;
-            log.info("init", "Pusher realtime enabled (cluster={})", properties.getCluster());
+            log.info("Pusher realtime enabled (cluster={})", properties.getCluster());
         } else {
             this.pusher = null;
-            log.info("init", "Pusher realtime disabled (set APP_PUSHER_ENABLED=true and credentials)");
+            log.info("Pusher realtime disabled (set APP_PUSHER_ENABLED=true and credentials)");
         }
     }
 
@@ -86,7 +87,7 @@ public class PusherRealtimeService {
             String json = objectMapper.writeValueAsString(data);
             return objectMapper.readValue(json, MAP_TYPE);
         } catch (Exception ex) {
-            log.warn("toPusherPayload", "Falha a serializar payload Pusher: {}", ex.getMessage());
+            log.warn("Falha a serializar payload Pusher: {}", ex.getMessage());
             return Map.of();
         }
     }
@@ -98,7 +99,7 @@ public class PusherRealtimeService {
         try {
             pusher.trigger(userChannel(userId), eventName, toPusherPayload(data));
         } catch (Exception ex) {
-            log.warn("publishUserEvent", "Falha ao publicar Pusher user={} event={}: {}", userId, eventName, ex.getMessage());
+            log.warn("Falha ao publicar Pusher user={} event={}: {}", userId, eventName, ex.getMessage());
         }
     }
 
@@ -113,13 +114,13 @@ public class PusherRealtimeService {
         try {
             pusher.trigger(userChannel(userId), EVENT_MATCH_STATE, safePayload);
         } catch (Exception ex) {
-            log.warn("publishMatchState", "Falha ao publicar Pusher user={} event={}: {}", userId, EVENT_MATCH_STATE, ex.getMessage());
+            log.warn("Falha ao publicar Pusher user={} event={}: {}", userId, EVENT_MATCH_STATE, ex.getMessage());
         }
         if (state != null && state.matchId() != null) {
             try {
                 pusher.trigger(matchChannel(state.matchId()), EVENT_MATCH_STATE, safePayload);
             } catch (Exception ex) {
-                log.warn("publishMatchState", "Falha ao publicar Pusher match={}: {}", state.matchId(), ex.getMessage());
+                log.warn("Falha ao publicar Pusher match={}: {}", state.matchId(), ex.getMessage());
             }
         }
     }

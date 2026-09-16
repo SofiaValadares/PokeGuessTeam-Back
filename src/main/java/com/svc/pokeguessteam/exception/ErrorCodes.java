@@ -78,6 +78,4 @@ public final class ErrorCodes {
     public static final String GAME_EVENT_POOL_INSUFFICIENT = "GAME_EVENT_POOL_INSUFFICIENT";
     public static final String FRIEND_BALL_NO_EVENT = "FRIEND_BALL_NO_EVENT";
     public static final String FRIEND_BALL_POOL_EMPTY = "FRIEND_BALL_POOL_EMPTY";
-
-    public static final String INTERNAL_ERROR = "INTERNAL_ERROR";
 }
