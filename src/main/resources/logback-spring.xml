@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
     <springProperty name="APP_NAME" source="spring.application.name" defaultValue="pokeguessteam"/>
-    <property name="LOG_DIR" value="${LOG_PATH:-logs}"/>
+    <!-- Prefer LOG_PATH; fallback to java.io.tmpdir (writable in containers). -->
+    <property name="LOG_DIR" value="${LOG_PATH:-${java.io.tmpdir}/pokeguessteam-logs}"/>
     <property name="LOG_PATTERN"
               value="[%d{yyyy-MM-dd HH:mm:ss.SSS}] [%level] [%logger{0}%replace(%X{function}){'(.+)', '/$1'}]: %msg%n"/>
 

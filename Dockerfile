@@ -10,10 +10,16 @@ RUN mvn -q package -DskipTests
 FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
 
-RUN addgroup -S app && adduser -S app -G app
+RUN addgroup -S app && adduser -S app -G app \
+    && mkdir -p /tmp/logs \
+    && chown -R app:app /tmp/logs
+
+COPY --from=build --chown=app:app /app/target/pokeguessteam-*.jar app.jar
+
 USER app
 
-COPY --from=build /app/target/pokeguessteam-*.jar app.jar
+# Relativo a /app falha (user sem permissão); /tmp é gravável no container.
+ENV LOG_PATH=/tmp/logs
 
 EXPOSE 8080
 
