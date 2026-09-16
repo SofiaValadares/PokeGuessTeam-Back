@@ -20,40 +20,41 @@ import com.svc.pokeguessteam.repository.pokemon.PokemonRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
-import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
  * Seeds species + evolution lines on startup.
  * <p>
- * On Neon / pooled Postgres, per-row lookups for ~1000 species can keep a connection
- * open long enough for the proxy to close the socket and kill the whole boot.
- * This runner batches reads/writes and skips work when the catalog is already complete.
+ * Neon / pooled Postgres closes long transactions; inserts run in small committed batches.
  */
 @Component
 public class PokemonSeedConfig implements CommandLineRunner {
 
     private static final Logger log = LoggerFactory.getLogger(PokemonSeedConfig.class);
-    private static final int MAX_ATTEMPTS = 3;
+    private static final int MAX_ATTEMPTS = 5;
+    private static final int BATCH_SIZE = 80;
 
     private final PokemonRepository pokemonRepository;
     private final EvolutionLineRepository evolutionLineRepository;
+    private final TransactionTemplate tx;
 
     public PokemonSeedConfig(
             PokemonRepository pokemonRepository,
-            EvolutionLineRepository evolutionLineRepository
+            EvolutionLineRepository evolutionLineRepository,
+            PlatformTransactionManager transactionManager
     ) {
         this.pokemonRepository = pokemonRepository;
         this.evolutionLineRepository = evolutionLineRepository;
+        this.tx = new TransactionTemplate(transactionManager);
     }
 
     @Override
@@ -76,38 +77,56 @@ public class PokemonSeedConfig implements CommandLineRunner {
                 }
 
                 log.info(
-                        "Seeding pokemon catalog (have {}/{} species, {}/{} lines)...",
+                        "Seeding pokemon catalog (have {}/{} species, {}/{} lines) attempt {}/{}...",
                         pokemonCount,
                         expectedPokemon,
                         lineCount,
-                        expectedLines
+                        expectedLines,
+                        attempt,
+                        MAX_ATTEMPTS
                 );
                 Map<Integer, EvolutionLineModel> linesByKey = seedEvolutionLines();
                 Map<String, PokemonModel> byPokedexKey = seedPokemon(entries, linesByKey);
                 applyEvolutionData(byPokedexKey);
-                log.info("Pokemon catalog seed finished");
-                return;
-            } catch (DataAccessException ex) {
+
+                long afterPokemon = pokemonRepository.count();
+                long afterLines = evolutionLineRepository.count();
+                log.info(
+                        "Pokemon catalog seed finished ({} species, {} lines)",
+                        afterPokemon,
+                        afterLines
+                );
+                if (afterPokemon >= expectedPokemon && afterLines >= expectedLines) {
+                    return;
+                }
+                log.warn(
+                        "Catalog still incomplete after seed pass ({}/{} species, {}/{} lines)",
+                        afterPokemon,
+                        expectedPokemon,
+                        afterLines,
+                        expectedLines
+                );
+            } catch (RuntimeException ex) {
+                Throwable root = ex;
+                while (root.getCause() != null && root.getCause() != root) {
+                    root = root.getCause();
+                }
                 log.warn(
                         "Pokemon seed attempt {}/{} failed: {}",
                         attempt,
                         MAX_ATTEMPTS,
-                        ex.getMostSpecificCause() != null
-                                ? ex.getMostSpecificCause().getMessage()
-                                : ex.getMessage()
+                        root.getMessage() != null ? root.getMessage() : ex.getMessage()
                 );
                 if (attempt == MAX_ATTEMPTS) {
-                    try {
-                        if (pokemonRepository.count() > 0) {
-                            log.error(
-                                    "Pokemon seed failed after {} attempts, but catalog has data — continuing startup",
-                                    MAX_ATTEMPTS,
-                                    ex
-                            );
-                            return;
-                        }
-                    } catch (DataAccessException countEx) {
-                        log.error("Pokemon seed failed and catalog count is unreachable", countEx);
+                    long remaining = safeCount();
+                    if (remaining > 0) {
+                        log.error(
+                                "Pokemon seed failed after {} attempts, but catalog has {} rows — continuing startup",
+                                MAX_ATTEMPTS,
+                                remaining,
+                                ex
+                        );
+                        return;
                     }
                     throw ex;
                 }
@@ -116,19 +135,37 @@ public class PokemonSeedConfig implements CommandLineRunner {
         }
     }
 
+    private long safeCount() {
+        try {
+            return pokemonRepository.count();
+        } catch (RuntimeException ex) {
+            return 0;
+        }
+    }
+
     private Map<Integer, EvolutionLineModel> seedEvolutionLines() {
         List<EvolutionLineSeedEntry> seeds = EvolutionLinesSeed.entries();
-        Map<Integer, EvolutionLineModel> existing = evolutionLineRepository.findAll().stream()
-                .collect(Collectors.toMap(EvolutionLineModel::getLineKey, Function.identity(), (a, b) -> a));
+        Map<Integer, EvolutionLineModel> existing = new HashMap<>();
 
-        List<EvolutionLineModel> toInsert = new ArrayList<>();
-        for (EvolutionLineSeedEntry seed : seeds) {
-            if (!existing.containsKey(seed.lineKey())) {
-                toInsert.add(seed.toModel());
+        List<EvolutionLineModel> toInsert = tx.execute(status -> {
+            Map<Integer, EvolutionLineModel> found = evolutionLineRepository.findAll().stream()
+                    .collect(Collectors.toMap(EvolutionLineModel::getLineKey, Function.identity(), (a, b) -> a));
+            existing.putAll(found);
+
+            List<EvolutionLineModel> missing = new ArrayList<>();
+            for (EvolutionLineSeedEntry seed : seeds) {
+                if (!found.containsKey(seed.lineKey())) {
+                    missing.add(seed.toModel());
+                }
             }
-        }
-        if (!toInsert.isEmpty()) {
-            for (EvolutionLineModel saved : evolutionLineRepository.saveAll(toInsert)) {
+            if (missing.isEmpty()) {
+                return List.of();
+            }
+            return evolutionLineRepository.saveAll(missing);
+        });
+
+        if (toInsert != null) {
+            for (EvolutionLineModel saved : toInsert) {
                 existing.put(saved.getLineKey(), saved);
             }
         }
@@ -148,11 +185,16 @@ public class PokemonSeedConfig implements CommandLineRunner {
             List<PokemonSeedEntry> entries,
             Map<Integer, EvolutionLineModel> linesByKey
     ) {
-        Map<Integer, PokemonModel> existingByNumber = pokemonRepository.findAll().stream()
-                .collect(Collectors.toMap(PokemonModel::getPokedexNumber, Function.identity(), (a, b) -> a));
+        Map<Integer, PokemonModel> existingByNumber = tx.execute(status ->
+                pokemonRepository.findAll().stream()
+                        .collect(Collectors.toMap(PokemonModel::getPokedexNumber, Function.identity(), (a, b) -> a))
+        );
+        if (existingByNumber == null) {
+            existingByNumber = Map.of();
+        }
 
-        List<PokemonModel> toInsert = new ArrayList<>();
         Map<String, PokemonModel> byPokedexKey = new HashMap<>(entries.size());
+        List<PokemonModel> batch = new ArrayList<>(BATCH_SIZE);
 
         for (PokemonSeedEntry entry : entries) {
             String key = String.valueOf(entry.pokedexNumber());
@@ -165,15 +207,27 @@ public class PokemonSeedConfig implements CommandLineRunner {
             if (line == null) {
                 throw new IllegalStateException("Unknown evolution line key: " + entry.evolutionLineKey());
             }
-            toInsert.add(entry.toModel(line));
-        }
-
-        if (!toInsert.isEmpty()) {
-            for (PokemonModel saved : pokemonRepository.saveAll(toInsert)) {
-                byPokedexKey.put(String.valueOf(saved.getPokedexNumber()), saved);
+            batch.add(entry.toModel(line));
+            if (batch.size() >= BATCH_SIZE) {
+                flushPokemonBatch(batch, byPokedexKey);
+                batch.clear();
             }
         }
+        if (!batch.isEmpty()) {
+            flushPokemonBatch(batch, byPokedexKey);
+        }
         return byPokedexKey;
+    }
+
+    private void flushPokemonBatch(List<PokemonModel> batch, Map<String, PokemonModel> byPokedexKey) {
+        List<PokemonModel> toSave = List.copyOf(batch);
+        List<PokemonModel> saved = tx.execute(status -> pokemonRepository.saveAll(toSave));
+        if (saved != null) {
+            for (PokemonModel pokemon : saved) {
+                byPokedexKey.put(String.valueOf(pokemon.getPokedexNumber()), pokemon);
+            }
+            log.info("Seeded pokemon batch size={} (catalog now {})", saved.size(), byPokedexKey.size());
+        }
     }
 
     private static List<PokemonSeedEntry> allPokemonEntries() {
@@ -269,18 +323,31 @@ public class PokemonSeedConfig implements CommandLineRunner {
         putEvolution(evolutionStage, evolutionLevel, 147, EvolutionStage.BASE, 30);
         putEvolution(evolutionStage, evolutionLevel, 148, EvolutionStage.FIRST_STAGE, 55);
 
-        Set<PokemonModel> dirty = new HashSet<>();
+        List<PokemonModel> dirty = new ArrayList<>();
         for (PokemonModel pokemon : byPokemonId.values()) {
             int number = pokemon.getPokedexNumber();
+            boolean changed = false;
             if (evolutionStage.containsKey(number)) {
                 pokemon.setEvolutionStage(evolutionStage.get(number));
+                changed = true;
             }
             if (evolutionLevel.containsKey(number)) {
                 pokemon.setEvolutionLevel(evolutionLevel.get(number));
+                changed = true;
             }
-            dirty.add(pokemon);
+            if (changed) {
+                dirty.add(pokemon);
+            }
         }
-        pokemonRepository.saveAll(dirty);
+
+        for (int i = 0; i < dirty.size(); i += BATCH_SIZE) {
+            List<PokemonModel> slice = dirty.subList(i, Math.min(i + BATCH_SIZE, dirty.size()));
+            List<PokemonModel> copy = List.copyOf(slice);
+            tx.execute(status -> {
+                pokemonRepository.saveAll(copy);
+                return null;
+            });
+        }
     }
 
     private static void putEvolution(
@@ -296,7 +363,7 @@ public class PokemonSeedConfig implements CommandLineRunner {
 
     private static void sleepBeforeRetry(int attempt) {
         try {
-            Thread.sleep(500L * attempt);
+            Thread.sleep(1000L * attempt);
         } catch (InterruptedException ie) {
             Thread.currentThread().interrupt();
         }
