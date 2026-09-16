@@ -269,7 +269,7 @@ public class AuthController {
     }
 
     private void establishSession(UserModel user, HttpServletRequest httpRequest) {
-        user = userRoleService.syncMasterFromEnv(user);
+        user = userRoleService.bootstrapFirstMasterIfNeeded(user);
         if (user.isSiteBannedNow()) {
             throw new ApiBusinessException(
                     HttpStatus.FORBIDDEN,

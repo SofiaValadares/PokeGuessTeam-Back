@@ -9,6 +9,8 @@ import com.svc.pokeguessteam.service.AdminUserService;
 import com.svc.pokeguessteam.service.CurrentUserService;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -63,13 +65,21 @@ public class AdminUserController {
         return ResponseEntity.ok(adminUserService.unban(adminId, userId, request.scope()));
     }
 
-    @PostMapping("/{userId}/role")
+    @PatchMapping("/{userId}/role")
     public ResponseEntity<AdminUserListItemDto> setRole(
-            HttpSession session,
-            @PathVariable String userId,
-            @Valid @RequestBody SetUserRoleRequest request
-    ) {
-        String masterId = currentUserService.requireUserId(session);
-        return ResponseEntity.ok(adminUserService.setRole(masterId, userId, request));
-    }
+        HttpSession session,
+        HttpServletRequest httpRequest,
+        @PathVariable String userId,
+        @Valid @RequestBody SetUserRoleRequest request) {
+            String masterId = currentUserService.requireUserId(session);
+
+            return ResponseEntity.ok(
+                adminUserService.setRole(
+                    masterId,
+                    userId,
+                    request,
+                    httpRequest.getRemoteAddr()
+                )
+            );
+        }
 }

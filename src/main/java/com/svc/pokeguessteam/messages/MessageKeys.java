@@ -102,4 +102,8 @@ public final class MessageKeys {
     public static final String GAME_EVENT_POOL_INSUFFICIENT = "error.game.event-pool-insufficient";
     public static final String FRIEND_BALL_NO_EVENT = "error.pokeball.friend-ball-no-event";
     public static final String FRIEND_BALL_POOL_EMPTY = "error.pokeball.friend-ball-pool-empty";
+
+    public static final String ADMIN_CANNOT_CHANGE_OWN_ROLE = "error.admin.cannot-change-own-role";
+    public static final String ADMIN_LAST_MASTER = "error.admin.last-master";
+    public static final String ADMIN_TARGET_NOT_VERIFIED = "error.admin.target-not-verified";
 }
