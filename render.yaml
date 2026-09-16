@@ -29,3 +29,5 @@ services:
         value: "false"
       - key: APP_CORS_ALLOWED_ORIGIN_PATTERNS
         sync: false
+      - key: LOG_PATH
+        value: /tmp/logs
