@@ -20,6 +20,7 @@ public final class MessageKeys {
     public static final String AUTH_CODE_INVALID = "error.auth.code-invalid";
     public static final String AUTH_CODE_RESEND_COOLDOWN = "error.auth.code-resend-cooldown";
     public static final String AUTH_PASSWORD_RESET_SENT = "info.auth.password-reset-sent";
+    public static final String AUTH_REGISTER_ACCEPTED = "info.auth.register-accepted";
     public static final String AUTH_EMAIL_VERIFICATION_SENT = "info.auth.email-verification-sent";
     public static final String AUTH_EMAIL_VERIFIED = "info.auth.email-verified";
     public static final String AUTH_PASSWORD_RESET_DONE = "info.auth.password-reset-done";

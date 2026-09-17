@@ -43,26 +43,39 @@ public class AuthService {
         this.auditLogService = auditLogService;
     }
 
+    /**
+     * Cadastro sem enumeração: e-mail ou username já usados não geram erro distinto na API.
+     * A resposta HTTP deve ser sempre a mesma (ver AuthController).
+     */
     @Transactional
-    public UserModel register(String username, String email, String rawPassword) {
+    public void register(String username, String email, String rawPassword) {
         String normalizedEmail = normalizeEmail(email);
         String normalizedUsername = normalizeUsername(username);
         rejectUsernameFromEmail(normalizedUsername, normalizedEmail);
 
-        if (userRepository.findByEmail(normalizedEmail).isPresent()) {
-            throw new ApiBusinessException(
-                    HttpStatus.CONFLICT,
-                    ErrorCodes.AUTH_EMAIL_ALREADY_REGISTERED,
-                    MessageKeys.AUTH_EMAIL_ALREADY_REGISTERED
+        Optional<UserModel> existingByEmail = userRepository.findByEmail(normalizedEmail);
+        if (existingByEmail.isPresent()) {
+            UserModel existing = existingByEmail.get();
+            auditLogService.recordSecurity(
+                    existing.getIdUser(),
+                    "REGISTER_EMAIL_EXISTS",
+                    "Tentativa de cadastro com e-mail já registado userId=" + existing.getIdUser()
             );
+            if (!Boolean.TRUE.equals(existing.getEmailVerify())) {
+                authCodeService.sendEmailVerificationCodeQuietly(existing);
+            }
+            log.info("register", "Cadastro ignorado: e-mail já existente userId={}", existing.getIdUser());
+            return;
         }
 
         if (userRepository.findByUsername(normalizedUsername).isPresent()) {
-            throw new ApiBusinessException(
-                    HttpStatus.CONFLICT,
-                    ErrorCodes.AUTH_USERNAME_ALREADY_TAKEN,
-                    MessageKeys.AUTH_USERNAME_ALREADY_TAKEN
+            auditLogService.recordSecurity(
+                    null,
+                    "REGISTER_USERNAME_TAKEN",
+                    "Tentativa de cadastro com username já em uso"
             );
+            log.info("register", "Cadastro ignorado: username já em uso");
+            return;
         }
 
         UserModel user = new UserModel();
@@ -73,7 +86,6 @@ public class AuthService {
         profileService.ensureProfileWithStarters(saved.getIdUser());
         authCodeService.sendEmailVerificationCode(saved);
         log.info("register", "Conta criada userId={}", saved.getIdUser());
-        return saved;
     }
 
     public UserModel authenticate(String email, String rawPassword) {

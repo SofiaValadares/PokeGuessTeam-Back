@@ -12,7 +12,6 @@ import com.svc.pokeguessteam.dto.auth.LoginRequest;
 import com.svc.pokeguessteam.dto.auth.MessageResponse;
 import com.svc.pokeguessteam.dto.auth.PasswordResetConfirmRequest;
 import com.svc.pokeguessteam.dto.auth.RegisterRequest;
-import com.svc.pokeguessteam.dto.auth.RegisterResponse;
 import com.svc.pokeguessteam.dto.auth.SessionResponse;
 import com.svc.pokeguessteam.messages.MessageKeys;
 import com.svc.pokeguessteam.model.user.UserModel;
@@ -84,25 +83,16 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    public ResponseEntity<RegisterResponse> register(
+    public ResponseEntity<MessageResponse> register(
             @RequestBody @Valid RegisterRequest request
     ) {
-        UserModel user = authService.register(
+        // Resposta idêntica com ou sem conta nova — evita enumeração de e-mails.
+        authService.register(
                 request.username(),
                 request.email(),
                 request.password()
         );
-
-        profileService.ensureProfileWithStarters(user.getIdUser());
-
-        return ResponseEntity.ok(
-                new RegisterResponse(
-                        user.getIdUser(),
-                        user.getEmail(),
-                        user.getUsername(),
-                        Boolean.TRUE.equals(user.getEmailVerify())
-                )
-        );
+        return ResponseEntity.ok(new MessageResponse(msg(MessageKeys.AUTH_REGISTER_ACCEPTED)));
     }
 
     @PostMapping({"/email/verification/send", "/verification/resend"})

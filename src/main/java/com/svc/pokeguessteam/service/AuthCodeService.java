@@ -53,6 +53,18 @@ public class AuthCodeService {
         issueCode(user, AuthCodePurpose.EMAIL_VERIFICATION);
     }
 
+    /**
+     * Reenvia verificação sem falhar a API (cooldown / já verificado) — usado no cadastro anti-enumeração.
+     */
+    @Transactional
+    public void sendEmailVerificationCodeQuietly(UserModel user) {
+        try {
+            sendEmailVerificationCode(user);
+        } catch (ApiBusinessException ignored) {
+            // Intencional: não revelar estado da conta no fluxo de registo.
+        }
+    }
+
     @Transactional
     public void sendEmailVerificationCodeByEmail(String email) {
         UserModel user = requireUserByEmail(email);
