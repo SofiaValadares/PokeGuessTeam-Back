@@ -1,5 +1,6 @@
 package com.svc.pokeguessteam.repository.pokemon;
 
+import com.svc.pokeguessteam.model.enums.EvolutionStage;
 import com.svc.pokeguessteam.model.enums.PokemonRarity;
 import com.svc.pokeguessteam.model.pokemon.PokemonModel;
 import org.springframework.data.domain.Pageable;
@@ -16,6 +17,8 @@ public interface PokemonRepository extends JpaRepository<PokemonModel, String> {
     List<PokemonModel> findAllByOrderByPokedexNumberAsc();
 
     List<PokemonModel> findByEvolutionLine_Rarity(PokemonRarity rarity);
+
+    List<PokemonModel> findByEvolutionLine_RarityAndEvolutionStage(PokemonRarity rarity, EvolutionStage evolutionStage);
 
     List<PokemonModel> findByEvolutionLine_LineKey(Integer lineKey);
 

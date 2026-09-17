@@ -219,7 +219,10 @@ public class PokeballDrawService {
     }
 
     private PokemonModel pickRandomPokemon(PokemonRarity rarity) {
-        List<PokemonModel> pool = pokemonRepository.findByEvolutionLine_Rarity(rarity);
+        List<PokemonModel> pool = pokemonRepository.findByEvolutionLine_RarityAndEvolutionStage(
+                rarity,
+                EvolutionStage.BASE
+        );
         if (pool.isEmpty()) {
             throw new ApiBusinessException(
                     HttpStatus.INTERNAL_SERVER_ERROR,

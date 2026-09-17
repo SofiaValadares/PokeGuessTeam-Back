@@ -47,8 +47,8 @@ public class AuthService {
     }
 
     /**
-     * Cadastro sem enumeração: e-mail ou username já usados não geram erro distinto na API.
-     * A resposta HTTP deve ser sempre a mesma (ver AuthController).
+     * Cadastro sem enumeração de e-mail: se o e-mail já existir, a API responde como sucesso
+     * e notifica o titular. Username em uso continua a devolver erro explícito (é público).
      */
     @Transactional
     public void register(String username, String email, String rawPassword) {
@@ -78,8 +78,11 @@ public class AuthService {
                     "REGISTER_USERNAME_TAKEN",
                     "Tentativa de cadastro com username já em uso"
             );
-            log.info("register", "Cadastro ignorado: username já em uso");
-            return;
+            throw new ApiBusinessException(
+                    HttpStatus.CONFLICT,
+                    ErrorCodes.AUTH_USERNAME_ALREADY_TAKEN,
+                    MessageKeys.AUTH_USERNAME_ALREADY_TAKEN
+            );
         }
 
         UserModel user = new UserModel();

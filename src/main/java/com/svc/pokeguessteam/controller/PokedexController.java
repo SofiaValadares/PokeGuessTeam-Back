@@ -1,7 +1,9 @@
 package com.svc.pokeguessteam.controller;
 
+import com.svc.pokeguessteam.dto.pokemon.PokedexCatalogResponse;
 import com.svc.pokeguessteam.dto.pokemon.PokedexEntryDto;
 import com.svc.pokeguessteam.dto.pokemon.PokedexEntryPageResponse;
+import com.svc.pokeguessteam.dto.pokemon.PokedexVersionResponse;
 import com.svc.pokeguessteam.service.CurrentUserService;
 import com.svc.pokeguessteam.service.PokedexService;
 import com.svc.pokeguessteam.service.ProfileService;
@@ -32,6 +34,28 @@ public class PokedexController {
         this.profileService = profileService;
     }
 
+    /** Versão leve do catálogo nacional (sem payload completo). */
+    @GetMapping("/version")
+    public ResponseEntity<PokedexVersionResponse> version(HttpSession session) {
+        currentUserService.requireUserId(session);
+        return ResponseEntity.ok(pokedexService.version());
+    }
+
+    /** Catálogo nacional + linhas evolutivas (sem flags de utilizador). */
+    @GetMapping("/catalog")
+    public ResponseEntity<PokedexCatalogResponse> catalog(HttpSession session) {
+        currentUserService.requireUserId(session);
+        return ResponseEntity.ok(pokedexService.catalog());
+    }
+
+    /** Números da Pokédex pessoal registados pelo utilizador. */
+    @GetMapping("/registered")
+    public ResponseEntity<List<Integer>> registered(HttpSession session) {
+        String userId = currentUserService.requireUserId(session);
+        profileService.ensureProfileWithStarters(userId);
+        return ResponseEntity.ok(pokedexService.registeredPokedexNumbers(userId));
+    }
+
     /**
      * Lista completa da Pokédex nacional com flag de registo na Pokédex pessoal.
      */
@@ -39,7 +63,7 @@ public class PokedexController {
     public ResponseEntity<List<PokedexEntryDto>> listAll(HttpSession session) {
         String userId = currentUserService.requireUserId(session);
         profileService.ensureProfileWithStarters(userId);
-        return ResponseEntity.ok(pokedexService.listAllForUser(userId)); // sync incluído no serviço
+        return ResponseEntity.ok(pokedexService.listAllForUser(userId));
     }
 
     /**

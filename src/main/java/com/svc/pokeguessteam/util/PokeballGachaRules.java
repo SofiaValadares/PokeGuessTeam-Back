@@ -22,6 +22,7 @@ public final class PokeballGachaRules {
         body.put("requestBody", Map.of("pokeballType", "POKE_BALL | GREAT_BALL | ULTRA_BALL | MASTER_BALL | FRIEND_BALL"));
         body.put("consumesOneBallPerDraw", true);
         body.put("rarities", List.of("COMMON", "RARE", "LEGENDARY", "MYTHICAL"));
+        body.put("drawPool", "Only EvolutionStage.BASE species (first form of each evolution line)");
         body.put("balls", Map.of(
                 PokeballType.POKE_BALL.name(), pokeBallRules(),
                 PokeballType.GREAT_BALL.name(), greatBallRules(),
@@ -43,8 +44,9 @@ public final class PokeballGachaRules {
 
     private static Map<String, Object> pokeBallRules() {
         return Map.of(
-                "summary", "Sorteio aleatório; piso Comum.",
+                "summary", "Sorteio aleatório de forma BASE; piso Comum.",
                 "defaultRarity", PokemonRarity.COMMON.name(),
+                "pool", "BASE evolution stage filtered by rolled rarity",
                 "upgradeRolls", List.of(
                         roll(PokemonRarity.RARE, 10),
                         roll(PokemonRarity.LEGENDARY, 100),
@@ -55,8 +57,9 @@ public final class PokeballGachaRules {
 
     private static Map<String, Object> greatBallRules() {
         return Map.of(
-                "summary", "Garante Raro ou superior (GDD).",
+                "summary", "Forma BASE; garante Raro ou superior (GDD).",
                 "defaultRarity", PokemonRarity.RARE.name(),
+                "pool", "BASE evolution stage filtered by rolled rarity",
                 "upgradeRolls", List.of(
                         roll(PokemonRarity.LEGENDARY, 50),
                         roll(PokemonRarity.MYTHICAL, 300)
@@ -66,8 +69,9 @@ public final class PokeballGachaRules {
 
     private static Map<String, Object> ultraBallRules() {
         return Map.of(
-                "summary", "Garante Lendário ou superior (GDD).",
+                "summary", "Forma BASE; garante Lendário ou superior (GDD).",
                 "defaultRarity", PokemonRarity.LEGENDARY.name(),
+                "pool", "BASE evolution stage filtered by rolled rarity",
                 "upgradeRolls", List.of(
                         roll(PokemonRarity.MYTHICAL, 150)
                 )
@@ -76,8 +80,9 @@ public final class PokeballGachaRules {
 
     private static Map<String, Object> masterBallRules() {
         return Map.of(
-                "summary", "Mítico garantido (GDD).",
+                "summary", "Forma BASE; Mítico garantido (GDD).",
                 "defaultRarity", PokemonRarity.MYTHICAL.name(),
+                "pool", "BASE evolution stage filtered by rolled rarity",
                 "upgradeRolls", List.of()
         );
     }
