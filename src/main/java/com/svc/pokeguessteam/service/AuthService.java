@@ -24,6 +24,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final ProfileService profileService;
     private final AuthCodeService authCodeService;
+    private final TransactionalEmailService transactionalEmailService;
     private final AppAuthProperties authProperties;
     private final AuditLogService auditLogService;
 
@@ -32,6 +33,7 @@ public class AuthService {
             PasswordEncoder passwordEncoder,
             ProfileService profileService,
             AuthCodeService authCodeService,
+            TransactionalEmailService transactionalEmailService,
             AppAuthProperties authProperties,
             AuditLogService auditLogService
     ) {
@@ -39,6 +41,7 @@ public class AuthService {
         this.passwordEncoder = passwordEncoder;
         this.profileService = profileService;
         this.authCodeService = authCodeService;
+        this.transactionalEmailService = transactionalEmailService;
         this.authProperties = authProperties;
         this.auditLogService = auditLogService;
     }
@@ -61,6 +64,7 @@ public class AuthService {
                     "REGISTER_EMAIL_EXISTS",
                     "Tentativa de cadastro com e-mail já registado userId=" + existing.getIdUser()
             );
+            transactionalEmailService.sendExistingAccountRegisterNotice(existing.getEmail());
             if (!Boolean.TRUE.equals(existing.getEmailVerify())) {
                 authCodeService.sendEmailVerificationCodeQuietly(existing);
             }

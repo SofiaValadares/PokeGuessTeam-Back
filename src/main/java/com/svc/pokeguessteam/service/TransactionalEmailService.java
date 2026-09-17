@@ -62,6 +62,24 @@ public class TransactionalEmailService {
         deliver(toEmail, subject, body.trim(), plainCode);
     }
 
+    /**
+     * Aviso sem revelar existência na API: alguém tentou registar com um e-mail já associado a uma conta.
+     */
+    public void sendExistingAccountRegisterNotice(String toEmail) {
+        String subject = "PokeTeamGuess — tentativa de cadastro";
+        String body = """
+                Olá!
+
+                Recebemos um pedido de cadastro com este e-mail, mas já existe uma conta associada a ele.
+
+                Se foi você, faça login ou use a opção de redefinir a senha.
+                Se ainda não confirmou o e-mail, solicite um novo código de verificação na aplicação.
+
+                Se não foi você, ignore esta mensagem. A sua conta permanece inalterada.
+                """;
+        deliver(toEmail, subject, body.trim(), null);
+    }
+
     private void deliver(String intendedTo, String subject, String body, String plainCode) {
         if (mailProperties.isDevLogOnly()) {
             logDevFallback(intendedTo, subject, plainCode, "modo dev — e-mail não enviado");
@@ -116,6 +134,10 @@ public class TransactionalEmailService {
     }
 
     private void logDevFallback(String toEmail, String subject, String plainCode, String reason) {
+        if (plainCode == null || plainCode.isBlank()) {
+            log.warn("[DEV] {} — destino={} assunto={}", reason, toEmail, subject);
+            return;
+        }
         log.warn("[DEV] {} — destino={} assunto={} código={}", reason, toEmail, subject, plainCode);
     }
 }
