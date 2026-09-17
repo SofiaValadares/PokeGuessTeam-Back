@@ -57,6 +57,18 @@ public class ActiveMatchPlayerModel {
     @Column(name = "TURN_TIMEOUT_PENALTIES", nullable = false)
     private int turnTimeoutPenalties;
 
+    /** SHA-256 público do payload (team || nonce). */
+    @Column(name = "TEAM_COMMITMENT", length = 64)
+    private String teamCommitment;
+
+    /** HMAC-SHA256(chave do servidor, commitment). */
+    @Column(name = "TEAM_COMMITMENT_MAC", length = 64)
+    private String teamCommitmentMac;
+
+    /** AES-256-GCM do payload canónico (abertura selada). */
+    @Column(name = "TEAM_SEALED_OPENING", length = 1024)
+    private String sealedOpening;
+
     public String getId() {
         return id;
     }
@@ -137,5 +149,29 @@ public class ActiveMatchPlayerModel {
 
     public void setTurnTimeoutPenalties(int turnTimeoutPenalties) {
         this.turnTimeoutPenalties = turnTimeoutPenalties;
+    }
+
+    public String getTeamCommitment() {
+        return teamCommitment;
+    }
+
+    public void setTeamCommitment(String teamCommitment) {
+        this.teamCommitment = teamCommitment;
+    }
+
+    public String getTeamCommitmentMac() {
+        return teamCommitmentMac;
+    }
+
+    public void setTeamCommitmentMac(String teamCommitmentMac) {
+        this.teamCommitmentMac = teamCommitmentMac;
+    }
+
+    public String getSealedOpening() {
+        return sealedOpening;
+    }
+
+    public void setSealedOpening(String sealedOpening) {
+        this.sealedOpening = sealedOpening;
     }
 }

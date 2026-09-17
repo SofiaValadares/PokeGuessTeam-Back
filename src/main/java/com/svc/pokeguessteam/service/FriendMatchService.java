@@ -10,6 +10,7 @@ import com.svc.pokeguessteam.dto.game.GameHistoryEntryDto;
 import com.svc.pokeguessteam.dto.game.MatchRewardDto;
 import com.svc.pokeguessteam.dto.game.OpponentSlotKnowledgeDto;
 import com.svc.pokeguessteam.dto.game.OpponentTeamKnowledgeResponse;
+import com.svc.pokeguessteam.dto.game.TeamOpeningDto;
 import com.svc.pokeguessteam.exception.ApiBusinessException;
 import com.svc.pokeguessteam.exception.ErrorCodes;
 import com.svc.pokeguessteam.messages.MessageKeys;
@@ -52,6 +53,7 @@ public class FriendMatchService {
     private final FriendMatchStore friendMatchStore;
     private final BonusEventService bonusEventService;
     private final PusherRealtimeService pusherRealtimeService;
+    private final TeamCommitmentService teamCommitmentService;
 
     public FriendMatchService(
             PokemonRepository pokemonRepository,
@@ -63,7 +65,8 @@ public class FriendMatchService {
             DuelTeamService duelTeamService,
             FriendMatchStore friendMatchStore,
             BonusEventService bonusEventService,
-            PusherRealtimeService pusherRealtimeService
+            PusherRealtimeService pusherRealtimeService,
+            TeamCommitmentService teamCommitmentService
     ) {
         this.pokemonRepository = pokemonRepository;
         this.profileService = profileService;
@@ -75,6 +78,7 @@ public class FriendMatchService {
         this.friendMatchStore = friendMatchStore;
         this.bonusEventService = bonusEventService;
         this.pusherRealtimeService = pusherRealtimeService;
+        this.teamCommitmentService = teamCommitmentService;
     }
 
     @Transactional
@@ -104,7 +108,7 @@ public class FriendMatchService {
         match.setJoinCode(JoinCodeGenerator.generateUnique(friendMatchStore::isJoinCodeTaken));
         match.getHostPlayer().setSide(MatchPlayerSide.HOST);
         match.getHostPlayer().setSkipTurns(0);
-        match.getHostPlayer().setTeam(team);
+        teamCommitmentService.bindPlayer(match.getHostPlayer(), team);
         match.getOpponentPlayer().setSide(MatchPlayerSide.OPPONENT);
         match.getOpponentPlayer().setSkipTurns(0);
 
@@ -174,7 +178,7 @@ public class FriendMatchService {
         activeMatchConstraintService.clearStaleClientSideMatches(guestProfile.getId());
         activeMatchConstraintService.ensureCanStartNewMatch(guestProfile.getId());
         match.setGuestProfile(guestProfile);
-        match.getOpponentPlayer().setTeam(team);
+        teamCommitmentService.bindPlayer(match.getOpponentPlayer(), team);
         MatchEngine.tryStartIfBothTeamsReady(match, GameConstants.TEAM_SIZE);
         ActiveMatchModel saved = saveMatch(match);
 
@@ -223,7 +227,7 @@ public class FriendMatchService {
                     MessageKeys.GAME_MATCH_TEAM_LOCKED
             );
         }
-        player.setTeam(team);
+        teamCommitmentService.bindPlayer(player, team);
 
         MatchEngine.tryStartIfBothTeamsReady(match, GameConstants.TEAM_SIZE);
         saveMatch(match);
@@ -447,6 +451,17 @@ public class FriendMatchService {
         if (match.getStatus() != MatchStatus.FINISHED) {
             return null;
         }
+        teamCommitmentService.verifyOpening(
+                match.getHostPlayer(),
+                new TeamOpeningDto(match.getHostPlayer().getTeam(), teamCommitmentService.nonceOf(match.getHostPlayer()))
+        );
+        teamCommitmentService.verifyOpening(
+                match.getOpponentPlayer(),
+                new TeamOpeningDto(
+                        match.getOpponentPlayer().getTeam(),
+                        teamCommitmentService.nonceOf(match.getOpponentPlayer())
+                )
+        );
         GameHistoryEntryDto history = gameHistoryService.saveFriendGameFromActiveMatch(match, surrenderSide);
         friendMatchStore.rememberFinishedHistory(match.getId(), history);
         return history;
@@ -494,7 +509,24 @@ public class FriendMatchService {
                 ? matchRewardService.previewRewardForProfile(match, viewerProfile, surrenderSide)
                 : null;
 
-        return FriendMatchStateDto.from(match, viewerSide, knowledge, recentGuesses, history, yourReward);
+        ActiveMatchPlayerModel yours = viewerSide == MatchPlayerSide.HOST
+                ? match.getHostPlayer()
+                : match.getOpponentPlayer();
+        ActiveMatchPlayerModel opponent = viewerSide == MatchPlayerSide.HOST
+                ? match.getOpponentPlayer()
+                : match.getHostPlayer();
+        boolean opened = match.getStatus() == MatchStatus.FINISHED;
+
+        return FriendMatchStateDto.from(
+                match,
+                viewerSide,
+                knowledge,
+                recentGuesses,
+                history,
+                yourReward,
+                opened ? teamCommitmentService.nonceOf(yours) : null,
+                opened ? teamCommitmentService.nonceOf(opponent) : null
+        );
     }
 
     private Set<Integer> requireActiveEventPool() {

@@ -4,18 +4,13 @@ import com.svc.pokeguessteam.dto.game.GameFinishResponse;
 import com.svc.pokeguessteam.dto.game.GameHistoryEntryDto;
 import com.svc.pokeguessteam.dto.game.GameLocalFinishRequest;
 import com.svc.pokeguessteam.dto.game.LocalMatchSetupRequest;
+import com.svc.pokeguessteam.dto.game.LocalMatchSetupResponse;
 import com.svc.pokeguessteam.dto.game.MatchRewardDto;
-import com.svc.pokeguessteam.exception.ApiBusinessException;
-import com.svc.pokeguessteam.exception.ErrorCodes;
-import com.svc.pokeguessteam.messages.MessageKeys;
 import com.svc.pokeguessteam.model.enums.GameModes;
-import com.svc.pokeguessteam.model.enums.MatchPlayerSide;
 import com.svc.pokeguessteam.model.enums.MatchStatus;
-import com.svc.pokeguessteam.model.game.ActiveMatchModel;
 import com.svc.pokeguessteam.model.user.ProfileModel;
 import com.svc.pokeguessteam.repository.game.ActiveMatchRepository;
 import com.svc.pokeguessteam.util.GameFinishValidation;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,7 +26,7 @@ public class LocalMatchService {
     private final ActiveMatchConstraintService activeMatchConstraintService;
     private final DuelTeamService duelTeamService;
     private final ActiveMatchRemovalService activeMatchRemovalService;
-    private final ActiveMatchTeamService activeMatchTeamService;
+    private final ClientMatchCommitmentService clientMatchCommitmentService;
 
     public LocalMatchService(
             ActiveMatchRepository activeMatchRepository,
@@ -41,7 +36,7 @@ public class LocalMatchService {
             ActiveMatchConstraintService activeMatchConstraintService,
             DuelTeamService duelTeamService,
             ActiveMatchRemovalService activeMatchRemovalService,
-            ActiveMatchTeamService activeMatchTeamService
+            ClientMatchCommitmentService clientMatchCommitmentService
     ) {
         this.activeMatchRepository = activeMatchRepository;
         this.profileService = profileService;
@@ -50,64 +45,53 @@ public class LocalMatchService {
         this.activeMatchConstraintService = activeMatchConstraintService;
         this.duelTeamService = duelTeamService;
         this.activeMatchRemovalService = activeMatchRemovalService;
-        this.activeMatchTeamService = activeMatchTeamService;
+        this.clientMatchCommitmentService = clientMatchCommitmentService;
     }
 
-    /** Valida equipas e nome do adversário; o jogo corre no cliente. */
+    /** Valida equipas, publica commitments e sela as aberturas. */
     @Transactional
-    public void validateSetupForClient(String userId, LocalMatchSetupRequest request) {
+    public LocalMatchSetupResponse validateSetupForClient(String userId, LocalMatchSetupRequest request) {
         ProfileModel profile = profileService.ensureProfileWithStarters(userId);
         clearStaleLocalMatches(profile.getId());
         activeMatchConstraintService.ensureCanStartNewMatch(profile.getId());
-        GameFinishValidation.validateAndNormalizeLocalOpponentName(request.opponentName());
-        duelTeamService.validateTeamFromRegisteredPokedex(userId, request.hostTeam());
-        duelTeamService.validateTeamFromRegisteredPokedex(userId, request.opponentTeam());
-
-        ActiveMatchModel match = createSetupMatch(profile, request.opponentName(), request.hostTeam(), request.opponentTeam());
-        ActiveMatchModel saved = activeMatchRepository.save(match);
-        activeMatchTeamService.saveTeams(saved);
+        String opponentName = GameFinishValidation.validateAndNormalizeLocalOpponentName(request.opponentName());
+        List<Integer> hostTeam = duelTeamService.validateTeamFromRegisteredPokedex(userId, request.hostTeam());
+        List<Integer> opponentTeam = duelTeamService.validateTeamFromRegisteredPokedex(userId, request.opponentTeam());
+        ClientMatchCommitmentService.CommittedClientMatch committed =
+                clientMatchCommitmentService.commit(profile, GameModes.LOCAL, opponentName, hostTeam, opponentTeam);
+        return new LocalMatchSetupResponse(
+                committed.matchId(),
+                committed.host().commitment(),
+                committed.opponent().commitment()
+        );
     }
 
-    /** Persiste histórico e recompensas após partida resolvida no cliente. */
+    /** Abre os commitments (AES + SHA-256 + HMAC), persiste histórico e recompensas. */
     @Transactional
     public GameFinishResponse finishClientMatch(String userId, GameLocalFinishRequest request) {
         ProfileModel profile = profileService.ensureProfileWithStarters(userId);
-        ActiveMatchModel match = requireActiveSetupMatch(profile.getId(), GameModes.LOCAL);
-        List<Integer> userTeam = activeMatchTeamService.loadTeam(match.getHostPlayer().getId());
-        List<Integer> opponentTeam = activeMatchTeamService.loadTeam(match.getOpponentPlayer().getId());
-        GameHistoryEntryDto history = gameHistoryService.saveLocalFinish(userId, request, userTeam, opponentTeam);
-        activeMatchRemovalService.deleteByMatchId(match.getId());
+        ClientMatchCommitmentService.OpenedClientMatch opened = clientMatchCommitmentService.verifyAndConsume(
+                profile.getId(),
+                GameModes.LOCAL,
+                request.matchId(),
+                request.hostTeam(),
+                request.opponentTeam()
+        );
+        GameHistoryEntryDto history = gameHistoryService.saveLocalFinish(
+                userId,
+                request,
+                request.hostTeam(),
+                request.opponentTeam()
+        );
         MatchRewardDto reward = matchRewardService.grantForUser(userId, GameModes.LOCAL, request.result());
-        return new GameFinishResponse(history, reward);
-    }
-
-    private ActiveMatchModel createSetupMatch(
-            ProfileModel profile,
-            String opponentName,
-            List<Integer> hostTeam,
-            List<Integer> opponentTeam
-    ) {
-        ActiveMatchModel match = FriendMatchStore.newMatchShell();
-        match.setProfile(profile);
-        match.setGameMode(GameModes.LOCAL);
-        match.setOpponentName(opponentName);
-        match.getHostPlayer().setSide(MatchPlayerSide.HOST);
-        match.getHostPlayer().setTeam(hostTeam);
-        match.getOpponentPlayer().setSide(MatchPlayerSide.OPPONENT);
-        match.getOpponentPlayer().setTeam(opponentTeam);
-        return match;
-    }
-
-    private ActiveMatchModel requireActiveSetupMatch(String profileId, GameModes mode) {
-        return activeMatchRepository.findAllUnfinishedForProfileOrderByCreatedAtDesc(profileId, MatchStatus.FINISHED)
-                .stream()
-                .filter(match -> match.getGameMode() == mode)
-                .findFirst()
-                .orElseThrow(() -> new ApiBusinessException(
-                        HttpStatus.NOT_FOUND,
-                    ErrorCodes.GAME_MATCH_NOT_FOUND,
-                    MessageKeys.GAME_MATCH_NOT_FOUND
-                ));
+        return new GameFinishResponse(
+                history,
+                reward,
+                opened.hostCommitment(),
+                opened.opponentCommitment(),
+                opened.hostOpening(),
+                opened.opponentOpening()
+        );
     }
 
     private void clearStaleLocalMatches(String profileId) {
