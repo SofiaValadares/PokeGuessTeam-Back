@@ -7,6 +7,7 @@ import com.svc.pokeguessteam.model.user.UserModel;
 import com.svc.pokeguessteam.config.AppAuthProperties;
 import com.svc.pokeguessteam.logging.AppLogger;
 import com.svc.pokeguessteam.repository.user.UserRepository;
+import com.svc.pokeguessteam.validation.UsernameEmailGuard;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -46,6 +47,7 @@ public class AuthService {
     public UserModel register(String username, String email, String rawPassword) {
         String normalizedEmail = normalizeEmail(email);
         String normalizedUsername = normalizeUsername(username);
+        rejectUsernameFromEmail(normalizedUsername, normalizedEmail);
 
         if (userRepository.findByEmail(normalizedEmail).isPresent()) {
             throw new ApiBusinessException(
@@ -74,19 +76,19 @@ public class AuthService {
         return saved;
     }
 
-    public UserModel authenticate(String login, String rawPassword) {
-        String trimmedLogin = login == null ? "" : login.trim();
-        if (trimmedLogin.isEmpty() || rawPassword == null || rawPassword.isEmpty()) {
+    public UserModel authenticate(String email, String rawPassword) {
+        String trimmedEmail = email == null ? "" : email.trim();
+        if (trimmedEmail.isEmpty() || !trimmedEmail.contains("@") || rawPassword == null || rawPassword.isEmpty()) {
             auditLogService.recordSecurity(null, "LOGIN_FAILED", "Credenciais inválidas (campos vazios)");
             throw invalidCredentials();
         }
 
-        Optional<UserModel> found = findUserByLogin(trimmedLogin);
+        Optional<UserModel> found = userRepository.findByEmail(normalizeEmail(trimmedEmail));
         if (found.isEmpty()) {
             auditLogService.recordSecurity(
                     null,
                     "LOGIN_FAILED",
-                    "Utilizador não encontrado login=" + redactLogin(trimmedLogin)
+                    "Utilizador não encontrado login=" + redactLogin(trimmedEmail)
             );
             throw invalidCredentials();
         }
@@ -219,6 +221,7 @@ public class AuthService {
                     MessageKeys.AUTH_CURRENT_PASSWORD_WRONG
             );
         }
+        rejectUsernameFromEmail(normalizedUsername, user.getEmail());
         if (normalizedUsername.equals(user.getUsername())) {
             return;
         }
@@ -241,12 +244,14 @@ public class AuthService {
         );
     }
 
-    private Optional<UserModel> findUserByLogin(String login) {
-        if (login.contains("@")) {
-            return userRepository.findByEmail(normalizeEmail(login));
+    private static void rejectUsernameFromEmail(String username, String email) {
+        if (UsernameEmailGuard.conflicts(username, email)) {
+            throw new ApiBusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    ErrorCodes.AUTH_USERNAME_FROM_EMAIL,
+                    MessageKeys.AUTH_USERNAME_FROM_EMAIL
+            );
         }
-
-        return userRepository.findByUsername(normalizeUsername(login));
     }
 
     private static String normalizeEmail(String email) {

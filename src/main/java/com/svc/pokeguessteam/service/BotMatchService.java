@@ -1,5 +1,7 @@
 package com.svc.pokeguessteam.service;
 
+import com.svc.pokeguessteam.dto.game.BotMatchGuessCheckResponse;
+import com.svc.pokeguessteam.dto.game.BotMatchGuessRequest;
 import com.svc.pokeguessteam.dto.game.BotMatchSetupResponse;
 import com.svc.pokeguessteam.dto.game.BotMatchTeamRequest;
 import com.svc.pokeguessteam.dto.game.GameBotFinishRequest;
@@ -80,28 +82,39 @@ public class BotMatchService {
         return new BotMatchSetupResponse(
                 committed.matchId(),
                 committed.host().team(),
-                committed.opponent().team(),
                 committed.host().commitment(),
                 committed.opponent().commitment()
         );
+    }
+
+    @Transactional(readOnly = true)
+    public BotMatchGuessCheckResponse evaluateGuess(String userId, BotMatchGuessRequest request) {
+        ProfileModel profile = profileService.ensureProfileWithStarters(userId);
+        boolean hit = clientMatchCommitmentService.isOpponentTeamHit(
+                profile.getId(),
+                GameModes.BOT,
+                request.matchId(),
+                request.pokedexNumber()
+        );
+        return new BotMatchGuessCheckResponse(hit, request.pokedexNumber());
     }
 
     /** Abre os commitments (AES + SHA-256 + HMAC), persiste histórico e recompensas. */
     @Transactional
     public GameFinishResponse finishClientMatch(String userId, GameBotFinishRequest request) {
         ProfileModel profile = profileService.ensureProfileWithStarters(userId);
-        ClientMatchCommitmentService.OpenedClientMatch opened = clientMatchCommitmentService.verifyAndConsume(
+        ClientMatchCommitmentService.OpenedClientMatch opened = clientMatchCommitmentService.verifyHostAndOpenSealedOpponent(
                 profile.getId(),
                 GameModes.BOT,
                 request.matchId(),
-                request.hostTeam(),
-                request.opponentTeam()
+                request.hostTeam()
         );
+        List<Integer> opponentTeam = opened.opponentOpening().team();
         GameHistoryEntryDto history = gameHistoryService.saveBotFinish(
                 userId,
                 request,
                 request.hostTeam(),
-                request.opponentTeam()
+                opponentTeam
         );
         MatchRewardDto reward = matchRewardService.grantForUser(userId, GameModes.BOT, request.result());
         return new GameFinishResponse(

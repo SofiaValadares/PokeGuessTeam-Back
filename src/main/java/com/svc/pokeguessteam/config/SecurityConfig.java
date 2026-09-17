@@ -1,10 +1,10 @@
 package com.svc.pokeguessteam.config;
 
-import com.svc.pokeguessteam.repository.user.UserRepository;
 import com.svc.pokeguessteam.security.DatabaseRoleRefreshFilter;
 import com.svc.pokeguessteam.security.JsonAuthenticationEntryPoint;
-import com.svc.pokeguessteam.security.SessionAuthorityService;
+import com.svc.pokeguessteam.security.SessionIpBindingFilter;
 
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.boot.web.servlet.server.CookieSameSiteSupplier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -12,10 +12,13 @@ import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.session.SessionRegistry;
+import org.springframework.security.core.session.SessionRegistryImpl;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.intercept.AuthorizationFilter;
+import org.springframework.security.web.session.HttpSessionEventPublisher;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -27,17 +30,17 @@ import java.util.List;
 public class SecurityConfig {
 
     private final AppCorsProperties corsProperties;
-    private final UserRepository userRepository;
-    private final SessionAuthorityService sessionAuthorityService;
+    private final DatabaseRoleRefreshFilter databaseRoleRefreshFilter;
+    private final SessionIpBindingFilter sessionIpBindingFilter;
 
     public SecurityConfig(
             AppCorsProperties corsProperties,
-            UserRepository userRepository,
-            SessionAuthorityService sessionAuthorityService
+            DatabaseRoleRefreshFilter databaseRoleRefreshFilter,
+            SessionIpBindingFilter sessionIpBindingFilter
     ) {
         this.corsProperties = corsProperties;
-        this.userRepository = userRepository;
-        this.sessionAuthorityService = sessionAuthorityService;
+        this.databaseRoleRefreshFilter = databaseRoleRefreshFilter;
+        this.sessionIpBindingFilter = sessionIpBindingFilter;
     }
 
     @Bean
@@ -55,6 +58,7 @@ public class SecurityConfig {
                         .sessionFixation(fixation -> fixation.migrateSession())
                         .maximumSessions(1)
                         .maxSessionsPreventsLogin(false)
+                        .sessionRegistry(sessionRegistry())
                 )
 
                 .authorizeHttpRequests(auth -> auth
@@ -186,14 +190,43 @@ public class SecurityConfig {
          * O mesmo vale para rebaixamentos.
          */
         http.addFilterBefore(
-                new DatabaseRoleRefreshFilter(
-                        userRepository,
-                        sessionAuthorityService
-                ),
+                sessionIpBindingFilter,
+                AuthorizationFilter.class
+        );
+        http.addFilterBefore(
+                databaseRoleRefreshFilter,
                 AuthorizationFilter.class
         );
 
         return http.build();
+    }
+
+    @Bean
+    public SessionRegistry sessionRegistry() {
+        return new SessionRegistryImpl();
+    }
+
+    @Bean
+    public HttpSessionEventPublisher httpSessionEventPublisher() {
+        return new HttpSessionEventPublisher();
+    }
+
+    @Bean
+    public FilterRegistrationBean<DatabaseRoleRefreshFilter> databaseRoleRefreshFilterRegistration(
+            DatabaseRoleRefreshFilter filter
+    ) {
+        FilterRegistrationBean<DatabaseRoleRefreshFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
+    }
+
+    @Bean
+    public FilterRegistrationBean<SessionIpBindingFilter> sessionIpBindingFilterRegistration(
+            SessionIpBindingFilter filter
+    ) {
+        FilterRegistrationBean<SessionIpBindingFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
     }
 
     @Bean
