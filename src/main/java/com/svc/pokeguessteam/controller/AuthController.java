@@ -16,9 +16,12 @@ import com.svc.pokeguessteam.dto.auth.RegisterResponse;
 import com.svc.pokeguessteam.dto.auth.SessionResponse;
 import com.svc.pokeguessteam.messages.MessageKeys;
 import com.svc.pokeguessteam.model.user.UserModel;
+import com.svc.pokeguessteam.security.ActiveUserSessionIndex;
+import com.svc.pokeguessteam.security.ClientIpResolver;
 import com.svc.pokeguessteam.security.DeviceFingerprintUtil;
 import com.svc.pokeguessteam.security.SessionAuthorityService;
 import com.svc.pokeguessteam.security.SessionBindingInterceptor;
+import com.svc.pokeguessteam.security.SessionIpBindingFilter;
 import com.svc.pokeguessteam.service.AccountDeletionService;
 import com.svc.pokeguessteam.service.AuthCodeService;
 import com.svc.pokeguessteam.service.AuthService;
@@ -55,6 +58,7 @@ public class AuthController {
     private final CurrentUserService currentUserService;
     private final UserRoleService userRoleService;
     private final SessionAuthorityService sessionAuthorityService;
+    private final ActiveUserSessionIndex activeUserSessionIndex;
     private final MessageSource messageSource;
 
     public AuthController(
@@ -65,6 +69,7 @@ public class AuthController {
             CurrentUserService currentUserService,
             UserRoleService userRoleService,
             SessionAuthorityService sessionAuthorityService,
+            ActiveUserSessionIndex activeUserSessionIndex,
             MessageSource messageSource
     ) {
         this.authService = authService;
@@ -74,6 +79,7 @@ public class AuthController {
         this.currentUserService = currentUserService;
         this.userRoleService = userRoleService;
         this.sessionAuthorityService = sessionAuthorityService;
+        this.activeUserSessionIndex = activeUserSessionIndex;
         this.messageSource = messageSource;
     }
 
@@ -204,7 +210,7 @@ public class AuthController {
             HttpServletRequest httpRequest
     ) {
         UserModel user = authService.authenticate(
-                request.login(),
+                request.email(),
                 request.password()
         );
 
@@ -280,13 +286,22 @@ public class AuthController {
 
         profileService.ensureProfileWithStarters(user.getIdUser());
 
+        HttpSession previous = httpRequest.getSession(false);
+        if (previous != null) {
+            previous.invalidate();
+        }
         HttpSession session = httpRequest.getSession(true);
         session.setAttribute(USER_ID_ATTR, user.getIdUser());
+        session.setAttribute(
+                SessionIpBindingFilter.CLIENT_IP_ATTR,
+                ClientIpResolver.resolve(httpRequest)
+        );
         session.setAttribute(
                 SessionBindingInterceptor.DEVICE_ID_ATTR,
                 DeviceFingerprintUtil.generateDeviceId(httpRequest)
         );
         sessionAuthorityService.applyToSession(user, session);
+        activeUserSessionIndex.register(user.getIdUser(), session);
     }
 
     private AuthSessionResponse toSessionResponse(UserModel user, String message, boolean firstLogin) {

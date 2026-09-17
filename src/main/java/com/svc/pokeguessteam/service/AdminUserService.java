@@ -12,6 +12,7 @@ import com.svc.pokeguessteam.model.enums.UserRole;
 import com.svc.pokeguessteam.model.user.UserModel;
 import com.svc.pokeguessteam.repository.game.HistoryGamePlayerRepository;
 import com.svc.pokeguessteam.repository.user.UserRepository;
+import com.svc.pokeguessteam.security.ActiveUserSessionIndex;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -32,19 +33,22 @@ public class AdminUserService {
     private final AdminAccessService adminAccessService;
     private final AdminAuditService adminAuditService;
     private final AuditLogService auditLogService;
+    private final ActiveUserSessionIndex activeUserSessionIndex;
 
     public AdminUserService(
             UserRepository userRepository,
             HistoryGamePlayerRepository historyGamePlayerRepository,
             AdminAccessService adminAccessService,
             AdminAuditService adminAuditService,
-            AuditLogService auditLogService
+            AuditLogService auditLogService,
+            ActiveUserSessionIndex activeUserSessionIndex
     ) {
         this.userRepository = userRepository;
         this.historyGamePlayerRepository = historyGamePlayerRepository;
         this.adminAccessService = adminAccessService;
         this.adminAuditService = adminAuditService;
         this.auditLogService = auditLogService;
+        this.activeUserSessionIndex = activeUserSessionIndex;
     }
 
     @Transactional(readOnly = true)
@@ -225,6 +229,10 @@ public class AdminUserService {
 
         UserModel saved =
                 userRepository.save(target);
+
+        if (request.scope() == BanScope.SITE) {
+            activeUserSessionIndex.invalidateAll(saved.getIdUser());
+        }
 
         auditLogService.recordAdminAction(
                 adminId,

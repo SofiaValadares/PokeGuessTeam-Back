@@ -1,5 +1,7 @@
 package com.svc.pokeguessteam.controller;
 
+import com.svc.pokeguessteam.dto.game.BotMatchGuessCheckResponse;
+import com.svc.pokeguessteam.dto.game.BotMatchGuessRequest;
 import com.svc.pokeguessteam.dto.game.BotMatchSetupResponse;
 import com.svc.pokeguessteam.dto.game.BotMatchTeamRequest;
 import com.svc.pokeguessteam.dto.game.GameBotFinishRequest;
@@ -16,7 +18,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Partida vs bot: validação de equipa e registo de resultado no servidor; motor no cliente.
+ * Partida vs bot: validação de equipa e palpite no servidor; motor de turno no cliente.
  */
 @RestController
 @RequestMapping("/api/game/bot/match")
@@ -37,6 +39,15 @@ public class BotMatchController {
     ) {
         String userId = currentUserService.requireUserId(session);
         return ResponseEntity.ok(botMatchService.validateTeamForClient(userId, request));
+    }
+
+    @PostMapping("/guess")
+    public ResponseEntity<BotMatchGuessCheckResponse> guess(
+            HttpSession session,
+            @Valid @RequestBody BotMatchGuessRequest request
+    ) {
+        String userId = currentUserService.requireUserId(session);
+        return ResponseEntity.ok(botMatchService.evaluateGuess(userId, request));
     }
 
     @PostMapping("/finish")

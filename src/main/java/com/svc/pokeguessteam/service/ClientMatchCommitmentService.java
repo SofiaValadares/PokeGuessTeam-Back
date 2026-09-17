@@ -102,6 +102,51 @@ public class ClientMatchCommitmentService {
         return new OpenedClientMatch(hostCommitment, opponentCommitment, hostOpening, opponentOpening);
     }
 
+    @Transactional
+    public OpenedClientMatch verifyHostAndOpenSealedOpponent(
+            String profileId,
+            GameModes mode,
+            String matchId,
+            List<Integer> claimedHostTeam
+    ) {
+        ActiveMatchModel match = activeMatchRepository.findByIdAndProfile_Id(matchId, profileId)
+                .filter(stored -> stored.getGameMode() == mode)
+                .orElseThrow(() -> new ApiBusinessException(
+                        HttpStatus.NOT_FOUND,
+                        ErrorCodes.GAME_MATCH_NOT_FOUND,
+                        MessageKeys.GAME_MATCH_NOT_FOUND
+                ));
+        String hostCommitment = match.getHostPlayer().getTeamCommitment();
+        String opponentCommitment = match.getOpponentPlayer().getTeamCommitment();
+        TeamOpeningDto hostOpening = teamCommitmentService.openClaimedTeam(
+                match.getHostPlayer(),
+                claimedHostTeam,
+                null
+        );
+        TeamOpeningDto opponentOpening = teamCommitmentService.openSealed(match.getOpponentPlayer());
+        activeMatchRemovalService.deleteByMatchId(match.getId());
+        return new OpenedClientMatch(hostCommitment, opponentCommitment, hostOpening, opponentOpening);
+    }
+
+    @Transactional(readOnly = true)
+    public boolean isOpponentTeamHit(String profileId, GameModes mode, String matchId, int pokedexNumber) {
+        ActiveMatchModel match = activeMatchRepository.findByIdAndProfile_Id(matchId, profileId)
+                .filter(stored -> stored.getGameMode() == mode)
+                .orElseThrow(() -> new ApiBusinessException(
+                        HttpStatus.NOT_FOUND,
+                        ErrorCodes.GAME_MATCH_NOT_FOUND,
+                        MessageKeys.GAME_MATCH_NOT_FOUND
+                ));
+        if (match.getStatus() != MatchStatus.ACTIVE) {
+            throw new ApiBusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    ErrorCodes.GAME_MATCH_NOT_ACTIVE,
+                    MessageKeys.GAME_MATCH_NOT_ACTIVE
+            );
+        }
+        return teamCommitmentService.openSealed(match.getOpponentPlayer()).team().contains(pokedexNumber);
+    }
+
     public record CommittedClientMatch(
             String matchId,
             TeamCommitmentService.IssuedTeamCommitment host,

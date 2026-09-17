@@ -16,9 +16,6 @@ public record GameBotFinishRequest(
         @NotNull
         @Size(min = GameConstants.TEAM_SIZE, max = GameConstants.TEAM_SIZE)
         List<Integer> hostTeam,
-        @NotNull
-        @Size(min = GameConstants.TEAM_SIZE, max = GameConstants.TEAM_SIZE)
-        List<Integer> opponentTeam,
         @Min(value = 0, message = "{error.game.correct-guesses.min}")
         @Max(value = GameConstants.MAX_CORRECT_GUESSES, message = "{error.game.correct-guesses.max}")
         int userCorrectGuesses,
