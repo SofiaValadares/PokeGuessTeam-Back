@@ -116,13 +116,6 @@ public class PusherRealtimeService {
         } catch (Exception ex) {
             log.warn("Falha ao publicar Pusher user={} event={}: {}", userId, EVENT_MATCH_STATE, ex.getMessage());
         }
-        if (state != null && state.matchId() != null) {
-            try {
-                pusher.trigger(matchChannel(state.matchId()), EVENT_MATCH_STATE, safePayload);
-            } catch (Exception ex) {
-                log.warn("Falha ao publicar Pusher match={}: {}", state.matchId(), ex.getMessage());
-            }
-        }
     }
 
     public void publishQueueWaiting(String userId, int registeredPokedexCount) {

@@ -15,6 +15,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -23,15 +24,18 @@ public class ClientMatchCommitmentService {
     private final ActiveMatchRepository activeMatchRepository;
     private final ActiveMatchRemovalService activeMatchRemovalService;
     private final TeamCommitmentService teamCommitmentService;
+    private final ActiveMatchTeamService activeMatchTeamService;
 
     public ClientMatchCommitmentService(
             ActiveMatchRepository activeMatchRepository,
             ActiveMatchRemovalService activeMatchRemovalService,
-            TeamCommitmentService teamCommitmentService
+            TeamCommitmentService teamCommitmentService,
+            ActiveMatchTeamService activeMatchTeamService
     ) {
         this.activeMatchRepository = activeMatchRepository;
         this.activeMatchRemovalService = activeMatchRemovalService;
         this.teamCommitmentService = teamCommitmentService;
+        this.activeMatchTeamService = activeMatchTeamService;
     }
 
     @Transactional
@@ -59,7 +63,17 @@ public class ClientMatchCommitmentService {
         TeamCommitmentService.IssuedTeamCommitment opponentIssued =
                 teamCommitmentService.bindPlayer(opponent, opponentTeam);
 
+        if (mode == GameModes.BOT) {
+            // Host começa; o /guess reutiliza MatchEngine como no modo amigo.
+            match.setStartingPlayer(MatchPlayerSide.HOST);
+            match.setCurrentTurn(MatchPlayerSide.HOST);
+            match.setStartedAt(LocalDateTime.now());
+        }
+
         ActiveMatchModel saved = activeMatchRepository.save(match);
+        activeMatchRepository.flush();
+        // Times em claro para validação mid-match; sealedOpening fica só para integridade no finish.
+        activeMatchTeamService.saveTeams(saved);
         return new CommittedClientMatch(saved.getId(), hostIssued, opponentIssued);
     }
 
@@ -144,7 +158,15 @@ public class ClientMatchCommitmentService {
                     MessageKeys.GAME_MATCH_NOT_ACTIVE
             );
         }
-        return teamCommitmentService.openSealed(match.getOpponentPlayer()).team().contains(pokedexNumber);
+        List<Integer> opponentTeam = activeMatchTeamService.loadTeam(match.getOpponentPlayer().getId());
+        if (opponentTeam.isEmpty()) {
+            throw new ApiBusinessException(
+                    HttpStatus.CONFLICT,
+                    ErrorCodes.GAME_MATCH_NOT_ACTIVE,
+                    MessageKeys.GAME_MATCH_NOT_ACTIVE
+            );
+        }
+        return opponentTeam.contains(pokedexNumber);
     }
 
     public record CommittedClientMatch(

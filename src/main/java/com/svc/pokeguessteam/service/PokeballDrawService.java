@@ -40,6 +40,7 @@ public class PokeballDrawService {
     private final ProfileService profileService;
     private final PokemonRepository pokemonRepository;
     private final EvolutionLineRepository evolutionLineRepository;
+    private final NationalPokedexCatalog nationalPokedexCatalog;
     private final ProfileInventoryItemRepository profileInventoryItemRepository;
     private final UserPokemonInventoryRepository userPokemonInventoryRepository;
     private final UserPokedexService userPokedexService;
@@ -50,6 +51,7 @@ public class PokeballDrawService {
             ProfileService profileService,
             PokemonRepository pokemonRepository,
             EvolutionLineRepository evolutionLineRepository,
+            NationalPokedexCatalog nationalPokedexCatalog,
             ProfileInventoryItemRepository profileInventoryItemRepository,
             UserPokemonInventoryRepository userPokemonInventoryRepository,
             UserPokedexService userPokedexService,
@@ -59,6 +61,7 @@ public class PokeballDrawService {
         this.profileService = profileService;
         this.pokemonRepository = pokemonRepository;
         this.evolutionLineRepository = evolutionLineRepository;
+        this.nationalPokedexCatalog = nationalPokedexCatalog;
         this.profileInventoryItemRepository = profileInventoryItemRepository;
         this.userPokemonInventoryRepository = userPokemonInventoryRepository;
         this.userPokedexService = userPokedexService;
@@ -142,27 +145,32 @@ public class PokeballDrawService {
             );
         }
 
+        Map<Integer, PokemonModel> byDex = nationalPokedexCatalog.speciesByDex();
         Map<Integer, PokemonModel> basesByDex = new LinkedHashMap<>();
-        for (Integer dex : eventDex) {
-            List<EvolutionLineModel> lines = evolutionLineRepository.findAllLinesContainingPokedexNumber(dex);
-            for (EvolutionLineModel line : lines) {
-                List<Integer> members = line.getMemberPokedexNumbers();
-                if (members == null || members.isEmpty()) {
-                    continue;
+        List<EvolutionLineModel> lines = evolutionLineRepository.findAllLinesContainingPokedexNumbers(eventDex);
+        for (EvolutionLineModel line : lines) {
+            List<Integer> members = line.getMemberPokedexNumbers();
+            if (members == null || members.isEmpty()) {
+                continue;
+            }
+            List<PokemonModel> species = new ArrayList<>();
+            for (Integer member : members) {
+                PokemonModel pokemon = byDex.get(member);
+                if (pokemon != null) {
+                    species.add(pokemon);
                 }
-                List<PokemonModel> species = pokemonRepository.findByPokedexNumberIn(members);
-                PokemonModel base = species.stream()
-                        .filter(p -> p.getEvolutionStage() == EvolutionStage.BASE)
-                        .min(Comparator.comparingInt(PokemonModel::getPokedexNumber))
-                        .orElseGet(() -> species.stream()
-                                .min(Comparator.comparingInt(p -> {
-                                    int idx = members.indexOf(p.getPokedexNumber());
-                                    return idx < 0 ? Integer.MAX_VALUE : idx;
-                                }))
-                                .orElse(null));
-                if (base != null) {
-                    basesByDex.putIfAbsent(base.getPokedexNumber(), base);
-                }
+            }
+            PokemonModel base = species.stream()
+                    .filter(p -> p.getEvolutionStage() == EvolutionStage.BASE)
+                    .min(Comparator.comparingInt(PokemonModel::getPokedexNumber))
+                    .orElseGet(() -> species.stream()
+                            .min(Comparator.comparingInt(p -> {
+                                int idx = members.indexOf(p.getPokedexNumber());
+                                return idx < 0 ? Integer.MAX_VALUE : idx;
+                            }))
+                            .orElse(null));
+            if (base != null) {
+                basesByDex.putIfAbsent(base.getPokedexNumber(), base);
             }
         }
 

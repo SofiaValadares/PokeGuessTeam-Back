@@ -1,11 +1,12 @@
 package com.svc.pokeguessteam.util;
 
-import java.util.concurrent.ThreadLocalRandom;
+import java.security.SecureRandom;
 import java.util.function.Predicate;
 
 public final class JoinCodeGenerator {
 
     private static final char[] ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789".toCharArray();
+    private static final SecureRandom RANDOM = new SecureRandom();
 
     private JoinCodeGenerator() {
     }
@@ -28,10 +29,9 @@ public final class JoinCodeGenerator {
     }
 
     private static String randomCode() {
-        ThreadLocalRandom random = ThreadLocalRandom.current();
         char[] buffer = new char[GameConstants.FRIEND_JOIN_CODE_LENGTH];
         for (int i = 0; i < buffer.length; i++) {
-            buffer[i] = ALPHABET[random.nextInt(ALPHABET.length)];
+            buffer[i] = ALPHABET[RANDOM.nextInt(ALPHABET.length)];
         }
         return new String(buffer);
     }

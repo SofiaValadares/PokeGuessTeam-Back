@@ -22,7 +22,6 @@ import com.svc.pokeguessteam.model.game.ActiveMatchModel;
 import com.svc.pokeguessteam.model.game.ActiveMatchPlayerModel;
 import com.svc.pokeguessteam.model.pokemon.PokemonModel;
 import com.svc.pokeguessteam.model.user.ProfileModel;
-import com.svc.pokeguessteam.repository.pokemon.PokemonRepository;
 import com.svc.pokeguessteam.util.GameConstants;
 import com.svc.pokeguessteam.util.JoinCodeGenerator;
 import com.svc.pokeguessteam.util.MatchEngine;
@@ -37,13 +36,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
 public class FriendMatchService {
 
-    private final PokemonRepository pokemonRepository;
+    private final NationalPokedexCatalog nationalPokedexCatalog;
     private final ProfileService profileService;
     private final GameHistoryService gameHistoryService;
     private final MatchRewardService matchRewardService;
@@ -56,7 +54,7 @@ public class FriendMatchService {
     private final TeamCommitmentService teamCommitmentService;
 
     public FriendMatchService(
-            PokemonRepository pokemonRepository,
+            NationalPokedexCatalog nationalPokedexCatalog,
             ProfileService profileService,
             GameHistoryService gameHistoryService,
             MatchRewardService matchRewardService,
@@ -68,7 +66,7 @@ public class FriendMatchService {
             PusherRealtimeService pusherRealtimeService,
             TeamCommitmentService teamCommitmentService
     ) {
-        this.pokemonRepository = pokemonRepository;
+        this.nationalPokedexCatalog = nationalPokedexCatalog;
         this.profileService = profileService;
         this.gameHistoryService = gameHistoryService;
         this.matchRewardService = matchRewardService;
@@ -277,6 +275,7 @@ public class FriendMatchService {
         }
 
         PokemonModel guessed = requirePokemon(request.pokedexNumber());
+        duelTeamService.requireRegisteredGuess(userId, guessed.getPokedexNumber());
         if (match.isEventMode() && !match.getEventPokedexNumbers().contains(guessed.getPokedexNumber())) {
             throw new ApiBusinessException(
                     HttpStatus.BAD_REQUEST,
@@ -325,7 +324,7 @@ public class FriendMatchService {
             );
         }
 
-        List<PokemonModel> allPokemon = pokemonRepository.findAllByOrderByPokedexNumberAsc();
+        List<PokemonModel> allPokemon = nationalPokedexCatalog.allSpeciesOrdered();
         PokemonModel autoGuess = pickRandomUnusedGuess(match, side, allPokemon);
         if (autoGuess == null) {
             throw new ApiBusinessException(
@@ -494,7 +493,7 @@ public class FriendMatchService {
     ) {
         MatchPlayerSide viewerSide = resolveSide(match, viewerProfile);
         Map<Integer, PokemonModel> pokemonByDex = loadPokemonByDex();
-        List<OpponentSlotKnowledgeDto> knowledge = matchKnowledgeService.buildKnowledge(match, viewerSide);
+        List<OpponentSlotKnowledgeDto> knowledge = matchKnowledgeService.buildKnowledge(match, viewerSide, pokemonByDex);
 
         List<BotMatchGuessFeedbackDto> recentGuesses = List.copyOf(match.getGuesses()).stream()
                 .limit(20)
@@ -620,12 +619,15 @@ public class FriendMatchService {
     }
 
     private PokemonModel requirePokemon(int pokedexNumber) {
-        return pokemonRepository.findByPokedexNumber(pokedexNumber)
-                .orElseThrow(() -> new ApiBusinessException(
-                        HttpStatus.NOT_FOUND,
-                        ErrorCodes.POKEMON_SPECIES_NOT_FOUND,
-                        MessageKeys.POKEMON_SPECIES_NOT_FOUND
-                ));
+        PokemonModel pokemon = nationalPokedexCatalog.speciesByDex().get(pokedexNumber);
+        if (pokemon == null) {
+            throw new ApiBusinessException(
+                    HttpStatus.NOT_FOUND,
+                    ErrorCodes.POKEMON_SPECIES_NOT_FOUND,
+                    MessageKeys.POKEMON_SPECIES_NOT_FOUND
+            );
+        }
+        return pokemon;
     }
 
     private void ensureNotAlreadyGuessed(ActiveMatchModel match, MatchPlayerSide side, int pokedexNumber) {
@@ -641,8 +643,7 @@ public class FriendMatchService {
     }
 
     private Map<Integer, PokemonModel> loadPokemonByDex() {
-        return pokemonRepository.findAllByOrderByPokedexNumberAsc().stream()
-                .collect(Collectors.toMap(PokemonModel::getPokedexNumber, Function.identity(), (a, b) -> a));
+        return nationalPokedexCatalog.speciesByDex();
     }
 
     private ActiveMatchModel requireMatchById(String matchId) {

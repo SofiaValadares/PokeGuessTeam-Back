@@ -8,6 +8,7 @@ import com.svc.pokeguessteam.config.AppMailProperties;
 import com.svc.pokeguessteam.config.AppMasterAdminProperties;
 import com.svc.pokeguessteam.config.AppPusherProperties;
 import com.svc.pokeguessteam.config.AppResendProperties;
+import com.svc.pokeguessteam.config.AppSecurityProperties;
 import com.svc.pokeguessteam.config.DotenvEnvironmentLoader;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -24,7 +25,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
         AppMailProperties.class,
         AppMasterAdminProperties.class,
         AppResendProperties.class,
-        AppPusherProperties.class
+        AppPusherProperties.class,
+        AppSecurityProperties.class
 })
 @EnableAsync
 @EnableScheduling

@@ -67,8 +67,13 @@ public class AuthCodeService {
 
     @Transactional
     public void sendEmailVerificationCodeByEmail(String email) {
-        UserModel user = requireUserByEmail(email);
-        sendEmailVerificationCode(user);
+        userRepository.findByEmail(normalizeEmail(email)).ifPresent(user -> {
+            try {
+                sendEmailVerificationCode(user);
+            } catch (ApiBusinessException ignored) {
+                // Mesma resposta para inexistente / já verificado / cooldown.
+            }
+        });
     }
 
     /**

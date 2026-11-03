@@ -2,6 +2,7 @@ package com.svc.pokeguessteam.exception;
 
 import org.springframework.context.MessageSource;
 import org.springframework.context.i18n.LocaleContextHolder;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -35,7 +36,11 @@ public class GlobalExceptionHandler {
                 locale
         );
         ApiErrorResponse body = ApiErrorResponse.of(ex.getCode(), message);
-        return ResponseEntity.status(ex.getStatus()).body(body);
+        ResponseEntity.BodyBuilder builder = ResponseEntity.status(ex.getStatus());
+        if (ex.getRetryAfterSeconds() != null) {
+            builder.header(HttpHeaders.RETRY_AFTER, String.valueOf(ex.getRetryAfterSeconds()));
+        }
+        return builder.body(body);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -69,12 +74,9 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ApiErrorResponse> handleIllegalState(IllegalStateException ex) {
-        ApiErrorResponse body = ApiErrorResponse.of(
-                ErrorCodes.GAME_MATCH_INVALID_ACTION,
-                ex.getMessage() != null && !ex.getMessage().isBlank()
-                        ? ex.getMessage()
-                        : "Erro interno ao processar a partida."
-        );
+        Locale locale = LocaleContextHolder.getLocale();
+        String message = messageSource.getMessage(MessageKeys.GAME_MATCH_INVALID_ACTION, null, locale);
+        ApiErrorResponse body = ApiErrorResponse.of(ErrorCodes.GAME_MATCH_INVALID_ACTION, message);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(body);
     }
 

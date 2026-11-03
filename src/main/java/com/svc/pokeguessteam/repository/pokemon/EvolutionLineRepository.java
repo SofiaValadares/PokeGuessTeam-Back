@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 
 public interface EvolutionLineRepository extends JpaRepository<EvolutionLineModel, Integer> {
@@ -14,4 +15,7 @@ public interface EvolutionLineRepository extends JpaRepository<EvolutionLineMode
      */
     @Query("SELECT DISTINCT l FROM EvolutionLineModel l JOIN l.memberPokedexNumbers m WHERE m = :pokedexNumber")
     List<EvolutionLineModel> findAllLinesContainingPokedexNumber(@Param("pokedexNumber") Integer pokedexNumber);
+
+    @Query("SELECT DISTINCT l FROM EvolutionLineModel l JOIN l.memberPokedexNumbers m WHERE m IN :pokedexNumbers")
+    List<EvolutionLineModel> findAllLinesContainingPokedexNumbers(@Param("pokedexNumbers") Collection<Integer> pokedexNumbers);
 }

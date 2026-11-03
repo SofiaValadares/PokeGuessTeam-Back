@@ -14,6 +14,8 @@ import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Catálogo nacional em memória — espécies mudam raramente; evita reler toda a TB_POKEMON a cada pedido.
@@ -48,6 +50,11 @@ public class NationalPokedexCatalog {
         return ensureSnapshot().evolutionLines();
     }
 
+    @Transactional(readOnly = true)
+    public Map<Integer, PokemonModel> speciesByDex() {
+        return ensureSnapshot().byDex();
+    }
+
     private CatalogSnapshot ensureSnapshot() {
         CatalogSnapshot current = snapshot;
         if (current != null) {
@@ -55,11 +62,16 @@ public class NationalPokedexCatalog {
         }
         synchronized (this) {
             if (snapshot == null) {
-                List<PokemonModel> species = List.copyOf(pokemonRepository.findAllByOrderByPokedexNumberAsc());
+                List<PokemonModel> species = List.copyOf(pokemonRepository.findAllWithEvolutionLineOrderByPokedexNumberAsc());
                 List<PokemonDto> speciesDtos = species.stream().map(PokemonDto::from).toList();
                 List<EvolutionLineDto> lines = dedupeEvolutionLines(speciesDtos);
+                Map<Integer, PokemonModel> byDex = species.stream().collect(Collectors.toUnmodifiableMap(
+                        PokemonModel::getPokedexNumber,
+                        Function.identity(),
+                        (a, b) -> a
+                ));
                 String version = computeVersion(species);
-                snapshot = new CatalogSnapshot(version, species, speciesDtos, lines);
+                snapshot = new CatalogSnapshot(version, species, speciesDtos, lines, byDex);
             }
             return snapshot;
         }
@@ -106,7 +118,8 @@ public class NationalPokedexCatalog {
             String version,
             List<PokemonModel> species,
             List<PokemonDto> speciesDtos,
-            List<EvolutionLineDto> evolutionLines
+            List<EvolutionLineDto> evolutionLines,
+            Map<Integer, PokemonModel> byDex
     ) {
     }
 }

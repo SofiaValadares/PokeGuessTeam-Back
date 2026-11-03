@@ -3,7 +3,9 @@ package com.svc.pokeguessteam.controller;
 import com.svc.pokeguessteam.exception.ApiBusinessException;
 import com.svc.pokeguessteam.exception.ErrorCodes;
 import com.svc.pokeguessteam.messages.MessageKeys;
+import com.svc.pokeguessteam.model.game.ActiveMatchModel;
 import com.svc.pokeguessteam.service.CurrentUserService;
+import com.svc.pokeguessteam.service.FriendMatchStore;
 import com.svc.pokeguessteam.service.PusherRealtimeService;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.http.HttpStatus;
@@ -23,10 +25,16 @@ public class PusherController {
 
     private final PusherRealtimeService pusherRealtimeService;
     private final CurrentUserService currentUserService;
+    private final FriendMatchStore friendMatchStore;
 
-    public PusherController(PusherRealtimeService pusherRealtimeService, CurrentUserService currentUserService) {
+    public PusherController(
+            PusherRealtimeService pusherRealtimeService,
+            CurrentUserService currentUserService,
+            FriendMatchStore friendMatchStore
+    ) {
         this.pusherRealtimeService = pusherRealtimeService;
         this.currentUserService = currentUserService;
+        this.friendMatchStore = friendMatchStore;
     }
 
     @GetMapping("/config")
@@ -61,11 +69,7 @@ public class PusherController {
                     MessageKeys.VALIDATION_SUMMARY
             );
         }
-        String userChannel = PusherRealtimeService.userChannel(userId);
-        String matchPrefix = "private-match-";
-        boolean allowed = channelName.equals(userChannel)
-                || channelName.startsWith(matchPrefix);
-        if (!allowed) {
+        if (!canSubscribe(userId, channelName)) {
             throw new ApiBusinessException(
                     HttpStatus.FORBIDDEN,
                     ErrorCodes.ADMIN_FORBIDDEN,
@@ -73,5 +77,30 @@ public class PusherController {
             );
         }
         return ResponseEntity.ok(pusherRealtimeService.authenticate(socketId, channelName));
+    }
+
+    private boolean canSubscribe(String userId, String channelName) {
+        if (channelName.equals(PusherRealtimeService.userChannel(userId))) {
+            return true;
+        }
+        String matchPrefix = "private-match-";
+        if (!channelName.startsWith(matchPrefix) || channelName.length() <= matchPrefix.length()) {
+            return false;
+        }
+        String matchId = channelName.substring(matchPrefix.length());
+        return friendMatchStore.findById(matchId)
+                .filter(match -> isParticipant(match, userId))
+                .isPresent();
+    }
+
+    private static boolean isParticipant(ActiveMatchModel match, String userId) {
+        if (match.getProfile() != null
+                && match.getProfile().getUser() != null
+                && userId.equals(match.getProfile().getUser().getIdUser())) {
+            return true;
+        }
+        return match.getGuestProfile() != null
+                && match.getGuestProfile().getUser() != null
+                && userId.equals(match.getGuestProfile().getUser().getIdUser());
     }
 }

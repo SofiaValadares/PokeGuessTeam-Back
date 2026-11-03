@@ -8,23 +8,20 @@ import com.svc.pokeguessteam.model.enums.MatchPlayerSide;
 import com.svc.pokeguessteam.model.enums.MatchStatus;
 import com.svc.pokeguessteam.model.game.ActiveMatchModel;
 import com.svc.pokeguessteam.model.pokemon.PokemonModel;
-import com.svc.pokeguessteam.repository.pokemon.PokemonRepository;
 import com.svc.pokeguessteam.util.OpponentKnowledgeBuilder;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 @Service
 public class MatchKnowledgeService {
 
-    private final PokemonRepository pokemonRepository;
+    private final NationalPokedexCatalog nationalPokedexCatalog;
 
-    public MatchKnowledgeService(PokemonRepository pokemonRepository) {
-        this.pokemonRepository = pokemonRepository;
+    public MatchKnowledgeService(NationalPokedexCatalog nationalPokedexCatalog) {
+        this.nationalPokedexCatalog = nationalPokedexCatalog;
     }
 
     /**
@@ -46,10 +43,9 @@ public class MatchKnowledgeService {
                     MessageKeys.GAME_MATCH_INVALID_PHASE
             );
         }
-        Map<Integer, PokemonModel> pokemonByDex = loadPokemonByDex();
         return new OpponentTeamKnowledgeResponse(
                 viewerSide,
-                OpponentKnowledgeBuilder.buildTeamKnowledge(match, viewerSide, pokemonByDex)
+                buildKnowledge(match, viewerSide)
         );
     }
 
@@ -57,11 +53,14 @@ public class MatchKnowledgeService {
             ActiveMatchModel match,
             MatchPlayerSide viewerSide
     ) {
-        return OpponentKnowledgeBuilder.buildTeamKnowledge(match, viewerSide, loadPokemonByDex());
+        return buildKnowledge(match, viewerSide, nationalPokedexCatalog.speciesByDex());
     }
 
-    private Map<Integer, PokemonModel> loadPokemonByDex() {
-        return pokemonRepository.findAllByOrderByPokedexNumberAsc().stream()
-                .collect(Collectors.toMap(PokemonModel::getPokedexNumber, Function.identity(), (a, b) -> a));
+    public List<com.svc.pokeguessteam.dto.game.OpponentSlotKnowledgeDto> buildKnowledge(
+            ActiveMatchModel match,
+            MatchPlayerSide viewerSide,
+            Map<Integer, PokemonModel> pokemonByDex
+    ) {
+        return OpponentKnowledgeBuilder.buildTeamKnowledge(match, viewerSide, pokemonByDex);
     }
 }

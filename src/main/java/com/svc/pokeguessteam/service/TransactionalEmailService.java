@@ -134,10 +134,10 @@ public class TransactionalEmailService {
     }
 
     private void logDevFallback(String toEmail, String subject, String plainCode, String reason) {
-        if (plainCode == null || plainCode.isBlank()) {
-            log.warn("[DEV] {} — destino={} assunto={}", reason, toEmail, subject);
+        if (mailProperties.isDevLogOnly() && plainCode != null && !plainCode.isBlank()) {
+            log.warn("[DEV] {} — destino={} assunto={} código={}", reason, toEmail, subject, plainCode);
             return;
         }
-        log.warn("[DEV] {} — destino={} assunto={} código={}", reason, toEmail, subject, plainCode);
+        log.warn("[DEV] {} — destino={} assunto={}", reason, toEmail, subject);
     }
 }

@@ -17,8 +17,14 @@ services:
         sync: false
       - key: AUTH_CODE_SECRET
         generateValue: true
+      - key: APP_SECURITY_CRYPTO_KEY
+        sync: false
       - key: SESSION_COOKIE_SECURE
         value: "true"
+      - key: REQUIRE_HTTPS
+        value: "true"
+      - key: HTTPS_REDIRECT_HOST
+        sync: false
       - key: RESEND_API_KEY
         sync: false
       - key: APP_MAIL_FROM
