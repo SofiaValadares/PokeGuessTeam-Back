@@ -12,17 +12,39 @@ public class ApiBusinessException extends RuntimeException {
     private final String code;
     private final String messageKey;
     private final Object[] messageArgs;
+    private final Integer retryAfterSeconds;
 
     public ApiBusinessException(HttpStatus status, String code, String messageKey) {
-        this(status, code, messageKey, new Object[0]);
+        this(status, code, messageKey, new Object[0], null);
     }
 
     public ApiBusinessException(HttpStatus status, String code, String messageKey, Object... messageArgs) {
+        this(status, code, messageKey, messageArgs, null);
+    }
+
+    public static ApiBusinessException withRetryAfter(
+            HttpStatus status,
+            String code,
+            String messageKey,
+            int retryAfterSeconds,
+            Object... messageArgs
+    ) {
+        return new ApiBusinessException(status, code, messageKey, messageArgs, retryAfterSeconds);
+    }
+
+    private ApiBusinessException(
+            HttpStatus status,
+            String code,
+            String messageKey,
+            Object[] messageArgs,
+            Integer retryAfterSeconds
+    ) {
         super(messageKey);
         this.status = status;
         this.code = code;
         this.messageKey = messageKey;
         this.messageArgs = messageArgs == null ? new Object[0] : messageArgs.clone();
+        this.retryAfterSeconds = retryAfterSeconds;
     }
 
     public HttpStatus getStatus() {
@@ -39,5 +61,9 @@ public class ApiBusinessException extends RuntimeException {
 
     public Object[] getMessageArgs() {
         return messageArgs.clone();
+    }
+
+    public Integer getRetryAfterSeconds() {
+        return retryAfterSeconds;
     }
 }

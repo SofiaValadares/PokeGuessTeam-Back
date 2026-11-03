@@ -1,7 +1,9 @@
 package com.svc.pokeguessteam.service;
 
+import com.svc.pokeguessteam.dto.pokemon.PokedexCatalogResponse;
 import com.svc.pokeguessteam.dto.pokemon.PokedexEntryDto;
 import com.svc.pokeguessteam.dto.pokemon.PokedexEntryPageResponse;
+import com.svc.pokeguessteam.dto.pokemon.PokedexVersionResponse;
 import com.svc.pokeguessteam.exception.ApiBusinessException;
 import com.svc.pokeguessteam.exception.ErrorCodes;
 import com.svc.pokeguessteam.messages.MessageKeys;
@@ -18,6 +20,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -42,6 +45,29 @@ public class PokedexService {
         this.pokemonRepository = pokemonRepository;
         this.profileRepository = profileRepository;
         this.userPokedexService = userPokedexService;
+    }
+
+    @Transactional(readOnly = true)
+    public PokedexVersionResponse version() {
+        return new PokedexVersionResponse(nationalPokedexCatalog.pokedexVersion());
+    }
+
+    /**
+     * Catálogo nacional sem flags de utilizador — para cache no cliente.
+     */
+    @Transactional(readOnly = true)
+    public PokedexCatalogResponse catalog() {
+        return new PokedexCatalogResponse(
+                nationalPokedexCatalog.pokedexVersion(),
+                nationalPokedexCatalog.allSpeciesDtos(),
+                nationalPokedexCatalog.allEvolutionLines()
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public List<Integer> registeredPokedexNumbers(String userId) {
+        requireProfile(userId);
+        return new ArrayList<>(userPokedexService.findRegisteredPokedexNumbers(userId));
     }
 
     @Transactional(readOnly = true)

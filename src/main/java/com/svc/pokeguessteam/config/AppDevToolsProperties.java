@@ -5,8 +5,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "app.dev-tools")
 public class AppDevToolsProperties {
 
-    /** Endpoints de debug (ex.: ajuste de XP). Desligar em produção. */
-    private boolean enabled = true;
+    /** Endpoints de debug (ex.: ajuste de XP). Ligar só em local (`DEV_TOOLS_ENABLED=true`). */
+    private boolean enabled = false;
 
     public boolean isEnabled() {
         return enabled;

@@ -9,6 +9,8 @@ public final class MessageKeys {
     }
 
     public static final String AUTH_INVALID_CREDENTIALS = "error.auth.invalid-credentials";
+    public static final String AUTH_LOGIN_LOCKED = "error.auth.login-locked";
+    public static final String AUTH_RATE_LIMITED = "error.auth.rate-limited";
     public static final String AUTH_EMAIL_ALREADY_REGISTERED = "error.auth.email-already-registered";
     public static final String AUTH_USERNAME_ALREADY_TAKEN = "error.auth.username-already-taken";
     public static final String AUTH_USERNAME_FROM_EMAIL = "error.validation.register.username.from-email";
@@ -79,6 +81,7 @@ public final class MessageKeys {
     public static final String GAME_TEAM_NOT_IN_POKEDEX = "error.game.team-not-in-pokedex";
     public static final String GAME_POKEDEX_INSUFFICIENT = "error.game.pokedex-insufficient";
     public static final String GAME_GUESS_ALREADY_USED = "error.game.guess-already-used";
+    public static final String GAME_GUESS_NOT_IN_POKEDEX = "error.game.guess-not-in-pokedex";
     public static final String GAME_FRIEND_MATCH_NOT_FOUND = "error.game.friend-match-not-found";
     public static final String GAME_FRIEND_ONLINE_BANNED = "error.game.friend-online-banned";
     public static final String GAME_JOIN_CODE_NOT_FOUND = "error.game.join-code-not-found";

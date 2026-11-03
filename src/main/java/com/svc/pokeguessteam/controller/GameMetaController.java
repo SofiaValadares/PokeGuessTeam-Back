@@ -2,6 +2,7 @@ package com.svc.pokeguessteam.controller;
 
 import com.svc.pokeguessteam.model.enums.GameModes;
 import com.svc.pokeguessteam.service.GameHistoryService;
+import com.svc.pokeguessteam.service.NationalPokedexCatalog;
 import com.svc.pokeguessteam.service.PokedexService;
 import com.svc.pokeguessteam.service.ProfileService;
 import com.svc.pokeguessteam.util.GameConstants;
@@ -23,12 +24,19 @@ import java.util.Map;
 @RequestMapping("/api/meta")
 public class GameMetaController {
 
+    private final NationalPokedexCatalog nationalPokedexCatalog;
+
+    public GameMetaController(NationalPokedexCatalog nationalPokedexCatalog) {
+        this.nationalPokedexCatalog = nationalPokedexCatalog;
+    }
+
     @GetMapping
     public ResponseEntity<Map<String, Object>> meta() {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("name", "PokeTeamGuess");
         body.put("summary", "Dedução estratégica: duas equipes secretas de 6 Pokémon; vence quem descobrir o time adversário primeiro, "
                 + "com pistas por tipagem, geração, cor, altura e peso.");
+        body.put("pokedexVersion", nationalPokedexCatalog.pokedexVersion());
         body.put("pokedexDefaultPageSize", PokedexService.DEFAULT_PAGE_SIZE);
         body.put("pokedexMaxPageSize", PokedexService.MAX_PAGE_SIZE);
         body.put("pokemonInventoryDefaultPageSize", ProfileService.PokemonPcConstants.DEFAULT_PAGE_SIZE);

@@ -1,6 +1,7 @@
 package com.svc.pokeguessteam.config;
 
 import com.svc.pokeguessteam.security.DatabaseRoleRefreshFilter;
+import com.svc.pokeguessteam.security.HttpsEnforcementFilter;
 import com.svc.pokeguessteam.security.JsonAuthenticationEntryPoint;
 import com.svc.pokeguessteam.security.SessionIpBindingFilter;
 
@@ -18,6 +19,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.intercept.AuthorizationFilter;
+import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 import org.springframework.security.web.session.HttpSessionEventPublisher;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -30,17 +32,23 @@ import java.util.List;
 public class SecurityConfig {
 
     private final AppCorsProperties corsProperties;
+    private final AppSecurityProperties securityProperties;
     private final DatabaseRoleRefreshFilter databaseRoleRefreshFilter;
     private final SessionIpBindingFilter sessionIpBindingFilter;
+    private final HttpsEnforcementFilter httpsEnforcementFilter;
 
     public SecurityConfig(
             AppCorsProperties corsProperties,
+            AppSecurityProperties securityProperties,
             DatabaseRoleRefreshFilter databaseRoleRefreshFilter,
-            SessionIpBindingFilter sessionIpBindingFilter
+            SessionIpBindingFilter sessionIpBindingFilter,
+            HttpsEnforcementFilter httpsEnforcementFilter
     ) {
         this.corsProperties = corsProperties;
+        this.securityProperties = securityProperties;
         this.databaseRoleRefreshFilter = databaseRoleRefreshFilter;
         this.sessionIpBindingFilter = sessionIpBindingFilter;
+        this.httpsEnforcementFilter = httpsEnforcementFilter;
     }
 
     @Bean
@@ -52,6 +60,24 @@ public class SecurityConfig {
         http
                 .cors(Customizer.withDefaults())
                 .csrf(csrf -> csrf.disable())
+                .headers(headers -> {
+                    headers.contentTypeOptions(Customizer.withDefaults());
+                    headers.frameOptions(frame -> frame.deny());
+                    headers.httpStrictTransportSecurity(hsts -> hsts
+                            .includeSubDomains(true)
+                            .preload(true)
+                            .maxAgeInSeconds(securityProperties.getHstsMaxAgeSeconds())
+                    );
+                    headers.referrerPolicy(referrer -> referrer.policy(
+                            ReferrerPolicyHeaderWriter.ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN
+                    ));
+                    headers.permissionsPolicy(policy -> policy.policy(
+                            "camera=(), microphone=(), geolocation=()"
+                    ));
+                    headers.contentSecurityPolicy(csp -> csp.policyDirectives(
+                            "default-src 'none'; frame-ancestors 'none'"
+                    ));
+                })
 
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
@@ -194,6 +220,10 @@ public class SecurityConfig {
                 AuthorizationFilter.class
         );
         http.addFilterBefore(
+                httpsEnforcementFilter,
+                SessionIpBindingFilter.class
+        );
+        http.addFilterBefore(
                 databaseRoleRefreshFilter,
                 AuthorizationFilter.class
         );
@@ -230,6 +260,15 @@ public class SecurityConfig {
     }
 
     @Bean
+    public FilterRegistrationBean<HttpsEnforcementFilter> httpsEnforcementFilterRegistration(
+            HttpsEnforcementFilter filter
+    ) {
+        FilterRegistrationBean<HttpsEnforcementFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
+    }
+
+    @Bean
     public CorsConfigurationSource corsConfigurationSource() {
 
         CorsConfiguration config =
@@ -259,10 +298,6 @@ public class SecurityConfig {
                         "X-Requested-With",
                         "Accept-Language"
                 )
-        );
-
-        config.setExposedHeaders(
-                List.of("Set-Cookie")
         );
 
         config.setMaxAge(

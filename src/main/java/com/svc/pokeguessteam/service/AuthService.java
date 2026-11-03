@@ -7,6 +7,7 @@ import com.svc.pokeguessteam.model.user.UserModel;
 import com.svc.pokeguessteam.config.AppAuthProperties;
 import com.svc.pokeguessteam.logging.AppLogger;
 import com.svc.pokeguessteam.repository.user.UserRepository;
+import com.svc.pokeguessteam.security.LoginAttemptService;
 import com.svc.pokeguessteam.validation.UsernameEmailGuard;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -27,6 +28,7 @@ public class AuthService {
     private final TransactionalEmailService transactionalEmailService;
     private final AppAuthProperties authProperties;
     private final AuditLogService auditLogService;
+    private final LoginAttemptService loginAttemptService;
 
     public AuthService(
             UserRepository userRepository,
@@ -35,7 +37,8 @@ public class AuthService {
             AuthCodeService authCodeService,
             TransactionalEmailService transactionalEmailService,
             AppAuthProperties authProperties,
-            AuditLogService auditLogService
+            AuditLogService auditLogService,
+            LoginAttemptService loginAttemptService
     ) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
@@ -44,11 +47,12 @@ public class AuthService {
         this.transactionalEmailService = transactionalEmailService;
         this.authProperties = authProperties;
         this.auditLogService = auditLogService;
+        this.loginAttemptService = loginAttemptService;
     }
 
     /**
-     * Cadastro sem enumeração: e-mail ou username já usados não geram erro distinto na API.
-     * A resposta HTTP deve ser sempre a mesma (ver AuthController).
+     * Cadastro sem enumeração de e-mail: se o e-mail já existir, a API responde como sucesso
+     * e notifica o titular. Username em uso continua a devolver erro explícito (é público).
      */
     @Transactional
     public void register(String username, String email, String rawPassword) {
@@ -78,8 +82,11 @@ public class AuthService {
                     "REGISTER_USERNAME_TAKEN",
                     "Tentativa de cadastro com username já em uso"
             );
-            log.info("register", "Cadastro ignorado: username já em uso");
-            return;
+            throw new ApiBusinessException(
+                    HttpStatus.CONFLICT,
+                    ErrorCodes.AUTH_USERNAME_ALREADY_TAKEN,
+                    MessageKeys.AUTH_USERNAME_ALREADY_TAKEN
+            );
         }
 
         UserModel user = new UserModel();
@@ -92,32 +99,34 @@ public class AuthService {
         log.info("register", "Conta criada userId={}", saved.getIdUser());
     }
 
-    public UserModel authenticate(String email, String rawPassword) {
+    public UserModel authenticate(String email, String rawPassword, String clientIp) {
         String trimmedEmail = email == null ? "" : email.trim();
+        loginAttemptService.assertNotLocked(trimmedEmail, clientIp);
+
         if (trimmedEmail.isEmpty() || !trimmedEmail.contains("@") || rawPassword == null || rawPassword.isEmpty()) {
-            auditLogService.recordSecurity(null, "LOGIN_FAILED", "Credenciais inválidas (campos vazios)");
-            throw invalidCredentials();
+            rejectFailedLogin(null, trimmedEmail, clientIp, "Credenciais inválidas (campos vazios)");
         }
 
         Optional<UserModel> found = userRepository.findByEmail(normalizeEmail(trimmedEmail));
         if (found.isEmpty()) {
-            auditLogService.recordSecurity(
+            rejectFailedLogin(
                     null,
-                    "LOGIN_FAILED",
+                    trimmedEmail,
+                    clientIp,
                     "Utilizador não encontrado login=" + redactLogin(trimmedEmail)
             );
-            throw invalidCredentials();
         }
         UserModel user = found.get();
 
         if (!passwordEncoder.matches(rawPassword, user.getPasswordHash())) {
-            auditLogService.recordSecurity(
+            rejectFailedLogin(
                     user.getIdUser(),
-                    "LOGIN_FAILED",
+                    trimmedEmail,
+                    clientIp,
                     "Password incorreta userId=" + user.getIdUser()
             );
-            throw invalidCredentials();
         }
+        loginAttemptService.recordSuccess(trimmedEmail);
         if (authProperties.isRequireEmailVerificationForLogin()
                 && !Boolean.TRUE.equals(user.getEmailVerify())) {
             log.warn("authenticate", "Login bloqueado: e-mail não verificado userId={}", user.getIdUser());
@@ -147,6 +156,18 @@ public class AuthService {
         }
         log.info("authenticate", "Autenticação bem-sucedida userId={}", user.getIdUser());
         return user;
+    }
+
+    private void rejectFailedLogin(String userId, String email, String clientIp, String auditDetail) {
+        auditLogService.recordSecurity(userId, "LOGIN_FAILED", auditDetail);
+        loginAttemptService.recordFailure(email, clientIp);
+        try {
+            loginAttemptService.assertNotLocked(email, clientIp);
+        } catch (ApiBusinessException locked) {
+            auditLogService.recordSecurity(userId, "LOGIN_LOCKED", "Lockout de login após falhas repetidas");
+            throw locked;
+        }
+        throw invalidCredentials();
     }
 
     private static String redactLogin(String login) {

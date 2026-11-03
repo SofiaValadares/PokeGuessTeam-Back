@@ -21,6 +21,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -35,7 +36,6 @@ public class CompetitiveMatchService {
     private final ProfileService profileService;
     private final DuelTeamService duelTeamService;
     private final ActiveMatchConstraintService activeMatchConstraintService;
-    private final UserPokedexService userPokedexService;
     private final FriendMatchStore friendMatchStore;
     private final FriendMatchService friendMatchService;
     private final PusherRealtimeService pusherRealtimeService;
@@ -46,7 +46,6 @@ public class CompetitiveMatchService {
             ProfileService profileService,
             DuelTeamService duelTeamService,
             ActiveMatchConstraintService activeMatchConstraintService,
-            UserPokedexService userPokedexService,
             FriendMatchStore friendMatchStore,
             FriendMatchService friendMatchService,
             PusherRealtimeService pusherRealtimeService
@@ -54,7 +53,6 @@ public class CompetitiveMatchService {
         this.profileService = profileService;
         this.duelTeamService = duelTeamService;
         this.activeMatchConstraintService = activeMatchConstraintService;
-        this.userPokedexService = userPokedexService;
         this.friendMatchStore = friendMatchStore;
         this.friendMatchService = friendMatchService;
         this.pusherRealtimeService = pusherRealtimeService;
@@ -81,8 +79,9 @@ public class CompetitiveMatchService {
             return body;
         }
 
-        List<Integer> team = duelTeamService.validateTeamFromRegisteredPokedex(userId, request.team(), null);
-        int registered = (int) userPokedexService.countRegistered(profile.getId());
+        Set<Integer> registeredNumbers = duelTeamService.registeredNumbers(userId);
+        List<Integer> team = duelTeamService.validateTeam(registeredNumbers, request.team(), null);
+        int registered = registeredNumbers.size();
 
         QueueEntry self = new QueueEntry(userId, profile.getId(), team, registered, Instant.now());
         queueByUserId.put(userId, self);

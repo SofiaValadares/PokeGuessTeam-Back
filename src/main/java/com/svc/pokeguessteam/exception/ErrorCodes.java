@@ -8,6 +8,8 @@ public final class ErrorCodes {
     public static final String VALIDATION_FAILED = "VALIDATION_FAILED";
     public static final String MALFORMED_JSON = "MALFORMED_JSON";
     public static final String AUTH_INVALID_CREDENTIALS = "AUTH_INVALID_CREDENTIALS";
+    public static final String AUTH_LOGIN_LOCKED = "AUTH_LOGIN_LOCKED";
+    public static final String AUTH_RATE_LIMITED = "AUTH_RATE_LIMITED";
     public static final String AUTH_EMAIL_ALREADY_REGISTERED = "AUTH_EMAIL_ALREADY_REGISTERED";
     public static final String AUTH_USERNAME_ALREADY_TAKEN = "AUTH_USERNAME_ALREADY_TAKEN";
     public static final String AUTH_USERNAME_FROM_EMAIL = "AUTH_USERNAME_FROM_EMAIL";
@@ -78,6 +80,7 @@ public final class ErrorCodes {
     public static final String GAME_EVENT_REQUIRED = "GAME_EVENT_REQUIRED";
     public static final String GAME_TEAM_NOT_IN_EVENT = "GAME_TEAM_NOT_IN_EVENT";
     public static final String GAME_GUESS_NOT_IN_EVENT = "GAME_GUESS_NOT_IN_EVENT";
+    public static final String GAME_GUESS_NOT_IN_POKEDEX = "GAME_GUESS_NOT_IN_POKEDEX";
     public static final String GAME_EVENT_POOL_INSUFFICIENT = "GAME_EVENT_POOL_INSUFFICIENT";
     public static final String FRIEND_BALL_NO_EVENT = "FRIEND_BALL_NO_EVENT";
     public static final String FRIEND_BALL_POOL_EMPTY = "FRIEND_BALL_POOL_EMPTY";

@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class LocalMatchService {
@@ -48,15 +49,16 @@ public class LocalMatchService {
         this.clientMatchCommitmentService = clientMatchCommitmentService;
     }
 
-    /** Valida equipas, publica commitments e sela as aberturas. */
+    /** Valida as duas equipas na Pokédex do user, publica commitments e sela as aberturas. */
     @Transactional
     public LocalMatchSetupResponse validateSetupForClient(String userId, LocalMatchSetupRequest request) {
         ProfileModel profile = profileService.ensureProfileWithStarters(userId);
         clearStaleLocalMatches(profile.getId());
         activeMatchConstraintService.ensureCanStartNewMatch(profile.getId());
         String opponentName = GameFinishValidation.validateAndNormalizeLocalOpponentName(request.opponentName());
-        List<Integer> hostTeam = duelTeamService.validateTeamFromRegisteredPokedex(userId, request.hostTeam());
-        List<Integer> opponentTeam = duelTeamService.validateTeamFromRegisteredPokedex(userId, request.opponentTeam());
+        Set<Integer> registered = duelTeamService.registeredNumbers(userId);
+        List<Integer> hostTeam = duelTeamService.validateTeam(registered, request.hostTeam(), null);
+        List<Integer> opponentTeam = duelTeamService.validateTeam(registered, request.opponentTeam(), null);
         ClientMatchCommitmentService.CommittedClientMatch committed =
                 clientMatchCommitmentService.commit(profile, GameModes.LOCAL, opponentName, hostTeam, opponentTeam);
         return new LocalMatchSetupResponse(
@@ -70,6 +72,9 @@ public class LocalMatchService {
     @Transactional
     public GameFinishResponse finishClientMatch(String userId, GameLocalFinishRequest request) {
         ProfileModel profile = profileService.ensureProfileWithStarters(userId);
+        Set<Integer> registered = duelTeamService.registeredNumbers(userId);
+        duelTeamService.validateTeam(registered, request.hostTeam(), null);
+        duelTeamService.validateTeam(registered, request.opponentTeam(), null);
         ClientMatchCommitmentService.OpenedClientMatch opened = clientMatchCommitmentService.verifyAndConsume(
                 profile.getId(),
                 GameModes.LOCAL,

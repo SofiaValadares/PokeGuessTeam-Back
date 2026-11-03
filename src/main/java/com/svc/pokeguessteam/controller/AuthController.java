@@ -16,6 +16,7 @@ import com.svc.pokeguessteam.dto.auth.SessionResponse;
 import com.svc.pokeguessteam.messages.MessageKeys;
 import com.svc.pokeguessteam.model.user.UserModel;
 import com.svc.pokeguessteam.security.ActiveUserSessionIndex;
+import com.svc.pokeguessteam.security.AuthIpRateLimiter;
 import com.svc.pokeguessteam.security.ClientIpResolver;
 import com.svc.pokeguessteam.security.DeviceFingerprintUtil;
 import com.svc.pokeguessteam.security.SessionAuthorityService;
@@ -58,6 +59,7 @@ public class AuthController {
     private final UserRoleService userRoleService;
     private final SessionAuthorityService sessionAuthorityService;
     private final ActiveUserSessionIndex activeUserSessionIndex;
+    private final AuthIpRateLimiter authIpRateLimiter;
     private final MessageSource messageSource;
 
     public AuthController(
@@ -69,6 +71,7 @@ public class AuthController {
             UserRoleService userRoleService,
             SessionAuthorityService sessionAuthorityService,
             ActiveUserSessionIndex activeUserSessionIndex,
+            AuthIpRateLimiter authIpRateLimiter,
             MessageSource messageSource
     ) {
         this.authService = authService;
@@ -79,13 +82,16 @@ public class AuthController {
         this.userRoleService = userRoleService;
         this.sessionAuthorityService = sessionAuthorityService;
         this.activeUserSessionIndex = activeUserSessionIndex;
+        this.authIpRateLimiter = authIpRateLimiter;
         this.messageSource = messageSource;
     }
 
     @PostMapping("/register")
     public ResponseEntity<MessageResponse> register(
-            @RequestBody @Valid RegisterRequest request
+            @RequestBody @Valid RegisterRequest request,
+            HttpServletRequest httpRequest
     ) {
+        authIpRateLimiter.consume("register", ClientIpResolver.resolve(httpRequest), 10, 15);
         // Resposta idêntica com ou sem conta nova — evita enumeração de e-mails.
         authService.register(
                 request.username(),
@@ -97,8 +103,10 @@ public class AuthController {
 
     @PostMapping({"/email/verification/send", "/verification/resend"})
     public ResponseEntity<MessageResponse> sendEmailVerification(
-            @RequestBody @Valid EmailOnlyRequest request
+            @RequestBody @Valid EmailOnlyRequest request,
+            HttpServletRequest httpRequest
     ) {
+        authIpRateLimiter.consume("auth-mail", ClientIpResolver.resolve(httpRequest), 8, 15);
         authCodeService.sendEmailVerificationCodeByEmail(request.email());
         return ResponseEntity.ok(new MessageResponse(msg(MessageKeys.AUTH_EMAIL_VERIFICATION_SENT)));
     }
@@ -116,8 +124,10 @@ public class AuthController {
 
     @PostMapping("/password-reset/request")
     public ResponseEntity<MessageResponse> requestPasswordReset(
-            @RequestBody @Valid EmailOnlyRequest request
+            @RequestBody @Valid EmailOnlyRequest request,
+            HttpServletRequest httpRequest
     ) {
+        authIpRateLimiter.consume("auth-mail", ClientIpResolver.resolve(httpRequest), 8, 15);
         authCodeService.sendPasswordResetCodeByEmailIfEligible(request.email());
         return ResponseEntity.ok(new MessageResponse(msg(MessageKeys.AUTH_PASSWORD_RESET_SENT)));
     }
@@ -201,7 +211,8 @@ public class AuthController {
     ) {
         UserModel user = authService.authenticate(
                 request.email(),
-                request.password()
+                request.password(),
+                ClientIpResolver.resolve(httpRequest)
         );
 
         boolean firstLogin = authService.recordLogin(user);

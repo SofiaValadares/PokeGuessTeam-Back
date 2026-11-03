@@ -108,7 +108,8 @@ src/main/java/com/svc/pokeguessteam/
 ### Testes
 
 ```
-src/test/java/.../service/   fluxos amigo, constraints
+src/test/java/.../service/   fluxos amigo, constraints, lockout de login
+src/test/java/.../security/  binding de IP, HTTPS, força bruta
 src/test/java/.../util/      MatchEngine, recompensas, conhecimento adversário
 ```
 
@@ -117,6 +118,16 @@ src/test/java/.../util/      MatchEngine, recompensas, conhecimento adversário
 ## Autenticação
 
 Todos os pedidos autenticados: `credentials: 'include'` (cookie `JSESSIONID`).
+
+### Segurança do canal e da sessão
+
+| Controlo | Comportamento |
+|----------|----------------|
+| **HTTPS/TLS** | Em produção (`REQUIRE_HTTPS=true`) pedidos com `X-Forwarded-Proto: http` são redirecionados para HTTPS (308). O proxy (Render) termina TLS. |
+| **HSTS** | `Strict-Transport-Security` (1 ano, includeSubDomains, preload) em respostas HTTPS. |
+| **Cookie de sessão** | `JSESSIONID` por sessão (30 min idle), `HttpOnly`, `SameSite=Lax`; `Secure` quando `SESSION_COOKIE_SECURE=true`. |
+| **Força bruta** | Após 5 logins falhados no mesmo e-mail (janela de 15 min) a API responde `429 AUTH_LOGIN_LOCKED` com `Retry-After`. Limite extra de 20 falhas por IP. |
+| **Cabeçalhos** | `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, CSP `default-src 'none'` na API. |
 
 E-mails via **Resend** (`RESEND_API_KEY`). Sem chave, o código aparece no log.
 
@@ -223,6 +234,7 @@ Valores em `GET /api/meta` → `matchRewards`.
 | `AUTH_CODE_SECRET` | Segredo códigos e-mail |
 | `RESEND_API_KEY` | E-mail |
 | `SESSION_COOKIE_SECURE` | `true` em HTTPS |
+| `REQUIRE_HTTPS` | `true` em produção (redirect HTTP→HTTPS via `X-Forwarded-Proto`) |
 | `APP_CORS_ALLOWED_ORIGIN_PATTERNS` | URL do frontend |
 | `DEV_TOOLS_ENABLED` | `false` em produção |
 | `AI_PROVIDER` | `auto`, `openai` ou `gemini` |
