@@ -5,6 +5,7 @@ import com.svc.pokeguessteam.model.enums.EvolutionStage;
 import com.svc.pokeguessteam.model.enums.PokedexColor;
 import com.svc.pokeguessteam.model.enums.PokemonRarity;
 import com.svc.pokeguessteam.model.enums.PokemonType;
+import com.svc.pokeguessteam.model.pokemon.EvolutionLineModel;
 import com.svc.pokeguessteam.model.pokemon.PokemonModel;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -24,6 +25,11 @@ public record PokemonDto(
         EvolutionLineDto evolutionLine
 ) {
     public static PokemonDto from(PokemonModel pokemon) {
+        return from(pokemon, pokemon.getEvolutionLine());
+    }
+
+    /** Forma base com a linha evolutiva efectivamente concedida (ramos partilhados). */
+    public static PokemonDto from(PokemonModel pokemon, EvolutionLineModel grantedLine) {
         return new PokemonDto(
                 String.valueOf(pokemon.getPokedexNumber()),
                 pokemon.getPokedexNumber(),
@@ -37,7 +43,7 @@ public record PokemonDto(
                 pokemon.getRarity(),
                 pokemon.getEvolutionStage(),
                 pokemon.getEvolutionLevel(),
-                EvolutionLineDto.from(pokemon.getEvolutionLine())
+                EvolutionLineDto.from(grantedLine)
         );
     }
 }

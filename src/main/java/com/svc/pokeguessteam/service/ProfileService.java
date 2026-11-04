@@ -326,6 +326,23 @@ public class ProfileService {
         profileRepository.save(profile);
     }
 
+    /**
+     * Garante inventário de bolas e converte fragmentos acumulados (≥10 → Poké Bola).
+     * Usado no GET /collection para reparar contas que ficaram a 10/10 sem conversão.
+     */
+    @Transactional
+    public ProfileModel reconcilePokeballFragments(String userId) {
+        ProfileModel profile = ensureProfileWithStarters(userId);
+        ensurePokeballInventoryIfMissing(profile);
+        int before = profile.getPokeballFragments() != null ? profile.getPokeballFragments() : 0;
+        convertPokeballFragmentsToBalls(profile);
+        int after = profile.getPokeballFragments() != null ? profile.getPokeballFragments() : 0;
+        if (before != after) {
+            return profileRepository.save(profile);
+        }
+        return profile;
+    }
+
     private void convertPokeballFragmentsToBalls(ProfileModel profile) {
         int frags = profile.getPokeballFragments() != null ? profile.getPokeballFragments() : 0;
         if (frags < FRAGMENTS_PER_POKE_BALL) {
@@ -334,10 +351,13 @@ public class ProfileService {
         ensurePokeballInventoryIfMissing(profile);
         ProfileInventoryItemModel pokeRow = profileInventoryItemRepository
                 .findByProfile_IdAndPokeballType(profile.getId(), PokeballType.POKE_BALL)
-                .orElse(null);
-        if (pokeRow == null) {
-            return;
-        }
+                .orElseGet(() -> {
+                    ProfileInventoryItemModel row = new ProfileInventoryItemModel();
+                    row.setProfile(profile);
+                    row.setPokeballType(PokeballType.POKE_BALL);
+                    row.setQuantity(0);
+                    return profileInventoryItemRepository.save(row);
+                });
         int newBalls = frags / FRAGMENTS_PER_POKE_BALL;
         int remainder = frags % FRAGMENTS_PER_POKE_BALL;
         int qty = pokeRow.getQuantity() != null ? pokeRow.getQuantity() : 0;

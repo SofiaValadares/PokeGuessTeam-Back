@@ -139,7 +139,8 @@ public class ProfileController {
     @GetMapping("/collection")
     public ResponseEntity<Map<String, Object>> collection(HttpSession session) {
         String userId = currentUserService.requireUserId(session);
-        ProfileModel profile = profileService.ensureProfileWithStarters(userId);
+        // Converte fragmentos ≥10 → Poké Bola (também repara contas que ficaram “presas” a 10/10).
+        ProfileModel profile = profileService.reconcilePokeballFragments(userId);
         List<ProfileInventoryItemModel> rows = profileService.getItemInventoryByProfileId(profile.getId());
         List<Map<String, Object>> items = rows.stream().map(entry -> {
             Map<String, Object> map = new HashMap<>();

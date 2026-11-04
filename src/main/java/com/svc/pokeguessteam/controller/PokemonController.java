@@ -3,7 +3,7 @@ package com.svc.pokeguessteam.controller;
 import com.svc.pokeguessteam.dto.pokemon.ClaimEvolutionRewardsResponse;
 import com.svc.pokeguessteam.dto.pokemon.PcPageResponse;
 import com.svc.pokeguessteam.dto.pokemon.PokeballDrawRequest;
-import com.svc.pokeguessteam.dto.pokemon.PokeballDrawResponse;
+import com.svc.pokeguessteam.dto.pokemon.PokeballMultiDrawResponse;
 import com.svc.pokeguessteam.dto.pokemon.PokemonDto;
 import com.svc.pokeguessteam.exception.ApiBusinessException;
 import com.svc.pokeguessteam.exception.ErrorCodes;
@@ -80,15 +80,20 @@ public class PokemonController {
     }
 
     /**
-     * Consome uma Pokébola do inventário, sorteia raridade conforme o tipo e adiciona ao PC (linha evolutiva).
+     * Consome 1–10 Pokébolas, sorteia raridade conforme o tipo e adiciona ao PC (linha evolutiva).
+     * Body: {@code { "pokeballType": "POKE_BALL", "count": 1|10 }}.
      */
     @PostMapping("/draw")
-    public ResponseEntity<PokeballDrawResponse> draw(
+    public ResponseEntity<PokeballMultiDrawResponse> draw(
             HttpSession session,
             @Valid @RequestBody PokeballDrawRequest request
     ) {
         String userId = currentUserService.requireUserId(session);
-        return ResponseEntity.ok(pokeballDrawService.draw(userId, request.pokeballType()));
+        return ResponseEntity.ok(pokeballDrawService.draw(
+                userId,
+                request.pokeballType(),
+                request.resolvedCount()
+        ));
     }
 
     @GetMapping("/species/{pokedexNumber}")

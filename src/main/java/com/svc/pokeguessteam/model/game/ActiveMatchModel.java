@@ -18,14 +18,15 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
-import jakarta.persistence.OneToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 @Entity
 @Table(name = "TB_ACTIVE_MATCHES")
@@ -54,9 +55,12 @@ public class ActiveMatchModel {
     @Column(name = "GAME_MODE", nullable = false, length = 20)
     private GameModes gameMode;
 
-  /** Partidas amigo ativas ficam só em {@link com.svc.pokeguessteam.service.FriendMatchStore}. */
+  /**
+     * Partidas amigo ativas ficam só em {@link com.svc.pokeguessteam.service.FriendMatchStore}.
+     * Tem de ser atualizável: o MatchEngine marca FINISHED no /guess e o /finish valida isso.
+     */
     @Enumerated(EnumType.STRING)
-    @Column(name = "MATCH_STATUS", nullable = false, length = 20, updatable = false)
+    @Column(name = "MATCH_STATUS", nullable = false, length = 20)
     private MatchStatus status;
 
     @Convert(converter = MatchPlayerSideConverter.class)
@@ -99,11 +103,15 @@ public class ActiveMatchModel {
     @Column(name = "CREATED_AT", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    @OneToOne(mappedBy = "match", cascade = CascadeType.ALL, orphanRemoval = true, optional = false)
-    private ActiveMatchPlayerModel userPlayer;
-
-    @OneToOne(mappedBy = "match", cascade = CascadeType.ALL, orphanRemoval = true, optional = false)
-    private ActiveMatchPlayerModel botPlayer;
+    /**
+     * HOST e OPPONENT vivem na mesma tabela ({@code TB_ACTIVE_MATCH_PLAYERS}).
+     * Dois {@code @OneToOne(mappedBy="match")} sem filtro de lado faziam o Hibernate
+     * apontar os dois campos para o mesmo row — times/hits/skipTurns partilhados e
+     * o bot a ser saltado no {@code advanceTurn}.
+     */
+    /** Set (não List) para o EntityGraph poder fazer fetch junto com {@link #guesses}. */
+    @OneToMany(mappedBy = "match", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<ActiveMatchPlayerModel> players = new LinkedHashSet<>();
 
     @OneToMany(mappedBy = "match", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ActiveMatchGuessModel> guesses = new ArrayList<>();
@@ -272,26 +280,24 @@ public class ActiveMatchModel {
 
     /** Jogador {@link MatchPlayerSide#HOST} (conta / anfitrião). */
     public ActiveMatchPlayerModel getHostPlayer() {
-        return userPlayer;
+        return getPlayer(MatchPlayerSide.HOST);
     }
 
     public void setHostPlayer(ActiveMatchPlayerModel hostPlayer) {
-        this.userPlayer = hostPlayer;
-        if (hostPlayer != null) {
-            hostPlayer.setMatch(this);
-        }
+        replacePlayer(MatchPlayerSide.HOST, hostPlayer);
     }
 
     /** Jogador {@link MatchPlayerSide#OPPONENT} (IA, 2.º humano local ou convidado). */
     public ActiveMatchPlayerModel getOpponentPlayer() {
-        return botPlayer;
+        return getPlayer(MatchPlayerSide.OPPONENT);
     }
 
     public void setOpponentPlayer(ActiveMatchPlayerModel opponentPlayer) {
-        this.botPlayer = opponentPlayer;
-        if (opponentPlayer != null) {
-            opponentPlayer.setMatch(this);
-        }
+        replacePlayer(MatchPlayerSide.OPPONENT, opponentPlayer);
+    }
+
+    public Set<ActiveMatchPlayerModel> getPlayers() {
+        return players;
     }
 
     public List<ActiveMatchGuessModel> getGuesses() {
@@ -299,11 +305,31 @@ public class ActiveMatchModel {
     }
 
     public ActiveMatchPlayerModel getPlayer(MatchPlayerSide side) {
-        return side == MatchPlayerSide.HOST ? userPlayer : botPlayer;
+        if (side == null) {
+            return null;
+        }
+        for (ActiveMatchPlayerModel player : players) {
+            if (player != null && player.getSide() == side) {
+                return player;
+            }
+        }
+        return null;
     }
 
     public ActiveMatchPlayerModel getOpponent(MatchPlayerSide side) {
-        return side == MatchPlayerSide.HOST ? botPlayer : userPlayer;
+        return getPlayer(getOpponentSide(side));
+    }
+
+    private void replacePlayer(MatchPlayerSide side, ActiveMatchPlayerModel player) {
+        players.removeIf(existing -> existing != null && existing.getSide() == side);
+        if (player == null) {
+            return;
+        }
+        player.setSide(side);
+        player.setMatch(this);
+        if (players.stream().noneMatch(existing -> existing == player)) {
+            players.add(player);
+        }
     }
 
     public MatchPlayerSide getOpponentSide(MatchPlayerSide side) {
