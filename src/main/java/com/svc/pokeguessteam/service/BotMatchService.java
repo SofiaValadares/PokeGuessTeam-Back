@@ -153,10 +153,10 @@ public class BotMatchService {
         ensureNotAlreadyGuessed(match, MatchPlayerSide.HOST, guessed.getPokedexNumber());
 
         Map<Integer, PokemonModel> pokemonByDex = loadPokemonByDex();
-        List<BotMatchGuessFeedbackDto> feedbacks = new ArrayList<>();
+        List<MatchEngine.ApplyGuessResult> applied = new ArrayList<>();
 
         MatchEngine.ApplyGuessResult hostResult = applyGuessSafe(match, MatchPlayerSide.HOST, guessed, pokemonByDex);
-        feedbacks.add(toFeedback(hostResult, pokemonByDex));
+        applied.add(hostResult);
 
         List<PokemonModel> botPool = duelTeamService.modelsFromRegistered(registered);
         while (match.getStatus() == MatchStatus.ACTIVE && match.getCurrentTurn() == MatchPlayerSide.OPPONENT) {
@@ -174,12 +174,16 @@ public class BotMatchService {
             MatchEngine.ApplyGuessResult botResult =
                     applyGuessSafe(match, MatchPlayerSide.OPPONENT, botGuess, pokemonByDex);
             botResult.guess().setAutoSelected(true);
-            feedbacks.add(toFeedback(botResult, pokemonByDex));
+            applied.add(botResult);
         }
 
-        activeMatchRepository.save(match);
+        // Flush + PrePersist nos guesses para ids estarem preenchidos no DTO do cliente.
+        activeMatchRepository.saveAndFlush(match);
+        List<BotMatchGuessFeedbackDto> feedbackDtos = applied.stream()
+                .map(result -> toFeedback(result, pokemonByDex))
+                .toList();
         FriendMatchStateDto state = toStateDto(match, pokemonByDex);
-        return new FriendMatchActionResponse(state, List.copyOf(feedbacks));
+        return new FriendMatchActionResponse(state, List.copyOf(feedbackDtos));
     }
 
     /** Abre os commitments (AES + SHA-256 + HMAC), persiste histórico e recompensas. */
@@ -364,10 +368,9 @@ public class BotMatchService {
     }
 
     private void clearStaleBotMatches(String profileId) {
-        activeMatchRepository.findAllActiveByProfileIdAndGameModeOrderByCreatedAtDesc(
-                profileId,
-                GameModes.BOT,
-                MatchStatus.FINISHED
-        ).forEach(match -> activeMatchRemovalService.deleteByMatchId(match.getId()));
+        // Inclui FINISHED órfãs (ex.: /finish falhou depois do /guess) — senão o
+        // cliente reabre sessionStorage duma partida que já não existe no servidor.
+        activeMatchRepository.findAllByProfileIdAndGameMode(profileId, GameModes.BOT)
+                .forEach(match -> activeMatchRemovalService.deleteByMatchId(match.getId()));
     }
 }

@@ -55,6 +55,7 @@ public final class MatchEngine {
                 .toList();
 
         ActiveMatchGuessModel guessRecord = new ActiveMatchGuessModel();
+        guessRecord.setId(java.util.UUID.randomUUID().toString());
         guessRecord.setPlayerSide(playerSide);
         guessRecord.setGuessedPokedexNumber(guessedPokemon.getPokedexNumber());
         guessRecord.setExactMatch(!matchedDexNumbers.isEmpty());

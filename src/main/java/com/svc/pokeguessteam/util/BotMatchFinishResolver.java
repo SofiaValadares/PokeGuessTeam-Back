@@ -18,7 +18,10 @@ public final class BotMatchFinishResolver {
     }
 
     public static GameResults resolve(MatchStatus status, MatchPlayerSide winner, GameResults claimed) {
-        if (status != MatchStatus.FINISHED) {
+        // Algumas rows antigas ficaram com winner/finishedAt mas MATCH_STATUS
+        // ACTIVE (coluna era updatable=false). Aceitar winner como partida terminada.
+        boolean finished = status == MatchStatus.FINISHED || winner != null;
+        if (!finished) {
             if (claimed == GameResults.DESISTENCE) {
                 return GameResults.DESISTENCE;
             }
