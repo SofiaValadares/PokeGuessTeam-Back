@@ -11,6 +11,7 @@ public record UserDto(
         boolean emailVerified,
         LocalDateTime registerDate,
         String role,
+        boolean developer,
         boolean siteBanned,
         boolean onlineBanned
 ) {
@@ -22,6 +23,7 @@ public record UserDto(
                 Boolean.TRUE.equals(user.getEmailVerify()),
                 user.getRegisterDate(),
                 user.getRole().name(),
+                user.isDeveloper(),
                 user.isSiteBannedNow(),
                 user.isOnlineBannedNow()
         );

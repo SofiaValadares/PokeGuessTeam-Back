@@ -20,6 +20,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -67,8 +68,47 @@ public class ProfileController {
             body.put("favoritePokemonId", null);
             body.put("favoritePokemonName", null);
         }
+        body.put("avatarMode", profile.getAvatarMode().name());
+        body.put("hasCustomAvatar", profile.getAvatarCustomBytes() != null && profile.getAvatarCustomBytes().length > 0);
+        body.put("avatarUrl", "/api/profile/avatar/" + userId);
         body.put("registeredPokedexCount", userPokedexService.countRegistered(profile.getId()));
         return ResponseEntity.ok(body);
+    }
+
+    @PostMapping(value = "/avatar", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Map<String, Object>> uploadAvatar(
+            HttpSession session,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
+            @RequestParam(value = "hiddenMessage", required = false) String hiddenMessage
+    ) throws java.io.IOException {
+        String userId = currentUserService.requireUserId(session);
+        profileService.uploadCustomAvatar(userId, file.getBytes(), file.getContentType(), hiddenMessage);
+        return me(session);
+    }
+
+    /** Revela mensagem LSB escondida no avatar custom do utilizador autenticado. */
+    @PostMapping("/avatar/stego/extract")
+    public ResponseEntity<Map<String, String>> extractAvatarStego(HttpSession session) {
+        String userId = currentUserService.requireUserId(session);
+        String message = profileService.extractHiddenMessageFromAvatar(userId);
+        return ResponseEntity.ok(Map.of("message", message));
+    }
+
+    @PostMapping("/avatar/use-pokemon")
+    public ResponseEntity<Map<String, Object>> usePokemonAvatar(HttpSession session) {
+        String userId = currentUserService.requireUserId(session);
+        profileService.usePokemonAvatar(userId);
+        return me(session);
+    }
+
+    @GetMapping("/avatar/{userId}")
+    public ResponseEntity<byte[]> getAvatar(@PathVariable String userId) {
+        return profileService.findCustomAvatar(userId)
+                .map(entry -> ResponseEntity.ok()
+                        .header(org.springframework.http.HttpHeaders.CACHE_CONTROL, "private, max-age=60")
+                        .contentType(org.springframework.http.MediaType.parseMediaType(entry.getKey()))
+                        .body(entry.getValue()))
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @PatchMapping("/favorite-pokemon")

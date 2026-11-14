@@ -28,6 +28,9 @@ public class SessionAuthorityService {
         if (user.getRole() != null && user.getRole().isMaster()) {
             authorities.add(new SimpleGrantedAuthority("ROLE_MASTER_ADMIN"));
         }
+        if (user.isDeveloper()) {
+            authorities.add(new SimpleGrantedAuthority("ROLE_DEVELOPER"));
+        }
         return authorities;
     }
 

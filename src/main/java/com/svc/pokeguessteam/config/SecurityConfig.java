@@ -173,7 +173,8 @@ public class SecurityConfig {
                          */
                         .requestMatchers(
                                 HttpMethod.PATCH,
-                                "/api/admin/users/*/role"
+                                "/api/admin/users/*/role",
+                                "/api/admin/users/*/developer"
                         ).hasRole("MASTER_ADMIN")
 
 
@@ -186,6 +187,12 @@ public class SecurityConfig {
                                 "/api/admin/audit/**"
                         ).hasRole("MASTER_ADMIN")
 
+
+                        // DEVELOPER — painéis de teste (Security Lab)
+
+                        .requestMatchers(
+                                "/api/dev/**"
+                        ).hasRole("DEVELOPER")
 
                         // ADMIN / MASTER ADMIN
 

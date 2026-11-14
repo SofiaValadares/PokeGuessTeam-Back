@@ -1,14 +1,19 @@
 package com.svc.pokeguessteam.model.user;
 
+import com.svc.pokeguessteam.model.enums.AvatarMode;
 import com.svc.pokeguessteam.model.pokemon.PokemonModel;
+import jakarta.persistence.Basic;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OneToOne;
@@ -64,6 +69,19 @@ public class ProfileModel {
     @Column(name = "FRIEND_ONLINE_BANNED_UNTIL")
     private LocalDateTime friendOnlineBannedUntil;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "AVATAR_MODE", nullable = false, length = 16)
+    @ColumnDefault("'POKEMON'")
+    private AvatarMode avatarMode = AvatarMode.POKEMON;
+
+    @Lob
+    @Basic(fetch = FetchType.LAZY)
+    @Column(name = "AVATAR_CUSTOM_BYTES")
+    private byte[] avatarCustomBytes;
+
+    @Column(name = "AVATAR_CONTENT_TYPE", length = 64)
+    private String avatarContentType;
+
     @Column(name = "CREATED_AT", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -72,6 +90,9 @@ public class ProfileModel {
         createdAt = LocalDateTime.now();
         if (pokeballFragments == null) {
             pokeballFragments = 0;
+        }
+        if (avatarMode == null) {
+            avatarMode = AvatarMode.POKEMON;
         }
     }
 
@@ -93,6 +114,30 @@ public class ProfileModel {
 
     public void setFavoritePokemon(PokemonModel favoritePokemon) {
         this.favoritePokemon = favoritePokemon;
+    }
+
+    public AvatarMode getAvatarMode() {
+        return avatarMode != null ? avatarMode : AvatarMode.POKEMON;
+    }
+
+    public void setAvatarMode(AvatarMode avatarMode) {
+        this.avatarMode = avatarMode != null ? avatarMode : AvatarMode.POKEMON;
+    }
+
+    public byte[] getAvatarCustomBytes() {
+        return avatarCustomBytes;
+    }
+
+    public void setAvatarCustomBytes(byte[] avatarCustomBytes) {
+        this.avatarCustomBytes = avatarCustomBytes;
+    }
+
+    public String getAvatarContentType() {
+        return avatarContentType;
+    }
+
+    public void setAvatarContentType(String avatarContentType) {
+        this.avatarContentType = avatarContentType;
     }
 
     public List<UserPokemonInventoryModel> getInventory() {

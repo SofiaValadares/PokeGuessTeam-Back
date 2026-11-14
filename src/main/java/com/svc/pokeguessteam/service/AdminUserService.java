@@ -305,6 +305,26 @@ public class AdminUserService {
      *    para evitar condições de corrida.
      * 6. Toda alteração é registrada no histórico de auditoria.
      */
+    /** Liga/desliga papel DEV (pode coexistir com ADMIN). Apenas MASTER. */
+    @Transactional
+    public AdminUserListItemDto setDeveloper(String masterId, String targetUserId, boolean developer) {
+        adminAccessService.requireMaster(masterId);
+        UserModel target = userRepository.findById(targetUserId)
+                .orElseThrow(() -> new ApiBusinessException(
+                        HttpStatus.NOT_FOUND,
+                        ErrorCodes.PROFILE_USER_NOT_FOUND,
+                        MessageKeys.PROFILE_USER_NOT_FOUND
+                ));
+        target.setDeveloper(developer);
+        UserModel saved = userRepository.save(target);
+        auditLogService.recordAdminAction(
+                masterId,
+                developer ? "GRANT_DEVELOPER" : "REVOKE_DEVELOPER",
+                "target=" + target.getUsername()
+        );
+        return toListItem(saved);
+    }
+
     @Transactional
     public AdminUserListItemDto setRole(
             String masterId,

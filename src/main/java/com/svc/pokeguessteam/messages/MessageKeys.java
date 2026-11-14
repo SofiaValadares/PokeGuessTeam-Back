@@ -51,6 +51,10 @@ public final class MessageKeys {
 
     public static final String PROFILE_USER_NOT_FOUND = "error.profile.user-not-found";
     public static final String PROFILE_NOT_FOUND = "error.profile.not-found";
+    public static final String PROFILE_STEGO_MESSAGE_TOO_LONG = "error.profile.stego.message-too-long";
+    public static final String PROFILE_STEGO_EMBED_FAILED = "error.profile.stego.embed-failed";
+    public static final String PROFILE_STEGO_EXTRACT_FAILED = "error.profile.stego.extract-failed";
+    public static final String PROFILE_STEGO_NO_CUSTOM_AVATAR = "error.profile.stego.no-custom-avatar";
     public static final String TRAINING_TEAM_LINE_NOT_IN_INVENTORY = "error.profile.training-team.not-in-inventory";
     public static final String TRAINING_TEAM_LINE_NOT_FOUND = "error.profile.training-team.line-not-found";
     public static final String TRAINING_TEAM_DUPLICATE = "error.profile.training-team.duplicate";

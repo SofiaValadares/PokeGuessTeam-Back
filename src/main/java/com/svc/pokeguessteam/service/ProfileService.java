@@ -19,10 +19,14 @@ import com.svc.pokeguessteam.model.user.TrainingTeamModel;
 import com.svc.pokeguessteam.model.user.UserModel;
 import com.svc.pokeguessteam.model.user.UserPokemonInventoryModel;
 import com.svc.pokeguessteam.repository.pokemon.PokemonRepository;
+import com.svc.pokeguessteam.model.enums.SecurityLabEventType;
+import com.svc.pokeguessteam.model.securitylab.SecurityLabEventModel;
+import com.svc.pokeguessteam.repository.securitylab.SecurityLabEventRepository;
 import com.svc.pokeguessteam.repository.user.ProfileInventoryItemRepository;
 import com.svc.pokeguessteam.repository.user.ProfileRepository;
 import com.svc.pokeguessteam.repository.user.UserPokemonInventoryRepository;
 import com.svc.pokeguessteam.repository.user.UserRepository;
+import com.svc.pokeguessteam.securitylab.SteganographyService;
 import com.svc.pokeguessteam.util.PokemonEvolutionRewards;
 import com.svc.pokeguessteam.util.PokemonInventoryXp;
 import org.springframework.data.domain.Page;
@@ -73,6 +77,8 @@ public class ProfileService {
     private final ProfileInventoryItemRepository profileInventoryItemRepository;
     private final UserPokedexService userPokedexService;
     private final EvolutionLineRepository evolutionLineRepository;
+    private final SteganographyService steganographyService;
+    private final SecurityLabEventRepository securityLabEventRepository;
 
     public ProfileService(ProfileRepository profileRepository,
                           UserRepository userRepository,
@@ -80,7 +86,9 @@ public class ProfileService {
                           UserPokemonInventoryRepository inventoryRepository,
                           ProfileInventoryItemRepository profileInventoryItemRepository,
                           UserPokedexService userPokedexService,
-                          EvolutionLineRepository evolutionLineRepository) {
+                          EvolutionLineRepository evolutionLineRepository,
+                          SteganographyService steganographyService,
+                          SecurityLabEventRepository securityLabEventRepository) {
         this.profileRepository = profileRepository;
         this.userRepository = userRepository;
         this.pokemonRepository = pokemonRepository;
@@ -88,6 +96,8 @@ public class ProfileService {
         this.profileInventoryItemRepository = profileInventoryItemRepository;
         this.userPokedexService = userPokedexService;
         this.evolutionLineRepository = evolutionLineRepository;
+        this.steganographyService = steganographyService;
+        this.securityLabEventRepository = securityLabEventRepository;
     }
 
     @Transactional
@@ -126,7 +136,181 @@ public class ProfileService {
                         MessageKeys.POKEMON_SPECIES_NOT_FOUND
                 ));
         profile.setFavoritePokemon(pokemon);
+        profile.setAvatarMode(com.svc.pokeguessteam.model.enums.AvatarMode.POKEMON);
         return profileRepository.save(profile);
+    }
+
+    private static final int MAX_AVATAR_BYTES = 512 * 1024;
+    private static final int MAX_STEGO_MESSAGE_CHARS = 500;
+
+    @Transactional
+    public ProfileModel uploadCustomAvatar(String userId, byte[] bytes, String contentType) {
+        return uploadCustomAvatar(userId, bytes, contentType, null);
+    }
+
+    /**
+     * Upload de avatar. Se {@code hiddenMessage} não for vazio, embute a mensagem via LSB
+     * e grava o PNG resultante (esteganografia no fluxo de perfil do jogador).
+     */
+    @Transactional
+    public ProfileModel uploadCustomAvatar(
+            String userId,
+            byte[] bytes,
+            String contentType,
+            String hiddenMessage
+    ) {
+        if (bytes == null || bytes.length == 0) {
+            throw new ApiBusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    ErrorCodes.VALIDATION_FAILED,
+                    MessageKeys.VALIDATION_SUMMARY
+            );
+        }
+        if (bytes.length > MAX_AVATAR_BYTES) {
+            throw new ApiBusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    ErrorCodes.VALIDATION_FAILED,
+                    MessageKeys.VALIDATION_SUMMARY
+            );
+        }
+        String ct = contentType == null ? "image/png" : contentType.toLowerCase();
+        if (!ct.startsWith("image/")) {
+            throw new ApiBusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    ErrorCodes.VALIDATION_FAILED,
+                    MessageKeys.VALIDATION_SUMMARY
+            );
+        }
+
+        byte[] toStore = bytes;
+        String storeCt = ct;
+        String message = hiddenMessage == null ? "" : hiddenMessage.trim();
+        if (!message.isEmpty()) {
+            if (message.length() > MAX_STEGO_MESSAGE_CHARS) {
+                throw new ApiBusinessException(
+                        HttpStatus.BAD_REQUEST,
+                        ErrorCodes.PROFILE_STEGO_MESSAGE_TOO_LONG,
+                        MessageKeys.PROFILE_STEGO_MESSAGE_TOO_LONG
+                );
+            }
+            try {
+                var embedded = steganographyService.embedBytes(bytes, message);
+                toStore = java.util.Base64.getDecoder().decode(embedded.imageBase64Png());
+                if (toStore.length > MAX_AVATAR_BYTES) {
+                    throw new ApiBusinessException(
+                            HttpStatus.BAD_REQUEST,
+                            ErrorCodes.VALIDATION_FAILED,
+                            MessageKeys.VALIDATION_SUMMARY
+                    );
+                }
+                storeCt = "image/png";
+                persistStegoEvent(
+                        userId,
+                        SecurityLabEventType.STEGO_EMBED,
+                        "Avatar: mensagem oculta (LSB)",
+                        "{\"usedBits\":" + embedded.usedBits()
+                                + ",\"capacityBits\":" + embedded.capacityBits()
+                                + ",\"source\":\"profile-avatar\"}",
+                        (double) embedded.usedBits()
+                );
+            } catch (ApiBusinessException e) {
+                throw e;
+            } catch (IllegalArgumentException e) {
+                throw new ApiBusinessException(
+                        HttpStatus.BAD_REQUEST,
+                        ErrorCodes.PROFILE_STEGO_EMBED_FAILED,
+                        MessageKeys.PROFILE_STEGO_EMBED_FAILED
+                );
+            }
+        }
+
+        ProfileModel profile = ensureProfileWithStarters(userId);
+        profile.setAvatarCustomBytes(toStore);
+        profile.setAvatarContentType(storeCt);
+        profile.setAvatarMode(com.svc.pokeguessteam.model.enums.AvatarMode.CUSTOM);
+        return profileRepository.save(profile);
+    }
+
+    /**
+     * Extrai mensagem LSB do avatar custom do próprio utilizador.
+     */
+    @Transactional
+    public String extractHiddenMessageFromAvatar(String userId) {
+        ProfileModel profile = ensureProfileWithStarters(userId);
+        if (profile.getAvatarMode() != com.svc.pokeguessteam.model.enums.AvatarMode.CUSTOM
+                || profile.getAvatarCustomBytes() == null
+                || profile.getAvatarCustomBytes().length == 0) {
+            throw new ApiBusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    ErrorCodes.PROFILE_STEGO_NO_CUSTOM_AVATAR,
+                    MessageKeys.PROFILE_STEGO_NO_CUSTOM_AVATAR
+            );
+        }
+        try {
+            String msg = steganographyService.extractBytes(profile.getAvatarCustomBytes());
+            persistStegoEvent(
+                    userId,
+                    SecurityLabEventType.STEGO_EXTRACT,
+                    "Avatar: mensagem revelada",
+                    "{\"source\":\"profile-avatar\",\"length\":" + msg.length() + "}",
+                    1.0
+            );
+            return msg;
+        } catch (IllegalArgumentException e) {
+            persistStegoEvent(
+                    userId,
+                    SecurityLabEventType.STEGO_EXTRACT_FAIL,
+                    "Avatar: falha ao revelar mensagem",
+                    "{\"source\":\"profile-avatar\"}",
+                    0.0
+            );
+            throw new ApiBusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    ErrorCodes.PROFILE_STEGO_EXTRACT_FAILED,
+                    MessageKeys.PROFILE_STEGO_EXTRACT_FAILED
+            );
+        }
+    }
+
+    private void persistStegoEvent(
+            String userId,
+            SecurityLabEventType type,
+            String summary,
+            String detailJson,
+            Double metric
+    ) {
+        SecurityLabEventModel e = new SecurityLabEventModel();
+        e.setEventType(type);
+        e.setActorUserId(userId);
+        userRepository.findById(userId).ifPresent(u -> {
+            e.setActorUsername(u.getUsername());
+            e.setActorWasDeveloper(u.isDeveloper());
+        });
+        e.setSummary(summary);
+        e.setDetailJson(detailJson);
+        e.setMetricValue(metric);
+        securityLabEventRepository.save(e);
+    }
+
+    @Transactional
+    public ProfileModel usePokemonAvatar(String userId) {
+        ProfileModel profile = ensureProfileWithStarters(userId);
+        profile.setAvatarMode(com.svc.pokeguessteam.model.enums.AvatarMode.POKEMON);
+        return profileRepository.save(profile);
+    }
+
+    @Transactional(readOnly = true)
+    public java.util.Optional<java.util.Map.Entry<String, byte[]>> findCustomAvatar(String userId) {
+        ProfileModel profile = ensureProfileWithStarters(userId);
+        if (profile.getAvatarMode() != com.svc.pokeguessteam.model.enums.AvatarMode.CUSTOM) {
+            return java.util.Optional.empty();
+        }
+        byte[] bytes = profile.getAvatarCustomBytes();
+        if (bytes == null || bytes.length == 0) {
+            return java.util.Optional.empty();
+        }
+        String ct = profile.getAvatarContentType() != null ? profile.getAvatarContentType() : "image/png";
+        return java.util.Optional.of(java.util.Map.entry(ct, bytes));
     }
 
     private ProfileModel createProfile(String userId) {

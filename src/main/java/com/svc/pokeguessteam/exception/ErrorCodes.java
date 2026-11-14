@@ -30,6 +30,10 @@ public final class ErrorCodes {
 
     public static final String PROFILE_USER_NOT_FOUND = "PROFILE_USER_NOT_FOUND";
     public static final String PROFILE_NOT_FOUND = "PROFILE_NOT_FOUND";
+    public static final String PROFILE_STEGO_MESSAGE_TOO_LONG = "PROFILE_STEGO_MESSAGE_TOO_LONG";
+    public static final String PROFILE_STEGO_EMBED_FAILED = "PROFILE_STEGO_EMBED_FAILED";
+    public static final String PROFILE_STEGO_EXTRACT_FAILED = "PROFILE_STEGO_EXTRACT_FAILED";
+    public static final String PROFILE_STEGO_NO_CUSTOM_AVATAR = "PROFILE_STEGO_NO_CUSTOM_AVATAR";
     public static final String TRAINING_TEAM_LINE_NOT_IN_INVENTORY = "TRAINING_TEAM_LINE_NOT_IN_INVENTORY";
     public static final String TRAINING_TEAM_LINE_NOT_FOUND = "TRAINING_TEAM_LINE_NOT_FOUND";
     public static final String TRAINING_TEAM_DUPLICATE = "TRAINING_TEAM_DUPLICATE";

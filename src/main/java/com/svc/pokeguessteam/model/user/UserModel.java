@@ -39,6 +39,11 @@ public class UserModel {
     @ColumnDefault("'USER'")
     private UserRole role = UserRole.USER;
 
+    /** Papel adicional independente: painéis de teste (Security Lab). Pode coexistir com ADMIN. */
+    @Column(name = "USER_IS_DEVELOPER", nullable = false)
+    @ColumnDefault("false")
+    private Boolean developer = false;
+
     @Column(name = "SITE_BANNED_PERMANENT", nullable = false)
     @ColumnDefault("false")
     private Boolean siteBannedPermanent = false;
@@ -59,12 +64,17 @@ public class UserModel {
     @PrePersist
     protected void onCreate() {
         this.registerDate = LocalDateTime.now();
-        this.emailVerify = false;
+        if (this.emailVerify == null) {
+            this.emailVerify = false;
+        }
         if (this.hasLoggedIn == null) {
             this.hasLoggedIn = false;
         }
         if (this.role == null) {
             this.role = UserRole.USER;
+        }
+        if (this.developer == null) {
+            this.developer = false;
         }
         if (this.siteBannedPermanent == null) {
             this.siteBannedPermanent = false;
@@ -129,6 +139,14 @@ public class UserModel {
 
     public void setRole(UserRole role) {
         this.role = role != null ? role : UserRole.USER;
+    }
+
+    public boolean isDeveloper() {
+        return Boolean.TRUE.equals(developer);
+    }
+
+    public void setDeveloper(Boolean developer) {
+        this.developer = Boolean.TRUE.equals(developer);
     }
 
     public Boolean getSiteBannedPermanent() {
