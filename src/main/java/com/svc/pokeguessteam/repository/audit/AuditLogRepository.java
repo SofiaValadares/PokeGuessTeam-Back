@@ -60,6 +60,8 @@ public interface AuditLogRepository extends JpaRepository<AuditLogModel, String>
 
     long countByActorUserId(String actorUserId);
 
+    long countByActionAndCreatedAtAfter(String action, LocalDateTime after);
+
     @Query("""
             SELECT a.actorUserId, COUNT(a)
             FROM AuditLogModel a

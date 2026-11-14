@@ -3,6 +3,7 @@ package com.svc.pokeguessteam.controller;
 import com.svc.pokeguessteam.dto.admin.AdminUserListItemDto;
 import com.svc.pokeguessteam.dto.admin.AdminUserPageResponse;
 import com.svc.pokeguessteam.dto.admin.BanUserRequest;
+import com.svc.pokeguessteam.dto.admin.SetDeveloperRequest;
 import com.svc.pokeguessteam.dto.admin.SetUserRoleRequest;
 import com.svc.pokeguessteam.dto.admin.UnbanUserRequest;
 import com.svc.pokeguessteam.service.AdminUserService;
@@ -82,4 +83,16 @@ public class AdminUserController {
                 )
             );
         }
+
+    @PatchMapping("/{userId}/developer")
+    public ResponseEntity<AdminUserListItemDto> setDeveloper(
+            HttpSession session,
+            @PathVariable String userId,
+            @Valid @RequestBody SetDeveloperRequest request
+    ) {
+        String masterId = currentUserService.requireUserId(session);
+        return ResponseEntity.ok(
+                adminUserService.setDeveloper(masterId, userId, Boolean.TRUE.equals(request.developer()))
+        );
+    }
 }

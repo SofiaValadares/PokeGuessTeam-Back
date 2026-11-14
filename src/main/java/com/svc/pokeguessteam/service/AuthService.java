@@ -8,6 +8,7 @@ import com.svc.pokeguessteam.config.AppAuthProperties;
 import com.svc.pokeguessteam.logging.AppLogger;
 import com.svc.pokeguessteam.repository.user.UserRepository;
 import com.svc.pokeguessteam.security.LoginAttemptService;
+import com.svc.pokeguessteam.securitylab.AnomalyDetectionService;
 import com.svc.pokeguessteam.validation.UsernameEmailGuard;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -29,6 +30,7 @@ public class AuthService {
     private final AppAuthProperties authProperties;
     private final AuditLogService auditLogService;
     private final LoginAttemptService loginAttemptService;
+    private final AnomalyDetectionService anomalyDetectionService;
 
     public AuthService(
             UserRepository userRepository,
@@ -38,7 +40,8 @@ public class AuthService {
             TransactionalEmailService transactionalEmailService,
             AppAuthProperties authProperties,
             AuditLogService auditLogService,
-            LoginAttemptService loginAttemptService
+            LoginAttemptService loginAttemptService,
+            AnomalyDetectionService anomalyDetectionService
     ) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
@@ -48,6 +51,7 @@ public class AuthService {
         this.authProperties = authProperties;
         this.auditLogService = auditLogService;
         this.loginAttemptService = loginAttemptService;
+        this.anomalyDetectionService = anomalyDetectionService;
     }
 
     /**
@@ -161,6 +165,11 @@ public class AuthService {
     private void rejectFailedLogin(String userId, String email, String clientIp, String auditDetail) {
         auditLogService.recordSecurity(userId, "LOGIN_FAILED", auditDetail);
         loginAttemptService.recordFailure(email, clientIp);
+        try {
+            anomalyDetectionService.scanAndPersist(userId);
+        } catch (Exception ex) {
+            log.warn("rejectFailedLogin", "Falha ao varrer anomalias após LOGIN_FAILED: {}", ex.getMessage());
+        }
         try {
             loginAttemptService.assertNotLocked(email, clientIp);
         } catch (ApiBusinessException locked) {
