@@ -9,9 +9,10 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
-import jakarta.persistence.Lob;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 
@@ -46,8 +47,9 @@ public class SecurityLabEventModel {
     @Column(name = "SUMMARY", nullable = false, length = 255)
     private String summary;
 
-    @Lob
-    @Column(name = "DETAIL_JSON")
+    /** TEXT — evitar @Lob/OID no PostgreSQL (falha com open-in-view=false / auto-commit). */
+    @JdbcTypeCode(SqlTypes.LONGVARCHAR)
+    @Column(name = "DETAIL_JSON", columnDefinition = "TEXT")
     private String detailJson;
 
     @Column(name = "METRIC_VALUE")
