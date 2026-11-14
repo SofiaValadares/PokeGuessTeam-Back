@@ -39,6 +39,7 @@ public final class ErrorCodes {
     public static final String TRAINING_TEAM_DUPLICATE = "TRAINING_TEAM_DUPLICATE";
     public static final String EVOLUTION_REWARD_NOT_AVAILABLE = "EVOLUTION_REWARD_NOT_AVAILABLE";
     public static final String DEV_TOOLS_DISABLED = "DEV_TOOLS_DISABLED";
+    public static final String SECURITY_LAB_DISABLED = "SECURITY_LAB_DISABLED";
 
     public static final String POKEMON_SPECIES_NOT_FOUND = "POKEMON_SPECIES_NOT_FOUND";
     public static final String POKEBALL_INSUFFICIENT = "POKEBALL_INSUFFICIENT";

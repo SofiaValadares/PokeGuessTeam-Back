@@ -1,5 +1,6 @@
 package com.svc.pokeguessteam.controller;
 
+import com.svc.pokeguessteam.config.AppSecurityLabProperties;
 import com.svc.pokeguessteam.model.enums.GameModes;
 import com.svc.pokeguessteam.service.GameHistoryService;
 import com.svc.pokeguessteam.service.NationalPokedexCatalog;
@@ -25,9 +26,14 @@ import java.util.Map;
 public class GameMetaController {
 
     private final NationalPokedexCatalog nationalPokedexCatalog;
+    private final AppSecurityLabProperties securityLabProperties;
 
-    public GameMetaController(NationalPokedexCatalog nationalPokedexCatalog) {
+    public GameMetaController(
+            NationalPokedexCatalog nationalPokedexCatalog,
+            AppSecurityLabProperties securityLabProperties
+    ) {
         this.nationalPokedexCatalog = nationalPokedexCatalog;
+        this.securityLabProperties = securityLabProperties;
     }
 
     @GetMapping
@@ -89,6 +95,11 @@ public class GameMetaController {
         ));
         body.put("evolutionRewards", PokemonEvolutionRewards.meta());
         body.put("gacha", PokeballGachaRules.meta());
+        body.put("securityLab", Map.of(
+                "enabled", securityLabProperties.isEnabled(),
+                "temporaryDeployNotice", securityLabProperties.isTemporaryDeployNotice(),
+                "requiresLabProfile", true
+        ));
         body.put("activeMatchApi", Map.of(
                 "botValidateTeam", "/api/game/bot/match/team",
                 "botFinish", "/api/game/bot/match/finish",

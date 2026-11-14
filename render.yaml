@@ -33,6 +33,11 @@ services:
         value: "false"
       - key: DEV_TOOLS_ENABLED
         value: "false"
+      # Lab Unidade 2: ligado só para contas com perfil Lab (USER_IS_DEVELOPER). Kill-switch: false.
+      - key: SECURITY_LAB_ENABLED
+        value: "true"
+      - key: SECURITY_LAB_TEMPORARY_NOTICE
+        value: "true"
       - key: APP_CORS_ALLOWED_ORIGIN_PATTERNS
         sync: false
       - key: LOG_PATH

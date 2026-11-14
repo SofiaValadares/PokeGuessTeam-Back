@@ -1,6 +1,10 @@
 package com.svc.pokeguessteam.service;
 
+import com.svc.pokeguessteam.config.AppSecurityLabProperties;
 import com.svc.pokeguessteam.dto.securitylab.SecurityLabDtos;
+import com.svc.pokeguessteam.exception.ApiBusinessException;
+import com.svc.pokeguessteam.exception.ErrorCodes;
+import com.svc.pokeguessteam.messages.MessageKeys;
 import com.svc.pokeguessteam.model.enums.SecurityLabEventType;
 import com.svc.pokeguessteam.model.securitylab.SecurityLabEventModel;
 import com.svc.pokeguessteam.repository.securitylab.SecurityLabEventRepository;
@@ -10,6 +14,7 @@ import com.svc.pokeguessteam.securitylab.CryptoAttackLabService;
 import com.svc.pokeguessteam.securitylab.SteganographyService;
 import com.svc.pokeguessteam.securitylab.SymmetricLabCipher;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +28,7 @@ import java.util.TreeMap;
 @Service
 public class SecurityLabService {
 
+    private final AppSecurityLabProperties securityLabProperties;
     private final SymmetricLabCipher cipher;
     private final SteganographyService steganographyService;
     private final CryptoAttackLabService attackLabService;
@@ -32,6 +38,7 @@ public class SecurityLabService {
     private final UserRepository userRepository;
 
     public SecurityLabService(
+            AppSecurityLabProperties securityLabProperties,
             SymmetricLabCipher cipher,
             SteganographyService steganographyService,
             CryptoAttackLabService attackLabService,
@@ -40,6 +47,7 @@ public class SecurityLabService {
             AuditLogService auditLogService,
             UserRepository userRepository
     ) {
+        this.securityLabProperties = securityLabProperties;
         this.cipher = cipher;
         this.steganographyService = steganographyService;
         this.attackLabService = attackLabService;
@@ -49,8 +57,27 @@ public class SecurityLabService {
         this.userRepository = userRepository;
     }
 
+    public void assertLabEnabled() {
+        if (!securityLabProperties.isEnabled()) {
+            throw new ApiBusinessException(
+                    HttpStatus.FORBIDDEN,
+                    ErrorCodes.SECURITY_LAB_DISABLED,
+                    MessageKeys.SECURITY_LAB_DISABLED
+            );
+        }
+    }
+
+    public boolean isLabEnabled() {
+        return securityLabProperties.isEnabled();
+    }
+
+    public boolean isTemporaryDeployNotice() {
+        return securityLabProperties.isTemporaryDeployNotice();
+    }
+
     @Transactional
     public SecurityLabDtos.EncryptResponse encrypt(String userId, SecurityLabDtos.EncryptRequest req) {
+        assertLabEnabled();
         String plaintext = req.plaintext() == null ? "" : req.plaintext();
         String seed = req.seed();
         var result = cipher.encrypt(plaintext, seed);
@@ -78,6 +105,7 @@ public class SecurityLabService {
 
     @Transactional
     public SecurityLabDtos.DecryptResponse decrypt(String userId, SecurityLabDtos.DecryptRequest req) {
+        assertLabEnabled();
         try {
             var km = cipher.restoreKey(req.seed(), req.nonceBase64());
             String plain = cipher.decrypt(req.ciphertextBase64(), km);
@@ -95,6 +123,7 @@ public class SecurityLabService {
 
     @Transactional
     public SecurityLabDtos.StegoEmbedResponse stegoEmbed(String userId, SecurityLabDtos.StegoEmbedRequest req) {
+        assertLabEnabled();
         var result = steganographyService.embed(req.imageBase64(), req.message() == null ? "" : req.message());
         persist(userId, SecurityLabEventType.STEGO_EMBED,
                 "Esteganografia embed (" + result.usedBits() + " bits)",
@@ -105,6 +134,7 @@ public class SecurityLabService {
 
     @Transactional
     public SecurityLabDtos.StegoExtractResponse stegoExtract(String userId, SecurityLabDtos.StegoExtractRequest req) {
+        assertLabEnabled();
         try {
             String msg = steganographyService.extract(req.imageBase64());
             persist(userId, SecurityLabEventType.STEGO_EXTRACT, "Esteganografia extract OK", null, 1.0);
@@ -120,6 +150,7 @@ public class SecurityLabService {
 
     @Transactional
     public SecurityLabDtos.BruteForceResponse bruteForce(String userId, SecurityLabDtos.AttackRequest req) {
+        assertLabEnabled();
         var r = attackLabService.bruteForce(
                 req.plaintext() == null ? "poke" : req.plaintext(),
                 req.seed(),
@@ -135,6 +166,7 @@ public class SecurityLabService {
 
     @Transactional
     public SecurityLabDtos.DifferentialResponse differential(String userId, SecurityLabDtos.AttackRequest req) {
+        assertLabEnabled();
         var r = attackLabService.differential(
                 req.plaintext() == null || req.plaintext().isBlank() ? "Pikachu" : req.plaintext(),
                 req.seed()
@@ -151,6 +183,7 @@ public class SecurityLabService {
 
     @Transactional
     public SecurityLabDtos.StatisticalResponse statistical(String userId, SecurityLabDtos.AttackRequest req) {
+        assertLabEnabled();
         var r = attackLabService.statistical(
                 req.plaintext() == null || req.plaintext().isBlank()
                         ? "The quick brown fox jumps over the lazy pokemon trainer 0123456789"
@@ -169,6 +202,7 @@ public class SecurityLabService {
 
     @Transactional
     public SecurityLabDtos.AnomalyScanResponse scanAnomalies(String userId) {
+        assertLabEnabled();
         var hits = anomalyDetectionService.scanAndPersist(userId);
         return new SecurityLabDtos.AnomalyScanResponse(
                 hits.stream()
@@ -179,6 +213,7 @@ public class SecurityLabService {
 
     @Transactional(readOnly = true)
     public SecurityLabDtos.DashboardResponse dashboard() {
+        assertLabEnabled();
         LocalDateTime after = LocalDateTime.now().minusDays(14);
         Map<String, Long> totals = new LinkedHashMap<>();
         for (Object[] row : eventRepository.countByTypeSince(after)) {
@@ -226,6 +261,7 @@ public class SecurityLabService {
 
     @Transactional
     public SecurityLabDtos.StegoExtractResponse stegoAttack(String userId, SecurityLabDtos.StegoExtractRequest req) {
+        assertLabEnabled();
         try {
             String msg = steganographyService.extract(req.imageBase64());
             persist(userId, SecurityLabEventType.STEGO_ATTACK,

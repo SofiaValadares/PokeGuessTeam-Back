@@ -60,6 +60,7 @@ public final class MessageKeys {
     public static final String TRAINING_TEAM_DUPLICATE = "error.profile.training-team.duplicate";
     public static final String EVOLUTION_REWARD_NOT_AVAILABLE = "error.pokemon.evolution-reward-not-available";
     public static final String DEV_TOOLS_DISABLED = "error.dev.tools-disabled";
+    public static final String SECURITY_LAB_DISABLED = "error.security-lab.disabled";
 
     public static final String POKEMON_SPECIES_NOT_FOUND = "error.pokemon.species-not-found";
     public static final String POKEBALL_INSUFFICIENT = "error.pokemon.pokeball-insufficient";

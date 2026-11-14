@@ -73,13 +73,24 @@ public class SecurityLabController {
         return ResponseEntity.ok(securityLabService.stegoAttack(currentUserService.requireUserId(session), body));
     }
 
+    @GetMapping("/status")
+    public ResponseEntity<Map<String, Object>> status() {
+        return ResponseEntity.ok(Map.of(
+                "enabled", securityLabService.isLabEnabled(),
+                "temporaryDeployNotice", securityLabService.isTemporaryDeployNotice(),
+                "access", "ROLE_DEVELOPER (perfil Lab)"
+        ));
+    }
+
     @GetMapping("/samples")
     public ResponseEntity<List<Map<String, String>>> listSamples() {
+        securityLabService.assertLabEnabled();
         return ResponseEntity.ok(com.svc.pokeguessteam.securitylab.StegoSampleImages.catalog());
     }
 
     @GetMapping("/samples/{id}")
     public ResponseEntity<byte[]> downloadSample(@PathVariable String id) {
+        securityLabService.assertLabEnabled();
         var sample = com.svc.pokeguessteam.securitylab.StegoSampleImages.load(id);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + sample.filename() + "\"")
