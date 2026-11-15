@@ -251,7 +251,7 @@ public class FriendMatchService {
 
         MatchRewardDto reward = null;
         if (match.getStatus() == MatchStatus.FINISHED) {
-            reward = completeIfFinished(match, null, userId);
+            reward = completeIfFinished(match, null, userId, history);
             state = toStateDto(match, profile, history, null);
         }
 
@@ -302,7 +302,7 @@ public class FriendMatchService {
 
         MatchRewardDto reward = null;
         if (match.getStatus() == MatchStatus.FINISHED) {
-            reward = completeIfFinished(match, null, userId);
+            reward = completeIfFinished(match, null, userId, history);
             state = toStateDto(match, profile, history, null);
         }
 
@@ -363,7 +363,7 @@ public class FriendMatchService {
         GameHistoryEntryDto history = finalizeIfFinished(match, side);
         FriendMatchStateDto surrendererView = toStateDto(match, profile, history, side);
 
-        MatchRewardDto reward = completeIfFinished(match, side, userId);
+        MatchRewardDto reward = completeIfFinished(match, side, userId, history);
 
         return new FriendMatchActionResponse(surrendererView, List.of(), reward);
     }
@@ -413,10 +413,14 @@ public class FriendMatchService {
     private MatchRewardDto completeIfFinished(
             ActiveMatchModel match,
             MatchPlayerSide surrenderSide,
-            String rewardForUserId
+            String rewardForUserId,
+            GameHistoryEntryDto history
     ) {
         if (match.getStatus() != MatchStatus.FINISHED) {
             return null;
+        }
+        if (isCancelledHistory(history)) {
+            return matchRewardService.completeCancelledMatch(match);
         }
         return matchRewardService.grantAndRemoveActiveMatch(match, surrenderSide, rewardForUserId);
     }
@@ -448,11 +452,18 @@ public class FriendMatchService {
                 })
                 .toList();
 
-        MatchRewardDto yourReward = history != null && match.getStatus() == MatchStatus.FINISHED
+        MatchRewardDto yourReward = history != null
+            && !isCancelledHistory(history)
+            && match.getStatus() == MatchStatus.FINISHED
                 ? matchRewardService.previewRewardForProfile(match, viewerProfile, surrenderSide)
                 : null;
 
         return FriendMatchStateDto.from(match, viewerSide, knowledge, recentGuesses, history, yourReward);
+    }
+
+    private static boolean isCancelledHistory(GameHistoryEntryDto history) {
+        return history != null && history.players().stream()
+                .anyMatch(player -> player.result() == com.svc.pokeguessteam.model.enums.GameResults.CANCELLED);
     }
 
     private ActiveMatchModel requireActiveFriendMatch(ProfileModel profile) {

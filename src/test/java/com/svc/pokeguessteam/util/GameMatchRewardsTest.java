@@ -9,6 +9,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class GameMatchRewardsTest {
 
     @Test
+    void cancelledMatchHasNoPayout() {
+        assertEquals(new GameMatchRewards.MatchRewardPayout(0, 0, 0),
+                GameMatchRewards.payout(GameModes.FRIEND, GameResults.CANCELLED));
+    }
+
+    @Test
     void friendWin_grantsPokeBallAnd300Xp() {
         var p = GameMatchRewards.payout(GameModes.FRIEND, GameResults.WIN);
         assertEquals(300, p.trainingTeamXp());

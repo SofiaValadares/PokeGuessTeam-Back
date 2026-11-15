@@ -39,7 +39,10 @@ public class GameMetaController {
         body.put("teamSize", GameConstants.TEAM_SIZE);
         body.put("maxCorrectGuesses", GameConstants.MAX_CORRECT_GUESSES);
         body.put("gameModes", Arrays.stream(GameModes.values()).map(Enum::name).toList());
-        body.put("gameResults", Arrays.stream(com.svc.pokeguessteam.model.enums.GameResults.values()).map(Enum::name).toList());
+        body.put("gameResults", Arrays.stream(com.svc.pokeguessteam.model.enums.GameResults.values())
+                .filter(result -> result != GameResults.CANCELLED)
+                .map(Enum::name)
+                .toList());
         body.put("gameHistoryDefaultPageSize", GameHistoryService.DEFAULT_PAGE_SIZE);
         body.put("gameHistoryMaxPageSize", GameHistoryService.MAX_PAGE_SIZE);
         body.put("friendJoinCodeLength", GameConstants.FRIEND_JOIN_CODE_LENGTH);

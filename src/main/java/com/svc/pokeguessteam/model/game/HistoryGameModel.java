@@ -43,6 +43,15 @@ public class HistoryGameModel {
     @Column(name = "OPPONENT_NAME", length = 120)
     private String opponentName;
 
+    @Column(name = "ANOMALY_SCORE")
+    private Integer anomalyScore = 0;
+
+    @Column(name = "ANOMALY_REASONS", length = 1000)
+    private String anomalyReasons;
+
+    @Column(name = "ANOMALY_ANALYSIS_STATUS", length = 24)
+    private String anomalyAnalysisStatus = "NOT_ANALYZED";
+
     @OneToMany(mappedBy = "game", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<HistoryGamePlayerModel> players = new ArrayList<>();
 
@@ -79,6 +88,30 @@ public class HistoryGameModel {
 
     public void setOpponentName(String opponentName) {
         this.opponentName = opponentName;
+    }
+
+    public int getAnomalyScore() {
+        return anomalyScore != null ? anomalyScore : 0;
+    }
+
+    public void setAnomalyScore(int anomalyScore) {
+        this.anomalyScore = anomalyScore;
+    }
+
+    public String getAnomalyReasons() {
+        return anomalyReasons;
+    }
+
+    public void setAnomalyReasons(String anomalyReasons) {
+        this.anomalyReasons = anomalyReasons;
+    }
+
+    public String getAnomalyAnalysisStatus() {
+        return anomalyAnalysisStatus != null ? anomalyAnalysisStatus : "NOT_ANALYZED";
+    }
+
+    public void setAnomalyAnalysisStatus(String anomalyAnalysisStatus) {
+        this.anomalyAnalysisStatus = anomalyAnalysisStatus;
     }
 
     public List<HistoryGamePlayerModel> getPlayers() {

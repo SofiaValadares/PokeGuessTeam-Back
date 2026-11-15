@@ -80,6 +80,14 @@ public class MatchRewardService {
         });
     }
 
+    @Transactional
+    public MatchRewardDto completeCancelledMatch(ActiveMatchModel match) {
+        if (match.getGameMode() != GameModes.FRIEND) {
+            throw new IllegalStateException("Partida ativa inesperada: " + match.getGameMode());
+        }
+        return friendMatchStore.completeOnce(match.getId(), MatchRewardService::emptyReward);
+    }
+
     private record GrantedFriendRewards(MatchRewardDto hostReward, MatchRewardDto guestReward) {
     }
 

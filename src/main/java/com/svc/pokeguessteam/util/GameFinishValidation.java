@@ -42,6 +42,13 @@ public final class GameFinishValidation {
                     MessageKeys.GAME_RESULT_REQUIRED
             );
         }
+        if (result == GameResults.CANCELLED) {
+            throw new ApiBusinessException(
+                HttpStatus.BAD_REQUEST,
+                ErrorCodes.GAME_RESULT_INCONSISTENT,
+                MessageKeys.GAME_RESULT_INCONSISTENT
+            );
+        }
         if (result == GameResults.DESISTENCE) {
             return;
         }
@@ -50,6 +57,7 @@ public final class GameFinishValidation {
             case LOSE -> userCorrectGuesses < opponentCorrectGuesses;
             case DRAW -> userCorrectGuesses == opponentCorrectGuesses;
             case DESISTENCE -> true;
+            case CANCELLED -> false;
         };
         if (!consistent) {
             throw new ApiBusinessException(
@@ -98,6 +106,7 @@ public final class GameFinishValidation {
             case LOSE -> GameResults.WIN;
             case DRAW -> GameResults.DRAW;
             case DESISTENCE -> GameResults.WIN;
+            case CANCELLED -> GameResults.CANCELLED;
         };
     }
 }

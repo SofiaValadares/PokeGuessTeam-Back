@@ -16,6 +16,8 @@ public class AppAiProperties {
 
     private String model = "gpt-4o-mini";
 
+    private int anomalyCancelThreshold = 70;
+
     public String getBaseUrl() {
         return baseUrl;
     }
@@ -46,6 +48,14 @@ public class AppAiProperties {
 
     public void setModel(String model) {
         this.model = model;
+    }
+
+    public int getAnomalyCancelThreshold() {
+        return anomalyCancelThreshold;
+    }
+
+    public void setAnomalyCancelThreshold(int anomalyCancelThreshold) {
+        this.anomalyCancelThreshold = Math.max(0, Math.min(100, anomalyCancelThreshold));
     }
 
     public boolean isConfigured() {

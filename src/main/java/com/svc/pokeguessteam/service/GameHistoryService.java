@@ -38,13 +38,16 @@ public class GameHistoryService {
 
     private final HistoryGameRepository historyGameRepository;
     private final ProfileService profileService;
+    private final GameAnomalyAiService gameAnomalyAiService;
 
     public GameHistoryService(
             HistoryGameRepository historyGameRepository,
-            ProfileService profileService
+            ProfileService profileService,
+            GameAnomalyAiService gameAnomalyAiService
     ) {
         this.historyGameRepository = historyGameRepository;
         this.profileService = profileService;
+        this.gameAnomalyAiService = gameAnomalyAiService;
     }
 
     @Transactional
@@ -107,12 +110,23 @@ public class GameHistoryService {
         int guestHits = match.getOpponentPlayer().getHits().size();
         GameResults hostResult = resolveParticipantResult(match, MatchPlayerSide.HOST, surrenderSide);
         GameResults guestResult = resolveParticipantResult(match, MatchPlayerSide.OPPONENT, surrenderSide);
+        GameAnomalyAiService.Analysis anomaly = gameAnomalyAiService.analyze(match);
+        boolean anomalyDetected = gameAnomalyAiService.shouldCancelMatch(anomaly);
 
         GameFinishValidation.validateScores(hostHits, guestHits);
-        validateFriendResults(hostHits, guestHits, hostResult, guestResult);
+        if (anomalyDetected) {
+            hostResult = GameResults.CANCELLED;
+            guestResult = GameResults.CANCELLED;
+            match.setWinner(null);
+        } else {
+            validateFriendResults(hostHits, guestHits, hostResult, guestResult);
+        }
 
         HistoryGameModel game = new HistoryGameModel();
         game.setGameMode(GameModes.FRIEND);
+        game.setAnomalyScore(anomaly.score());
+        game.setAnomalyReasons(String.join(",", anomaly.reasons()));
+        game.setAnomalyAnalysisStatus(anomalyDetected ? "ANOMALY_DETECTED" : anomaly.status());
         addProfilePlayer(
             game,
             match.getProfile(),

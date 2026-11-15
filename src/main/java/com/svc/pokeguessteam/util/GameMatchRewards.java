@@ -25,6 +25,7 @@ public final class GameMatchRewards {
         return switch (result) {
             case WIN -> new MatchRewardPayout(300, 1, 0);
             case DRAW, LOSE, DESISTENCE -> new MatchRewardPayout(150, 0, 5);
+            case CANCELLED -> new MatchRewardPayout(0, 0, 0);
         };
     }
 
@@ -32,6 +33,7 @@ public final class GameMatchRewards {
         return switch (result) {
             case WIN -> new MatchRewardPayout(150, 0, 5);
             case DRAW, LOSE, DESISTENCE -> new MatchRewardPayout(75, 0, 0);
+            case CANCELLED -> new MatchRewardPayout(0, 0, 0);
         };
     }
 }

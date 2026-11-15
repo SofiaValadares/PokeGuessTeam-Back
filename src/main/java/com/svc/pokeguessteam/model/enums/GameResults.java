@@ -2,12 +2,14 @@ package com.svc.pokeguessteam.model.enums;
 
 /**
  * Resultado na perspetiva do jogador autenticado (slot 1).
- * Alinhado à beta: vitória, derrota, empate e desistência.
+ * Resultado da partida na perspetiva do jogador autenticado.
  */
 public enum GameResults {
     WIN,
     LOSE,
     DRAW,
     /** Jogador autenticado desistiu da partida. */
-    DESISTENCE
+    DESISTENCE,
+    /** Partida anulada por uma análise de anomalia com confiança suficiente. */
+    CANCELLED
 }

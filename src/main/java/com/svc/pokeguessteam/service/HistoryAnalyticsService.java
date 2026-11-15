@@ -44,26 +44,30 @@ public class HistoryAnalyticsService {
     public HistorySummaryDto buildSummary(String userId) {
         ProfileModel profile = profileService.ensureProfileWithStarters(userId);
         List<HistoryGameModel> games = historyGameRepository.findAllByProfileIdOrderByPlayedAtDesc(profile.getId());
+        List<HistoryGameModel> countedGames = games.stream()
+                .filter(game -> game.getPlayers().stream()
+                        .noneMatch(player -> player.getResult() == GameResults.CANCELLED))
+                .toList();
 
-        int totalMatches = games.size();
-        int wins = countByResult(games, profile.getId(), GameResults.WIN);
-        int losses = countByResult(games, profile.getId(), GameResults.LOSE);
-        int draws = countByResult(games, profile.getId(), GameResults.DRAW);
-        int desistences = countByResult(games, profile.getId(), GameResults.DESISTENCE);
+        int totalMatches = countedGames.size();
+        int wins = countByResult(countedGames, profile.getId(), GameResults.WIN);
+        int losses = countByResult(countedGames, profile.getId(), GameResults.LOSE);
+        int draws = countByResult(countedGames, profile.getId(), GameResults.DRAW);
+        int desistences = countByResult(countedGames, profile.getId(), GameResults.DESISTENCE);
         double winRate = totalMatches == 0 ? 0.0 : (wins * 100.0 / totalMatches);
         double averageCorrectGuesses = totalMatches == 0
                 ? 0.0
-                : games.stream()
+                : countedGames.stream()
                         .mapToInt(game -> findUserPlayer(game, profile.getId())
                                 .map(HistoryGamePlayerModel::getCorrectGuesses)
                                 .orElse(0))
                         .average()
                         .orElse(0.0);
 
-        TopPokemonUsage topPokemonUsage = findTopPokemonUsage(games, profile.getId());
+        TopPokemonUsage topPokemonUsage = findTopPokemonUsage(countedGames, profile.getId());
 
         List<HistoryModeSummaryDto> modeSummaries = java.util.Arrays.stream(GameModes.values())
-                .map(mode -> summarizeMode(games, profile.getId(), mode))
+                .map(mode -> summarizeMode(countedGames, profile.getId(), mode))
                 .toList();
 
         GameModes bestMode = modeSummaries.stream()

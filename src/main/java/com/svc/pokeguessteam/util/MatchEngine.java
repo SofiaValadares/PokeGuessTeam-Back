@@ -59,6 +59,7 @@ public final class MatchEngine {
         guessRecord.setGuessedPokedexNumber(guessedPokemon.getPokedexNumber());
         guessRecord.setExactMatch(!matchedDexNumbers.isEmpty());
         guessRecord.setMatchedPokedexNumbers(new ArrayList<>(matchedDexNumbers));
+        guessRecord.setCreatedAt(LocalDateTime.now());
         match.addGuess(guessRecord);
 
         if (guessRecord.isExactMatch()) {
