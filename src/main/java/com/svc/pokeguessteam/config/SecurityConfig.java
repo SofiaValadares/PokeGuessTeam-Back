@@ -1,5 +1,11 @@
 package com.svc.pokeguessteam.config;
 
+import com.svc.pokeguessteam.security.DatabaseRoleRefreshFilter;
+import com.svc.pokeguessteam.security.HttpsEnforcementFilter;
+import com.svc.pokeguessteam.security.JsonAuthenticationEntryPoint;
+import com.svc.pokeguessteam.security.SessionIpBindingFilter;
+
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.boot.web.servlet.server.CookieSameSiteSupplier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -7,10 +13,14 @@ import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.session.SessionRegistry;
+import org.springframework.security.core.session.SessionRegistryImpl;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import com.svc.pokeguessteam.security.JsonAuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
+import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
+import org.springframework.security.web.session.HttpSessionEventPublisher;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -22,69 +32,330 @@ import java.util.List;
 public class SecurityConfig {
 
     private final AppCorsProperties corsProperties;
+    private final AppSecurityProperties securityProperties;
+    private final DatabaseRoleRefreshFilter databaseRoleRefreshFilter;
+    private final SessionIpBindingFilter sessionIpBindingFilter;
+    private final HttpsEnforcementFilter httpsEnforcementFilter;
 
-    public SecurityConfig(AppCorsProperties corsProperties) {
+    public SecurityConfig(
+            AppCorsProperties corsProperties,
+            AppSecurityProperties securityProperties,
+            DatabaseRoleRefreshFilter databaseRoleRefreshFilter,
+            SessionIpBindingFilter sessionIpBindingFilter,
+            HttpsEnforcementFilter httpsEnforcementFilter
+    ) {
         this.corsProperties = corsProperties;
+        this.securityProperties = securityProperties;
+        this.databaseRoleRefreshFilter = databaseRoleRefreshFilter;
+        this.sessionIpBindingFilter = sessionIpBindingFilter;
+        this.httpsEnforcementFilter = httpsEnforcementFilter;
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http,
-                                                   JsonAuthenticationEntryPoint authenticationEntryPoint) throws Exception {
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            JsonAuthenticationEntryPoint authenticationEntryPoint
+    ) throws Exception {
+
         http
                 .cors(Customizer.withDefaults())
                 .csrf(csrf -> csrf.disable())
+                .headers(headers -> {
+                    headers.contentTypeOptions(Customizer.withDefaults());
+                    /*
+                     * Avatar SVG e samples do lab são embutidos em <object> same-origin.
+                     * frame-ancestors 'none' / X-Frame-Options: DENY bloqueiam isso e geram
+                     * "Framing … violates … frame-ancestors 'none'" no DevTools.
+                     * Mantemos CSP estrito no resto da API; nestes paths permitimos embed +
+                     * script inline (superfície didática Unidade 2).
+                     */
+                    headers.frameOptions(frame -> frame.disable());
+                    headers.addHeaderWriter((request, response) -> {
+                        String uri = request.getRequestURI() == null ? "" : request.getRequestURI();
+                        boolean embeddableSvg = uri.contains("/api/profile/avatar/")
+                                || uri.contains("/api/dev/security-lab/samples/");
+                        if (embeddableSvg) {
+                            // connect-src 'self' é obrigatório: senão fetch() no SVG → TypeError Failed to fetch
+                            response.setHeader(
+                                    "Content-Security-Policy",
+                                    "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; "
+                                            + "img-src data: blob:; connect-src 'self'; frame-ancestors 'self'"
+                            );
+                        } else {
+                            response.setHeader(
+                                    "Content-Security-Policy",
+                                    "default-src 'none'; frame-ancestors 'none'"
+                            );
+                            response.setHeader("X-Frame-Options", "DENY");
+                        }
+                    });
+                    headers.httpStrictTransportSecurity(hsts -> hsts
+                            .includeSubDomains(true)
+                            .preload(true)
+                            .maxAgeInSeconds(securityProperties.getHstsMaxAgeSeconds())
+                    );
+                    headers.referrerPolicy(referrer -> referrer.policy(
+                            ReferrerPolicyHeaderWriter.ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN
+                    ));
+                    headers.permissionsPolicy(policy -> policy.policy(
+                            "camera=(), microphone=(), geolocation=()"
+                    ));
+                })
+
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
                         .sessionFixation(fixation -> fixation.migrateSession())
                         .maximumSessions(1)
                         .maxSessionsPreventsLogin(false)
+                        .sessionRegistry(sessionRegistry())
                 )
+
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.POST, "/auth/register").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/auth/login").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/auth/logout").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/auth/session").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/auth/email/verification/send").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/auth/email/verification/confirm").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/auth/verification/resend").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/auth/verification/confirm").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/auth/password-reset/request").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/auth/password-reset/confirm").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/meta").permitAll()
-                        .requestMatchers("/public/**").permitAll()
+
+                        // AUTENTICAÇÃO
+
+
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/auth/register"
+                        ).permitAll()
+
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/auth/login"
+                        ).permitAll()
+
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/auth/logout"
+                        ).permitAll()
+
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/auth/session"
+                        ).permitAll()
+
+
+                        // VERIFICAÇÃO DE E-MAIL
+
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/auth/email/verification/send"
+                        ).permitAll()
+
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/auth/email/verification/confirm"
+                        ).permitAll()
+
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/auth/verification/resend"
+                        ).permitAll()
+
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/auth/verification/confirm"
+                        ).permitAll()
+
+
+                        // RECUPERAÇÃO DE SENHA
+
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/auth/password-reset/request"
+                        ).permitAll()
+
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/auth/password-reset/confirm"
+                        ).permitAll()
+
+
+                        // ROTAS PÚBLICAS
+
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/meta"
+                        ).permitAll()
+
+                        .requestMatchers(
+                                "/public/**"
+                        ).permitAll()
+
+
+                        // MASTER ADMIN
+
+                        /*
+                         * Alteração de papel de usuário.
+                         * Apenas MASTER_ADMIN pode:
+                         * USER -> ADMIN
+                         * ADMIN -> USER
+                         * ADMIN -> MASTER_ADMIN
+                         * MASTER_ADMIN -> ADMIN
+                         */
+                        .requestMatchers(
+                                HttpMethod.PATCH,
+                                "/api/admin/users/*/role",
+                                "/api/admin/users/*/developer"
+                        ).hasRole("MASTER_ADMIN")
+
+
+                        /*
+                         * Histórico de alterações administrativas.
+                         * Somente MASTER_ADMIN pode visualizar.
+                         */
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/admin/audit/**"
+                        ).hasRole("MASTER_ADMIN")
+
+
+                        // DEVELOPER — painéis de teste (Security Lab)
+
+                        .requestMatchers(
+                                "/api/dev/**"
+                        ).hasRole("DEVELOPER")
+
+                        // ADMIN / MASTER ADMIN
+
+                        .requestMatchers(
+                                "/api/admin/**"
+                        ).hasAnyRole(
+                                "ADMIN",
+                                "MASTER_ADMIN"
+                        )
+
+
+                        // RESTANTE DA APLICAÇÃO
+
                         .anyRequest().authenticated()
                 )
+
                 .exceptionHandling(ex -> ex
-                        .authenticationEntryPoint(authenticationEntryPoint)
+                        .authenticationEntryPoint(
+                                authenticationEntryPoint
+                        )
                 )
+
                 .formLogin(form -> form.disable())
                 .httpBasic(basic -> basic.disable());
+
+        /*
+         * Atualiza as authorities do usuário a partir do banco ANTES de o Spring Security decidir se ele possui permissão para acessar uma determinada rota.
+         * O mesmo vale para rebaixamentos.
+         */
+        http.addFilterBefore(
+                sessionIpBindingFilter,
+                AuthorizationFilter.class
+        );
+        http.addFilterBefore(
+                httpsEnforcementFilter,
+                SessionIpBindingFilter.class
+        );
+        http.addFilterBefore(
+                databaseRoleRefreshFilter,
+                AuthorizationFilter.class
+        );
 
         return http.build();
     }
 
     @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOriginPatterns(corsProperties.getAllowedOriginPatterns());
-        config.setAllowCredentials(true);
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("Content-Type", "Authorization", "X-Requested-With", "Accept-Language"));
-        config.setExposedHeaders(List.of("Set-Cookie"));
-        config.setMaxAge(Duration.ofHours(1));
+    public SessionRegistry sessionRegistry() {
+        return new SessionRegistryImpl();
+    }
 
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", config);
+    @Bean
+    public HttpSessionEventPublisher httpSessionEventPublisher() {
+        return new HttpSessionEventPublisher();
+    }
+
+    @Bean
+    public FilterRegistrationBean<DatabaseRoleRefreshFilter> databaseRoleRefreshFilterRegistration(
+            DatabaseRoleRefreshFilter filter
+    ) {
+        FilterRegistrationBean<DatabaseRoleRefreshFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
+    }
+
+    @Bean
+    public FilterRegistrationBean<SessionIpBindingFilter> sessionIpBindingFilterRegistration(
+            SessionIpBindingFilter filter
+    ) {
+        FilterRegistrationBean<SessionIpBindingFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
+    }
+
+    @Bean
+    public FilterRegistrationBean<HttpsEnforcementFilter> httpsEnforcementFilterRegistration(
+            HttpsEnforcementFilter filter
+    ) {
+        FilterRegistrationBean<HttpsEnforcementFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
+    }
+
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+
+        CorsConfiguration config =
+                new CorsConfiguration();
+
+        config.setAllowedOriginPatterns(
+                corsProperties.getAllowedOriginPatterns()
+        );
+
+        config.setAllowCredentials(true);
+
+        config.setAllowedMethods(
+                List.of(
+                        "GET",
+                        "POST",
+                        "PUT",
+                        "PATCH",
+                        "DELETE",
+                        "OPTIONS"
+                )
+        );
+
+        config.setAllowedHeaders(
+                List.of(
+                        "Content-Type",
+                        "Authorization",
+                        "X-Requested-With",
+                        "Accept-Language"
+                )
+        );
+
+        config.setMaxAge(
+                Duration.ofHours(1)
+        );
+
+        UrlBasedCorsConfigurationSource source =
+                new UrlBasedCorsConfigurationSource();
+
+        source.registerCorsConfiguration(
+                "/**",
+                config
+        );
+
         return source;
     }
 
     @Bean
     public CookieSameSiteSupplier applicationCookieSameSiteSupplier() {
-        return CookieSameSiteSupplier.ofLax().whenHasName("JSESSIONID");
+
+        return CookieSameSiteSupplier
+                .ofLax()
+                .whenHasName("JSESSIONID");
     }
 
     @Bean
     public PasswordEncoder passwordEncoder() {
+
         return new BCryptPasswordEncoder();
     }
 }

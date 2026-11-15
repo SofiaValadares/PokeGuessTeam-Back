@@ -8,7 +8,17 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
+import java.util.List;
+
 public record GameLocalFinishRequest(
+        @NotBlank
+        String matchId,
+        @NotNull
+        @Size(min = GameConstants.TEAM_SIZE, max = GameConstants.TEAM_SIZE)
+        List<Integer> hostTeam,
+        @NotNull
+        @Size(min = GameConstants.TEAM_SIZE, max = GameConstants.TEAM_SIZE)
+        List<Integer> opponentTeam,
         @NotBlank(message = "{error.game.opponent-name.required}")
         @Size(
                 min = GameConstants.LOCAL_OPPONENT_NAME_MIN_LENGTH,

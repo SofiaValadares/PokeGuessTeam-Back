@@ -41,36 +41,47 @@ public class SessionBindingInterceptor implements HandlerInterceptor {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         Locale locale = LocaleContextHolder.getLocale();
         if (authentication == null || !authentication.isAuthenticated() || authentication instanceof AnonymousAuthenticationToken) {
-            return unauthorized(response, null, ErrorCodes.UNAUTHENTICATED,
+            return unauthorized(response, null, true, ErrorCodes.UNAUTHENTICATED,
                     MessageKeys.SESSION_INVALID_OR_EXPIRED, locale);
         }
 
         HttpSession session = request.getSession(false);
 
         if (session == null) {
-            return unauthorized(response, null, ErrorCodes.SESSION_NOT_FOUND,
+            return unauthorized(response, null, false, ErrorCodes.SESSION_NOT_FOUND,
                     MessageKeys.SESSION_NONE_ACTIVE, locale);
         }
 
         Object expectedDeviceId = session.getAttribute(DEVICE_ID_ATTR);
         if (!(expectedDeviceId instanceof String storedDeviceId)) {
-            return unauthorized(response, session, ErrorCodes.SESSION_BINDING_MISSING,
+            return unauthorized(response, session, true, ErrorCodes.SESSION_BINDING_MISSING,
                     MessageKeys.SESSION_BINDING_MISSING, locale);
         }
 
         String currentDeviceId = DeviceFingerprintUtil.generateDeviceId(request);
         if (!storedDeviceId.equals(currentDeviceId)) {
-            return unauthorized(response, session, ErrorCodes.SESSION_BINDING_MISMATCH,
+            return unauthorized(response, session, true, ErrorCodes.SESSION_BINDING_MISMATCH,
                     MessageKeys.SESSION_BINDING_MISMATCH, locale);
         }
 
         return true;
     }
 
-    private boolean unauthorized(HttpServletResponse response, HttpSession session, String code,
-                                 String messageKey, Locale locale) throws Exception {
-        if (session != null) {
-            session.invalidate();
+    private boolean unauthorized(
+            HttpServletResponse response,
+            HttpSession session,
+            boolean invalidateSession,
+            String code,
+            String messageKey,
+            Locale locale
+    ) throws Exception {
+        if (invalidateSession && session != null) {
+            try {
+                session.invalidate();
+            } catch (IllegalStateException ignored) {
+                // já invalidada
+            }
+            SecurityContextHolder.clearContext();
         }
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());

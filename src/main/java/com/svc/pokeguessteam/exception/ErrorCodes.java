@@ -8,8 +8,11 @@ public final class ErrorCodes {
     public static final String VALIDATION_FAILED = "VALIDATION_FAILED";
     public static final String MALFORMED_JSON = "MALFORMED_JSON";
     public static final String AUTH_INVALID_CREDENTIALS = "AUTH_INVALID_CREDENTIALS";
+    public static final String AUTH_LOGIN_LOCKED = "AUTH_LOGIN_LOCKED";
+    public static final String AUTH_RATE_LIMITED = "AUTH_RATE_LIMITED";
     public static final String AUTH_EMAIL_ALREADY_REGISTERED = "AUTH_EMAIL_ALREADY_REGISTERED";
     public static final String AUTH_USERNAME_ALREADY_TAKEN = "AUTH_USERNAME_ALREADY_TAKEN";
+    public static final String AUTH_USERNAME_FROM_EMAIL = "AUTH_USERNAME_FROM_EMAIL";
     public static final String AUTH_CURRENT_PASSWORD_WRONG = "AUTH_CURRENT_PASSWORD_WRONG";
     public static final String AUTH_NEW_PASSWORD_SAME = "AUTH_NEW_PASSWORD_SAME";
     public static final String AUTH_EMAIL_NOT_VERIFIED = "AUTH_EMAIL_NOT_VERIFIED";
@@ -22,15 +25,23 @@ public final class ErrorCodes {
     public static final String SESSION_NOT_FOUND = "SESSION_NOT_FOUND";
     public static final String SESSION_BINDING_MISSING = "SESSION_BINDING_MISSING";
     public static final String SESSION_BINDING_MISMATCH = "SESSION_BINDING_MISMATCH";
+    public static final String SESSION_IP_MISMATCH = "SESSION_IP_MISMATCH";
     public static final String SESSION_USER_ID_MISSING = "SESSION_USER_ID_MISSING";
 
     public static final String PROFILE_USER_NOT_FOUND = "PROFILE_USER_NOT_FOUND";
     public static final String PROFILE_NOT_FOUND = "PROFILE_NOT_FOUND";
+    public static final String PROFILE_STEGO_MESSAGE_TOO_LONG = "PROFILE_STEGO_MESSAGE_TOO_LONG";
+    public static final String PROFILE_STEGO_EMBED_FAILED = "PROFILE_STEGO_EMBED_FAILED";
+    public static final String PROFILE_STEGO_EXTRACT_FAILED = "PROFILE_STEGO_EXTRACT_FAILED";
+    public static final String PROFILE_STEGO_NO_CUSTOM_AVATAR = "PROFILE_STEGO_NO_CUSTOM_AVATAR";
+    public static final String PROFILE_AVATAR_TOO_LARGE = "PROFILE_AVATAR_TOO_LARGE";
+    public static final String PROFILE_AVATAR_UNSUPPORTED_TYPE = "PROFILE_AVATAR_UNSUPPORTED_TYPE";
     public static final String TRAINING_TEAM_LINE_NOT_IN_INVENTORY = "TRAINING_TEAM_LINE_NOT_IN_INVENTORY";
     public static final String TRAINING_TEAM_LINE_NOT_FOUND = "TRAINING_TEAM_LINE_NOT_FOUND";
     public static final String TRAINING_TEAM_DUPLICATE = "TRAINING_TEAM_DUPLICATE";
     public static final String EVOLUTION_REWARD_NOT_AVAILABLE = "EVOLUTION_REWARD_NOT_AVAILABLE";
     public static final String DEV_TOOLS_DISABLED = "DEV_TOOLS_DISABLED";
+    public static final String SECURITY_LAB_DISABLED = "SECURITY_LAB_DISABLED";
 
     public static final String POKEMON_SPECIES_NOT_FOUND = "POKEMON_SPECIES_NOT_FOUND";
     public static final String POKEBALL_INSUFFICIENT = "POKEBALL_INSUFFICIENT";
@@ -61,4 +72,29 @@ public final class ErrorCodes {
     public static final String GAME_MATCH_FULL = "GAME_MATCH_FULL";
     public static final String GAME_MATCH_GUEST_REQUIRED = "GAME_MATCH_GUEST_REQUIRED";
     public static final String GAME_LOCAL_MATCH_NOT_FOUND = "GAME_LOCAL_MATCH_NOT_FOUND";
+    public static final String GAME_TEAM_COMMITMENT_INVALID = "GAME_TEAM_COMMITMENT_INVALID";
+
+    public static final String AUTH_USER_SITE_BANNED = "AUTH_USER_SITE_BANNED";
+    public static final String AUTH_USER_ONLINE_BANNED = "AUTH_USER_ONLINE_BANNED";
+    public static final String ADMIN_FORBIDDEN = "ADMIN_FORBIDDEN";
+    public static final String ADMIN_EVENT_ACTIVE = "ADMIN_EVENT_ACTIVE";
+    public static final String ADMIN_EVENT_NOT_FOUND = "ADMIN_EVENT_NOT_FOUND";
+    public static final String ADMIN_USER_NOT_FOUND = "ADMIN_USER_NOT_FOUND";
+    public static final String ADMIN_CANNOT_MODIFY_MASTER = "ADMIN_CANNOT_MODIFY_MASTER";
+    public static final String ADMIN_INVALID_BAN_DURATION = "ADMIN_INVALID_BAN_DURATION";
+    public static final String ADMIN_EVENT_ALREADY_ACTIVE = "ADMIN_EVENT_ALREADY_ACTIVE";
+    public static final String ADMIN_EVENT_NOT_ACTIVE = "ADMIN_EVENT_NOT_ACTIVE";
+    public static final String GAME_EVENT_REQUIRED = "GAME_EVENT_REQUIRED";
+    public static final String GAME_TEAM_NOT_IN_EVENT = "GAME_TEAM_NOT_IN_EVENT";
+    public static final String GAME_GUESS_NOT_IN_EVENT = "GAME_GUESS_NOT_IN_EVENT";
+    public static final String GAME_GUESS_NOT_IN_POKEDEX = "GAME_GUESS_NOT_IN_POKEDEX";
+    public static final String GAME_EVENT_POOL_INSUFFICIENT = "GAME_EVENT_POOL_INSUFFICIENT";
+    public static final String FRIEND_BALL_NO_EVENT = "FRIEND_BALL_NO_EVENT";
+    public static final String FRIEND_BALL_POOL_EMPTY = "FRIEND_BALL_POOL_EMPTY";
+
+    public static final String ADMIN_CANNOT_CHANGE_OWN_ROLE = "ADMIN_CANNOT_CHANGE_OWN_ROLE";
+
+    public static final String ADMIN_LAST_MASTER = "ADMIN_LAST_MASTER";
+
+    public static final String ADMIN_TARGET_NOT_VERIFIED = "ADMIN_TARGET_NOT_VERIFIED";
 }

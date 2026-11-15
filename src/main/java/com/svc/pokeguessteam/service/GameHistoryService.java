@@ -123,7 +123,7 @@ public class GameHistoryService {
         }
 
         HistoryGameModel game = new HistoryGameModel();
-        game.setGameMode(GameModes.FRIEND);
+        game.setGameMode(match.getGameMode() != null ? match.getGameMode() : GameModes.FRIEND);
         game.setAnomalyScore(anomaly.score());
         game.setAnomalyReasons(String.join(",", anomaly.reasons()));
         game.setAnomalyAnalysisStatus(anomalyDetected ? "ANOMALY_DETECTED" : anomaly.status());
@@ -145,8 +145,7 @@ public class GameHistoryService {
             match.getOpponentPlayer().getTurnTimeoutPenalties(),
             match.getOpponentPlayer().getTeam()
         );
-        return GameHistoryEntryDto.from(historyGameRepository.save(game));
-    }
+        return GameHistoryEntryDto.from(historyGameRepository.save(game));    }
 
     private static GameResults resolveParticipantResult(
             ActiveMatchModel match,

@@ -25,6 +25,11 @@ public record FriendMatchStateDto(
         List<Integer> opponentHitsOnYourTeam,
         int yourCorrectGuesses,
         int opponentCorrectGuesses,
+        String yourTeamCommitment,
+        String opponentTeamCommitment,
+        String yourTeamNonce,
+        List<Integer> opponentTeam,
+        String opponentTeamNonce,
         FriendMatchParticipantDto host,
         FriendMatchParticipantDto guest,
         List<OpponentSlotKnowledgeDto> opponentKnowledge,
@@ -36,7 +41,9 @@ public record FriendMatchStateDto(
         int yourTimeoutPenalties,
         boolean opponentReplacedByBot,
         GameHistoryEntryDto historyEntry,
-        MatchRewardDto yourReward
+        MatchRewardDto yourReward,
+        boolean eventMode,
+        List<Integer> eventPokedexNumbers
 ) {
     public static FriendMatchStateDto from(
             ActiveMatchModel match,
@@ -44,7 +51,9 @@ public record FriendMatchStateDto(
             List<OpponentSlotKnowledgeDto> opponentKnowledge,
             List<BotMatchGuessFeedbackDto> recentGuesses,
             GameHistoryEntryDto historyEntry,
-            MatchRewardDto yourReward
+            MatchRewardDto yourReward,
+            String yourTeamNonce,
+            String opponentTeamNonce
     ) {
         ActiveMatchPlayerModel yours = viewerSide == MatchPlayerSide.HOST
                 ? match.getHostPlayer()
@@ -52,6 +61,8 @@ public record FriendMatchStateDto(
         ActiveMatchPlayerModel opponent = viewerSide == MatchPlayerSide.HOST
                 ? match.getOpponentPlayer()
                 : match.getHostPlayer();
+        boolean opponentReady = opponent.getTeam().size() >= GameConstants.TEAM_SIZE;
+        boolean opened = match.getStatus() == MatchStatus.FINISHED;
         return new FriendMatchStateDto(
                 match.getId(),
                 match.getJoinCode(),
@@ -66,6 +77,11 @@ public record FriendMatchStateDto(
                 sortedDexList(opponent.getHits()),
                 yours.getHits().size(),
                 opponent.getHits().size(),
+                yours.getTeamCommitment(),
+                opponentReady ? opponent.getTeamCommitment() : null,
+                yourTeamNonce,
+                opened ? List.copyOf(opponent.getTeam()) : null,
+                opened ? opponentTeamNonce : null,
                 participant(match.getProfile(), match.getHostPlayer().getTeam().size(), match.getHostPlayer().getTurnTimeoutPenalties()),
                 guestParticipant(match),
                 opponentKnowledge,
@@ -77,7 +93,9 @@ public record FriendMatchStateDto(
                 yours.getTurnTimeoutPenalties(),
                 match.getBotReplacementSide() != null && match.getBotReplacementSide() != viewerSide,
                 historyEntry,
-                yourReward
+                yourReward,
+                match.isEventMode(),
+                List.copyOf(match.getEventPokedexNumbers())
         );
     }
 
@@ -86,18 +104,30 @@ public record FriendMatchStateDto(
             int teamSize,
             int timeoutPenalties
     ) {
+        Integer favorite = profile.getFavoritePokemon() != null
+                ? profile.getFavoritePokemon().getPokedexNumber()
+                : null;
+        boolean hasCustomAvatar =
+                profile.getAvatarMode() == com.svc.pokeguessteam.model.enums.AvatarMode.CUSTOM
+                        && profile.getAvatarCustomBytes() != null
+                        && profile.getAvatarCustomBytes().length > 0;
+        long avatarVersion = com.svc.pokeguessteam.service.ProfileService.avatarContentVersion(
+                profile.getAvatarCustomBytes());
         return new FriendMatchParticipantDto(
                 profile.getUser().getIdUser(),
                 profile.getUser().getUsername(),
                 teamSize >= GameConstants.TEAM_SIZE,
-                timeoutPenalties
+                timeoutPenalties,
+                hasCustomAvatar,
+                favorite,
+                avatarVersion
         );
     }
 
     private static FriendMatchParticipantDto guestParticipant(ActiveMatchModel match) {
         ProfileModel guest = match.getGuestProfile();
         if (guest == null) {
-            return new FriendMatchParticipantDto(null, null, false, 0);
+            return new FriendMatchParticipantDto(null, null, false, 0, false, null, 0L);
         }
         return participant(guest, match.getOpponentPlayer().getTeam().size(), match.getOpponentPlayer().getTurnTimeoutPenalties());
     }

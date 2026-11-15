@@ -19,5 +19,7 @@ public interface UserPokedexRepository extends JpaRepository<UserPokedexModel, S
 
     List<UserPokedexModel> findByProfile_IdAndRegisteredTrueOrderByPokemon_PokedexNumberAsc(String profileId);
 
+    long countByProfile_IdAndRegisteredTrue(String profileId);
+
     void deleteByProfile_Id(String profileId);
 }

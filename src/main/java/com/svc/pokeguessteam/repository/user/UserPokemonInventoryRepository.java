@@ -15,4 +15,6 @@ public interface UserPokemonInventoryRepository extends JpaRepository<UserPokemo
     Page<UserPokemonInventoryModel> findByProfile_Id(String profileId, Pageable pageable);
 
     Optional<UserPokemonInventoryModel> findByProfile_IdAndEvolutionLine_LineKey(String profileId, Integer lineKey);
+
+    long countByProfile_Id(String profileId);
 }

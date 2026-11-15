@@ -12,33 +12,36 @@ import com.svc.pokeguessteam.dto.auth.LoginRequest;
 import com.svc.pokeguessteam.dto.auth.MessageResponse;
 import com.svc.pokeguessteam.dto.auth.PasswordResetConfirmRequest;
 import com.svc.pokeguessteam.dto.auth.RegisterRequest;
-import com.svc.pokeguessteam.dto.auth.RegisterResponse;
 import com.svc.pokeguessteam.dto.auth.SessionResponse;
 import com.svc.pokeguessteam.messages.MessageKeys;
 import com.svc.pokeguessteam.model.user.UserModel;
+import com.svc.pokeguessteam.security.ActiveUserSessionIndex;
+import com.svc.pokeguessteam.security.AuthIpRateLimiter;
+import com.svc.pokeguessteam.security.ClientIpResolver;
 import com.svc.pokeguessteam.security.DeviceFingerprintUtil;
+import com.svc.pokeguessteam.security.SessionAuthorityService;
 import com.svc.pokeguessteam.security.SessionBindingInterceptor;
+import com.svc.pokeguessteam.security.SessionIpBindingFilter;
 import com.svc.pokeguessteam.service.AccountDeletionService;
 import com.svc.pokeguessteam.service.AuthCodeService;
 import com.svc.pokeguessteam.service.AuthService;
 import com.svc.pokeguessteam.service.CurrentUserService;
 import com.svc.pokeguessteam.service.ProfileService;
+import com.svc.pokeguessteam.service.UserRoleService;
+import com.svc.pokeguessteam.exception.ApiBusinessException;
+import com.svc.pokeguessteam.exception.ErrorCodes;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import org.springframework.context.MessageSource;
 import org.springframework.context.i18n.LocaleContextHolder;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
@@ -53,6 +56,10 @@ public class AuthController {
     private final AccountDeletionService accountDeletionService;
     private final ProfileService profileService;
     private final CurrentUserService currentUserService;
+    private final UserRoleService userRoleService;
+    private final SessionAuthorityService sessionAuthorityService;
+    private final ActiveUserSessionIndex activeUserSessionIndex;
+    private final AuthIpRateLimiter authIpRateLimiter;
     private final MessageSource messageSource;
 
     public AuthController(
@@ -61,6 +68,10 @@ public class AuthController {
             AccountDeletionService accountDeletionService,
             ProfileService profileService,
             CurrentUserService currentUserService,
+            UserRoleService userRoleService,
+            SessionAuthorityService sessionAuthorityService,
+            ActiveUserSessionIndex activeUserSessionIndex,
+            AuthIpRateLimiter authIpRateLimiter,
             MessageSource messageSource
     ) {
         this.authService = authService;
@@ -68,35 +79,34 @@ public class AuthController {
         this.accountDeletionService = accountDeletionService;
         this.profileService = profileService;
         this.currentUserService = currentUserService;
+        this.userRoleService = userRoleService;
+        this.sessionAuthorityService = sessionAuthorityService;
+        this.activeUserSessionIndex = activeUserSessionIndex;
+        this.authIpRateLimiter = authIpRateLimiter;
         this.messageSource = messageSource;
     }
 
     @PostMapping("/register")
-    public ResponseEntity<RegisterResponse> register(
-            @RequestBody @Valid RegisterRequest request
+    public ResponseEntity<MessageResponse> register(
+            @RequestBody @Valid RegisterRequest request,
+            HttpServletRequest httpRequest
     ) {
-        UserModel user = authService.register(
+        authIpRateLimiter.consume("register", ClientIpResolver.resolve(httpRequest), 10, 15);
+        // Resposta idêntica com ou sem conta nova — evita enumeração de e-mails.
+        authService.register(
                 request.username(),
                 request.email(),
                 request.password()
         );
-
-        profileService.ensureProfileWithStarters(user.getIdUser());
-
-        return ResponseEntity.ok(
-                new RegisterResponse(
-                        user.getIdUser(),
-                        user.getEmail(),
-                        user.getUsername(),
-                        Boolean.TRUE.equals(user.getEmailVerify())
-                )
-        );
+        return ResponseEntity.ok(new MessageResponse(msg(MessageKeys.AUTH_REGISTER_ACCEPTED)));
     }
 
     @PostMapping({"/email/verification/send", "/verification/resend"})
     public ResponseEntity<MessageResponse> sendEmailVerification(
-            @RequestBody @Valid EmailOnlyRequest request
+            @RequestBody @Valid EmailOnlyRequest request,
+            HttpServletRequest httpRequest
     ) {
+        authIpRateLimiter.consume("auth-mail", ClientIpResolver.resolve(httpRequest), 8, 15);
         authCodeService.sendEmailVerificationCodeByEmail(request.email());
         return ResponseEntity.ok(new MessageResponse(msg(MessageKeys.AUTH_EMAIL_VERIFICATION_SENT)));
     }
@@ -114,8 +124,10 @@ public class AuthController {
 
     @PostMapping("/password-reset/request")
     public ResponseEntity<MessageResponse> requestPasswordReset(
-            @RequestBody @Valid EmailOnlyRequest request
+            @RequestBody @Valid EmailOnlyRequest request,
+            HttpServletRequest httpRequest
     ) {
+        authIpRateLimiter.consume("auth-mail", ClientIpResolver.resolve(httpRequest), 8, 15);
         authCodeService.sendPasswordResetCodeByEmailIfEligible(request.email());
         return ResponseEntity.ok(new MessageResponse(msg(MessageKeys.AUTH_PASSWORD_RESET_SENT)));
     }
@@ -198,8 +210,9 @@ public class AuthController {
             HttpServletRequest httpRequest
     ) {
         UserModel user = authService.authenticate(
-                request.login(),
-                request.password()
+                request.email(),
+                request.password(),
+                ClientIpResolver.resolve(httpRequest)
         );
 
         boolean firstLogin = authService.recordLogin(user);
@@ -263,29 +276,33 @@ public class AuthController {
     }
 
     private void establishSession(UserModel user, HttpServletRequest httpRequest) {
+        user = userRoleService.bootstrapFirstMasterIfNeeded(user);
+        if (user.isSiteBannedNow()) {
+            throw new ApiBusinessException(
+                    HttpStatus.FORBIDDEN,
+                    ErrorCodes.AUTH_USER_SITE_BANNED,
+                    MessageKeys.AUTH_USER_SITE_BANNED
+            );
+        }
+
         profileService.ensureProfileWithStarters(user.getIdUser());
 
+        HttpSession previous = httpRequest.getSession(false);
+        if (previous != null) {
+            previous.invalidate();
+        }
         HttpSession session = httpRequest.getSession(true);
         session.setAttribute(USER_ID_ATTR, user.getIdUser());
+        session.setAttribute(
+                SessionIpBindingFilter.CLIENT_IP_ATTR,
+                ClientIpResolver.resolve(httpRequest)
+        );
         session.setAttribute(
                 SessionBindingInterceptor.DEVICE_ID_ATTR,
                 DeviceFingerprintUtil.generateDeviceId(httpRequest)
         );
-
-        UsernamePasswordAuthenticationToken authentication =
-                new UsernamePasswordAuthenticationToken(
-                        user.getEmail(),
-                        null,
-                        List.of(new SimpleGrantedAuthority("ROLE_USER"))
-                );
-
-        SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
-        securityContext.setAuthentication(authentication);
-        SecurityContextHolder.setContext(securityContext);
-        session.setAttribute(
-                HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY,
-                securityContext
-        );
+        sessionAuthorityService.applyToSession(user, session);
+        activeUserSessionIndex.register(user.getIdUser(), session);
     }
 
     private AuthSessionResponse toSessionResponse(UserModel user, String message, boolean firstLogin) {

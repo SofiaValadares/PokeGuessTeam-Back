@@ -40,7 +40,11 @@ public class AuthCodeHasher {
             String targetEmail,
             String expectedHash
     ) {
-        return hash(userId, purpose, plainCode, targetEmail).equals(expectedHash);
+        byte[] actual = hash(userId, purpose, plainCode, targetEmail).getBytes(StandardCharsets.UTF_8);
+        byte[] expected = expectedHash == null
+                ? new byte[0]
+                : expectedHash.getBytes(StandardCharsets.UTF_8);
+        return MessageDigest.isEqual(actual, expected);
     }
 
     private static String sha256(String value) {

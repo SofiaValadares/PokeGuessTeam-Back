@@ -3,6 +3,7 @@ package com.svc.pokeguessteam.controller;
 import com.svc.pokeguessteam.dto.game.GameFinishResponse;
 import com.svc.pokeguessteam.dto.game.GameLocalFinishRequest;
 import com.svc.pokeguessteam.dto.game.LocalMatchSetupRequest;
+import com.svc.pokeguessteam.dto.game.LocalMatchSetupResponse;
 import com.svc.pokeguessteam.service.CurrentUserService;
 import com.svc.pokeguessteam.service.LocalMatchService;
 import jakarta.servlet.http.HttpSession;
@@ -30,13 +31,12 @@ public class LocalMatchController {
     }
 
     @PutMapping("/setup")
-    public ResponseEntity<Void> validateSetup(
+    public ResponseEntity<LocalMatchSetupResponse> validateSetup(
             HttpSession session,
             @Valid @RequestBody LocalMatchSetupRequest request
     ) {
         String userId = currentUserService.requireUserId(session);
-        localMatchService.validateSetupForClient(userId, request);
-        return ResponseEntity.noContent().build();
+        return ResponseEntity.ok(localMatchService.validateSetupForClient(userId, request));
     }
 
     @PostMapping("/finish")

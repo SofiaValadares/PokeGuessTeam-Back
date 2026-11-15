@@ -9,8 +9,11 @@ public final class MessageKeys {
     }
 
     public static final String AUTH_INVALID_CREDENTIALS = "error.auth.invalid-credentials";
+    public static final String AUTH_LOGIN_LOCKED = "error.auth.login-locked";
+    public static final String AUTH_RATE_LIMITED = "error.auth.rate-limited";
     public static final String AUTH_EMAIL_ALREADY_REGISTERED = "error.auth.email-already-registered";
     public static final String AUTH_USERNAME_ALREADY_TAKEN = "error.auth.username-already-taken";
+    public static final String AUTH_USERNAME_FROM_EMAIL = "error.validation.register.username.from-email";
     public static final String AUTH_CURRENT_PASSWORD_WRONG = "error.auth.current-password-wrong";
     public static final String AUTH_NEW_PASSWORD_SAME = "error.auth.new-password-same";
     public static final String AUTH_EMAIL_NOT_VERIFIED = "error.auth.email-not-verified";
@@ -19,6 +22,7 @@ public final class MessageKeys {
     public static final String AUTH_CODE_INVALID = "error.auth.code-invalid";
     public static final String AUTH_CODE_RESEND_COOLDOWN = "error.auth.code-resend-cooldown";
     public static final String AUTH_PASSWORD_RESET_SENT = "info.auth.password-reset-sent";
+    public static final String AUTH_REGISTER_ACCEPTED = "info.auth.register-accepted";
     public static final String AUTH_EMAIL_VERIFICATION_SENT = "info.auth.email-verification-sent";
     public static final String AUTH_EMAIL_VERIFIED = "info.auth.email-verified";
     public static final String AUTH_PASSWORD_RESET_DONE = "info.auth.password-reset-done";
@@ -36,20 +40,29 @@ public final class MessageKeys {
     public static final String SESSION_NONE_ACTIVE = "error.session.none-active";
     public static final String SESSION_BINDING_MISSING = "error.session.binding-missing";
     public static final String SESSION_BINDING_MISMATCH = "error.session.binding-mismatch";
+    public static final String SESSION_IP_MISMATCH = "error.session.ip-mismatch";
     public static final String SESSION_USER_ID_MISSING = "error.session.user-id-missing";
 
     public static final String VALIDATION_SUMMARY = "error.validation.summary";
     public static final String VALIDATION_FIELD_INVALID = "error.validation.field-invalid";
     public static final String VALIDATION_MALFORMED_JSON = "error.validation.malformed-json";
     public static final String VALIDATION_REGISTER_USERNAME_REQUIRED = "error.validation.register.username.required";
+    public static final String VALIDATION_REGISTER_PASSWORD_POLICY = "error.validation.register.password.policy";
 
     public static final String PROFILE_USER_NOT_FOUND = "error.profile.user-not-found";
     public static final String PROFILE_NOT_FOUND = "error.profile.not-found";
+    public static final String PROFILE_STEGO_MESSAGE_TOO_LONG = "error.profile.stego.message-too-long";
+    public static final String PROFILE_STEGO_EMBED_FAILED = "error.profile.stego.embed-failed";
+    public static final String PROFILE_STEGO_EXTRACT_FAILED = "error.profile.stego.extract-failed";
+    public static final String PROFILE_STEGO_NO_CUSTOM_AVATAR = "error.profile.stego.no-custom-avatar";
+    public static final String PROFILE_AVATAR_TOO_LARGE = "error.profile.avatar.too-large";
+    public static final String PROFILE_AVATAR_UNSUPPORTED_TYPE = "error.profile.avatar.unsupported-type";
     public static final String TRAINING_TEAM_LINE_NOT_IN_INVENTORY = "error.profile.training-team.not-in-inventory";
     public static final String TRAINING_TEAM_LINE_NOT_FOUND = "error.profile.training-team.line-not-found";
     public static final String TRAINING_TEAM_DUPLICATE = "error.profile.training-team.duplicate";
     public static final String EVOLUTION_REWARD_NOT_AVAILABLE = "error.pokemon.evolution-reward-not-available";
     public static final String DEV_TOOLS_DISABLED = "error.dev.tools-disabled";
+    public static final String SECURITY_LAB_DISABLED = "error.security-lab.disabled";
 
     public static final String POKEMON_SPECIES_NOT_FOUND = "error.pokemon.species-not-found";
     public static final String POKEBALL_INSUFFICIENT = "error.pokemon.pokeball-insufficient";
@@ -75,6 +88,7 @@ public final class MessageKeys {
     public static final String GAME_TEAM_NOT_IN_POKEDEX = "error.game.team-not-in-pokedex";
     public static final String GAME_POKEDEX_INSUFFICIENT = "error.game.pokedex-insufficient";
     public static final String GAME_GUESS_ALREADY_USED = "error.game.guess-already-used";
+    public static final String GAME_GUESS_NOT_IN_POKEDEX = "error.game.guess-not-in-pokedex";
     public static final String GAME_FRIEND_MATCH_NOT_FOUND = "error.game.friend-match-not-found";
     public static final String GAME_FRIEND_ONLINE_BANNED = "error.game.friend-online-banned";
     public static final String GAME_JOIN_CODE_NOT_FOUND = "error.game.join-code-not-found";
@@ -85,4 +99,26 @@ public final class MessageKeys {
     public static final String GAME_MATCH_GUEST_REQUIRED = "error.game.match-guest-required";
     public static final String GAME_MATCH_TEAM_LOCKED = "error.game.match-team-locked";
     public static final String GAME_LOCAL_MATCH_NOT_FOUND = "error.game.local-match-not-found";
+    public static final String GAME_TEAM_COMMITMENT_INVALID = "error.game.team-commitment-invalid";
+
+    public static final String AUTH_USER_SITE_BANNED = "error.auth.user-site-banned";
+    public static final String AUTH_USER_ONLINE_BANNED = "error.auth.user-online-banned";
+    public static final String ADMIN_FORBIDDEN = "error.admin.forbidden";
+    public static final String ADMIN_EVENT_ACTIVE = "error.admin.event-active";
+    public static final String ADMIN_EVENT_NOT_FOUND = "error.admin.event-not-found";
+    public static final String ADMIN_USER_NOT_FOUND = "error.admin.user-not-found";
+    public static final String ADMIN_CANNOT_MODIFY_MASTER = "error.admin.cannot-modify-master";
+    public static final String ADMIN_INVALID_BAN_DURATION = "error.admin.invalid-ban-duration";
+    public static final String ADMIN_EVENT_ALREADY_ACTIVE = "error.admin.event-already-active";
+    public static final String ADMIN_EVENT_NOT_ACTIVE = "error.admin.event-not-active";
+    public static final String GAME_EVENT_REQUIRED = "error.game.event-required";
+    public static final String GAME_TEAM_NOT_IN_EVENT = "error.game.team-not-in-event";
+    public static final String GAME_GUESS_NOT_IN_EVENT = "error.game.guess-not-in-event";
+    public static final String GAME_EVENT_POOL_INSUFFICIENT = "error.game.event-pool-insufficient";
+    public static final String FRIEND_BALL_NO_EVENT = "error.pokeball.friend-ball-no-event";
+    public static final String FRIEND_BALL_POOL_EMPTY = "error.pokeball.friend-ball-pool-empty";
+
+    public static final String ADMIN_CANNOT_CHANGE_OWN_ROLE = "error.admin.cannot-change-own-role";
+    public static final String ADMIN_LAST_MASTER = "error.admin.last-master";
+    public static final String ADMIN_TARGET_NOT_VERIFIED = "error.admin.target-not-verified";
 }

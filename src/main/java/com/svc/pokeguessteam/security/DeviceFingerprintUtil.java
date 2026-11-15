@@ -14,22 +14,8 @@ public final class DeviceFingerprintUtil {
 
     public static String generateDeviceId(HttpServletRequest request) {
         String userAgent = defaultString(request.getHeader("User-Agent"));
-        String clientIp = resolveClientIp(request);
+        String clientIp = ClientIpResolver.resolve(request);
         return sha256(userAgent + "|" + clientIp);
-    }
-
-    private static String resolveClientIp(HttpServletRequest request) {
-        String xForwardedFor = request.getHeader("X-Forwarded-For");
-        if (xForwardedFor != null && !xForwardedFor.isBlank()) {
-            return xForwardedFor.split(",")[0].trim();
-        }
-
-        String xRealIp = request.getHeader("X-Real-IP");
-        if (xRealIp != null && !xRealIp.isBlank()) {
-            return xRealIp.trim();
-        }
-
-        return defaultString(request.getRemoteAddr());
     }
 
     private static String sha256(String value) {

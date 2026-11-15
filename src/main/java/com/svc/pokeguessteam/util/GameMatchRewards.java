@@ -16,7 +16,7 @@ public final class GameMatchRewards {
 
     public static MatchRewardPayout payout(GameModes mode, GameResults result) {
         return switch (mode) {
-            case FRIEND -> payoutFriend(result);
+            case FRIEND, COMPETITIVE -> payoutFriend(result);
             case BOT, LOCAL -> payoutBotOrLocal(result);
         };
     }

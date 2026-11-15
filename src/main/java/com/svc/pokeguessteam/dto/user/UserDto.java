@@ -9,7 +9,11 @@ public record UserDto(
         String username,
         String email,
         boolean emailVerified,
-        LocalDateTime registerDate
+        LocalDateTime registerDate,
+        String role,
+        boolean developer,
+        boolean siteBanned,
+        boolean onlineBanned
 ) {
     public static UserDto from(UserModel user) {
         return new UserDto(
@@ -17,7 +21,11 @@ public record UserDto(
                 user.getUsername(),
                 user.getEmail(),
                 Boolean.TRUE.equals(user.getEmailVerify()),
-                user.getRegisterDate()
+                user.getRegisterDate(),
+                user.getRole().name(),
+                user.isDeveloper(),
+                user.isSiteBannedNow(),
+                user.isOnlineBannedNow()
         );
     }
 }

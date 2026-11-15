@@ -1,28 +1,43 @@
 package com.svc.pokeguessteam.service;
 
+import com.svc.pokeguessteam.dto.game.BotMatchGuessFeedbackDto;
+import com.svc.pokeguessteam.dto.game.BotMatchGuessRequest;
 import com.svc.pokeguessteam.dto.game.BotMatchSetupResponse;
 import com.svc.pokeguessteam.dto.game.BotMatchTeamRequest;
+import com.svc.pokeguessteam.dto.game.FriendMatchActionResponse;
+import com.svc.pokeguessteam.dto.game.FriendMatchStateDto;
 import com.svc.pokeguessteam.dto.game.GameBotFinishRequest;
 import com.svc.pokeguessteam.dto.game.GameFinishResponse;
 import com.svc.pokeguessteam.dto.game.GameHistoryEntryDto;
 import com.svc.pokeguessteam.dto.game.MatchRewardDto;
+import com.svc.pokeguessteam.dto.game.OpponentSlotKnowledgeDto;
 import com.svc.pokeguessteam.exception.ApiBusinessException;
 import com.svc.pokeguessteam.exception.ErrorCodes;
 import com.svc.pokeguessteam.messages.MessageKeys;
 import com.svc.pokeguessteam.model.enums.GameModes;
+import com.svc.pokeguessteam.model.enums.GameResults;
 import com.svc.pokeguessteam.model.enums.MatchPlayerSide;
 import com.svc.pokeguessteam.model.enums.MatchStatus;
+import com.svc.pokeguessteam.model.game.ActiveMatchGuessModel;
 import com.svc.pokeguessteam.model.game.ActiveMatchModel;
+import com.svc.pokeguessteam.model.game.ActiveMatchPlayerModel;
+import com.svc.pokeguessteam.model.pokemon.PokemonModel;
 import com.svc.pokeguessteam.model.user.ProfileModel;
 import com.svc.pokeguessteam.repository.game.ActiveMatchRepository;
+import com.svc.pokeguessteam.util.BotMatchFinishResolver;
 import com.svc.pokeguessteam.util.GameConstants;
+import com.svc.pokeguessteam.util.MatchEngine;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.stream.Collectors;
 
 @Service
 public class BotMatchService {
@@ -34,7 +49,11 @@ public class BotMatchService {
     private final ActiveMatchConstraintService activeMatchConstraintService;
     private final DuelTeamService duelTeamService;
     private final ActiveMatchRemovalService activeMatchRemovalService;
+    private final ClientMatchCommitmentService clientMatchCommitmentService;
     private final ActiveMatchTeamService activeMatchTeamService;
+    private final MatchKnowledgeService matchKnowledgeService;
+    private final NationalPokedexCatalog nationalPokedexCatalog;
+    private final TeamCommitmentService teamCommitmentService;
 
     public BotMatchService(
             ActiveMatchRepository activeMatchRepository,
@@ -44,7 +63,11 @@ public class BotMatchService {
             ActiveMatchConstraintService activeMatchConstraintService,
             DuelTeamService duelTeamService,
             ActiveMatchRemovalService activeMatchRemovalService,
-            ActiveMatchTeamService activeMatchTeamService
+            ClientMatchCommitmentService clientMatchCommitmentService,
+            ActiveMatchTeamService activeMatchTeamService,
+            MatchKnowledgeService matchKnowledgeService,
+            NationalPokedexCatalog nationalPokedexCatalog,
+            TeamCommitmentService teamCommitmentService
     ) {
         this.activeMatchRepository = activeMatchRepository;
         this.profileService = profileService;
@@ -53,78 +76,301 @@ public class BotMatchService {
         this.activeMatchConstraintService = activeMatchConstraintService;
         this.duelTeamService = duelTeamService;
         this.activeMatchRemovalService = activeMatchRemovalService;
+        this.clientMatchCommitmentService = clientMatchCommitmentService;
         this.activeMatchTeamService = activeMatchTeamService;
+        this.matchKnowledgeService = matchKnowledgeService;
+        this.nationalPokedexCatalog = nationalPokedexCatalog;
+        this.teamCommitmentService = teamCommitmentService;
     }
 
-    /** Valida equipa no servidor; o jogo corre no cliente. */
+    /** Valida a equipa na Pokédex do user, persiste times para /guess; crypto só no finish. */
     @Transactional
     public BotMatchSetupResponse validateTeamForClient(String userId, BotMatchTeamRequest request) {
         ProfileModel profile = profileService.ensureProfileWithStarters(userId);
         clearStaleBotMatches(profile.getId());
         activeMatchConstraintService.ensureCanStartNewMatch(profile.getId());
 
-        List<Integer> team = duelTeamService.validateTeamFromRegisteredPokedex(userId, request.team());
-        int registeredCount = duelTeamService.countRegistered(userId);
+        Set<Integer> registered = duelTeamService.registeredNumbers(userId);
+        List<Integer> team = duelTeamService.validateTeam(registered, request.team(), null);
         int minForBotDuel = GameConstants.TEAM_SIZE * 2;
-        if (registeredCount < minForBotDuel) {
+        if (registered.size() < minForBotDuel) {
             throw new ApiBusinessException(
                     HttpStatus.BAD_REQUEST,
                     ErrorCodes.GAME_POKEDEX_INSUFFICIENT,
                     MessageKeys.GAME_POKEDEX_INSUFFICIENT,
                     minForBotDuel,
-                    registeredCount
+                    registered.size()
             );
         }
         Set<Integer> excluded = new HashSet<>(team);
-        List<Integer> botTeam = duelTeamService.buildBotTeamFromUserPokedex(userId, excluded);
-
-        ActiveMatchModel match = createSetupMatch(profile, team, botTeam);
-        ActiveMatchModel saved = activeMatchRepository.save(match);
-        activeMatchTeamService.saveTeams(saved);
-        return new BotMatchSetupResponse(team, botTeam);
+        List<Integer> botTeam = duelTeamService.buildBotTeamFromRegistered(registered, excluded);
+        ClientMatchCommitmentService.CommittedClientMatch committed =
+                clientMatchCommitmentService.commit(profile, GameModes.BOT, "PokéBot", team, botTeam);
+        ActiveMatchModel match = activeMatchRepository.findById(committed.matchId())
+                .orElseThrow(() -> new ApiBusinessException(
+                        HttpStatus.NOT_FOUND,
+                        ErrorCodes.GAME_MATCH_NOT_FOUND,
+                        MessageKeys.GAME_MATCH_NOT_FOUND
+                ));
+        return new BotMatchSetupResponse(
+                committed.matchId(),
+                committed.host().team(),
+                committed.host().commitment(),
+                committed.opponent().commitment(),
+                match.getStartingPlayer(),
+                match.getCurrentTurn()
+        );
     }
 
-    /** Persiste histórico e recompensas após partida resolvida no cliente. */
+    /**
+     * Mesmo fluxo do guess online: MatchEngine + FriendMatchActionResponse
+     * (estado com opponentKnowledge). Após o palpite do host, o bot joga até
+     * voltar a vez do host ou a partida terminar.
+     */
+    @Transactional
+    public FriendMatchActionResponse submitGuess(String userId, BotMatchGuessRequest request) {
+        ProfileModel profile = profileService.ensureProfileWithStarters(userId);
+        ActiveMatchModel match = requireActiveBotMatch(profile.getId(), request.matchId());
+        hydrateMatch(match);
+
+        if (match.getCurrentTurn() != MatchPlayerSide.HOST) {
+            throw new ApiBusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    ErrorCodes.GAME_MATCH_WRONG_TURN,
+                    MessageKeys.GAME_MATCH_WRONG_TURN
+            );
+        }
+
+        PokemonModel guessed = requirePokemon(request.pokedexNumber());
+        Set<Integer> registered = duelTeamService.registeredNumbers(userId);
+        if (!registered.contains(guessed.getPokedexNumber())) {
+            throw new ApiBusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    ErrorCodes.GAME_GUESS_NOT_IN_POKEDEX,
+                    MessageKeys.GAME_GUESS_NOT_IN_POKEDEX
+            );
+        }
+        ensureNotAlreadyGuessed(match, MatchPlayerSide.HOST, guessed.getPokedexNumber());
+
+        Map<Integer, PokemonModel> pokemonByDex = loadPokemonByDex();
+        List<MatchEngine.ApplyGuessResult> applied = new ArrayList<>();
+
+        MatchEngine.ApplyGuessResult hostResult = applyGuessSafe(match, MatchPlayerSide.HOST, guessed, pokemonByDex);
+        applied.add(hostResult);
+
+        List<PokemonModel> botPool = duelTeamService.modelsFromRegistered(registered);
+        while (match.getStatus() == MatchStatus.ACTIVE && match.getCurrentTurn() == MatchPlayerSide.OPPONENT) {
+            PokemonModel botGuess = pickUnusedGuess(match, MatchPlayerSide.OPPONENT, botPool);
+            if (botGuess == null) {
+                botGuess = pickUnusedGuess(match, MatchPlayerSide.OPPONENT, pokemonByDex.values().stream().toList());
+            }
+            if (botGuess == null) {
+                throw new ApiBusinessException(
+                        HttpStatus.BAD_REQUEST,
+                        ErrorCodes.GAME_MATCH_INVALID_ACTION,
+                        MessageKeys.GAME_MATCH_INVALID_ACTION
+                );
+            }
+            MatchEngine.ApplyGuessResult botResult =
+                    applyGuessSafe(match, MatchPlayerSide.OPPONENT, botGuess, pokemonByDex);
+            botResult.guess().setAutoSelected(true);
+            applied.add(botResult);
+        }
+
+        // Flush + PrePersist nos guesses para ids estarem preenchidos no DTO do cliente.
+        activeMatchRepository.saveAndFlush(match);
+        List<BotMatchGuessFeedbackDto> feedbackDtos = applied.stream()
+                .map(result -> toFeedback(result, pokemonByDex))
+                .toList();
+        FriendMatchStateDto state = toStateDto(match, pokemonByDex);
+        return new FriendMatchActionResponse(state, List.copyOf(feedbackDtos));
+    }
+
+    /** Abre os commitments (AES + SHA-256 + HMAC), persiste histórico e recompensas. */
     @Transactional
     public GameFinishResponse finishClientMatch(String userId, GameBotFinishRequest request) {
         ProfileModel profile = profileService.ensureProfileWithStarters(userId);
-        ActiveMatchModel match = requireActiveSetupMatch(profile.getId(), GameModes.BOT);
-        List<Integer> userTeam = activeMatchTeamService.loadTeam(match.getHostPlayer().getId());
-        List<Integer> opponentTeam = activeMatchTeamService.loadTeam(match.getOpponentPlayer().getId());
-        GameHistoryEntryDto history = gameHistoryService.saveBotFinish(userId, request, userTeam, opponentTeam);
-        activeMatchRemovalService.deleteByMatchId(match.getId());
-        MatchRewardDto reward = matchRewardService.grantForUser(userId, GameModes.BOT, request.result());
-        return new GameFinishResponse(history, reward);
+        duelTeamService.validateTeamFromRegisteredPokedex(userId, request.hostTeam());
+        ActiveMatchModel match = activeMatchRepository.findByIdAndProfile_Id(request.matchId(), profile.getId())
+                .filter(stored -> stored.getGameMode() == GameModes.BOT)
+                .orElseThrow(() -> new ApiBusinessException(
+                        HttpStatus.NOT_FOUND,
+                        ErrorCodes.GAME_MATCH_NOT_FOUND,
+                        MessageKeys.GAME_MATCH_NOT_FOUND
+                ));
+        hydrateMatch(match);
+        GameResults result = BotMatchFinishResolver.resolve(match.getStatus(), match.getWinner(), request.result());
+        GameBotFinishRequest trusted = new GameBotFinishRequest(
+                request.matchId(),
+                request.hostTeam(),
+                match.getHostPlayer().getHits().size(),
+                match.getOpponentPlayer().getHits().size(),
+                result
+        );
+        ClientMatchCommitmentService.OpenedClientMatch opened = clientMatchCommitmentService.verifyHostAndOpenSealedOpponent(
+                profile.getId(),
+                GameModes.BOT,
+                request.matchId(),
+                request.hostTeam()
+        );
+        List<Integer> opponentTeam = opened.opponentOpening().team();
+        GameHistoryEntryDto history = gameHistoryService.saveBotFinish(
+                userId,
+                trusted,
+                request.hostTeam(),
+                opponentTeam
+        );
+        MatchRewardDto reward = matchRewardService.grantForUser(userId, GameModes.BOT, result);
+        return new GameFinishResponse(
+                history,
+                reward,
+                opened.hostCommitment(),
+                opened.opponentCommitment(),
+                opened.hostOpening(),
+                opened.opponentOpening()
+        );
     }
 
-    private ActiveMatchModel createSetupMatch(ProfileModel profile, List<Integer> userTeam, List<Integer> opponentTeam) {
-        ActiveMatchModel match = FriendMatchStore.newMatchShell();
-        match.setProfile(profile);
-        match.setGameMode(GameModes.BOT);
-        match.getHostPlayer().setSide(MatchPlayerSide.HOST);
-        match.getHostPlayer().setTeam(userTeam);
-        match.getOpponentPlayer().setSide(MatchPlayerSide.OPPONENT);
-        match.getOpponentPlayer().setTeam(opponentTeam);
+    private FriendMatchStateDto toStateDto(ActiveMatchModel match, Map<Integer, PokemonModel> pokemonByDex) {
+        MatchPlayerSide viewerSide = MatchPlayerSide.HOST;
+        List<OpponentSlotKnowledgeDto> knowledge = matchKnowledgeService.buildKnowledge(match, viewerSide, pokemonByDex);
+        List<BotMatchGuessFeedbackDto> recentGuesses = List.copyOf(match.getGuesses()).stream()
+                .map(g -> {
+                    PokemonModel p = pokemonByDex.get(g.getGuessedPokedexNumber());
+                    String name = p != null ? p.getName() : String.valueOf(g.getGuessedPokedexNumber());
+                    return BotMatchGuessFeedbackDto.from(g, name, null, null);
+                })
+                .toList();
+
+        boolean opened = match.getStatus() == MatchStatus.FINISHED;
+        return FriendMatchStateDto.from(
+                match,
+                viewerSide,
+                knowledge,
+                recentGuesses,
+                null,
+                null,
+                opened ? teamCommitmentService.nonceOf(match.getHostPlayer()) : null,
+                opened ? teamCommitmentService.nonceOf(match.getOpponentPlayer()) : null
+        );
+    }
+
+    private void hydrateMatch(ActiveMatchModel match) {
+        ActiveMatchPlayerModel host = match.getHostPlayer();
+        ActiveMatchPlayerModel opponent = match.getOpponentPlayer();
+        host.setTeam(activeMatchTeamService.loadTeam(host.getId()));
+        opponent.setTeam(activeMatchTeamService.loadTeam(opponent.getId()));
+
+        Set<Integer> hostHits = new HashSet<>();
+        Set<Integer> opponentHits = new HashSet<>();
+        for (ActiveMatchGuessModel guess : match.getGuesses()) {
+            if (!guess.isExactMatch()) {
+                continue;
+            }
+            if (guess.getPlayerSide() == MatchPlayerSide.HOST) {
+                hostHits.addAll(guess.getMatchedPokedexNumbers());
+            } else if (guess.getPlayerSide() == MatchPlayerSide.OPPONENT) {
+                opponentHits.addAll(guess.getMatchedPokedexNumbers());
+            }
+        }
+        host.loadHits(hostHits);
+        opponent.loadHits(opponentHits);
+    }
+
+    private ActiveMatchModel requireActiveBotMatch(String profileId, String matchId) {
+        ActiveMatchModel match = activeMatchRepository.findByIdAndProfile_Id(matchId, profileId)
+                .filter(stored -> stored.getGameMode() == GameModes.BOT)
+                .orElseThrow(() -> new ApiBusinessException(
+                        HttpStatus.NOT_FOUND,
+                        ErrorCodes.GAME_MATCH_NOT_FOUND,
+                        MessageKeys.GAME_MATCH_NOT_FOUND
+                ));
+        if (match.getStatus() != MatchStatus.ACTIVE) {
+            throw new ApiBusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    ErrorCodes.GAME_MATCH_NOT_ACTIVE,
+                    MessageKeys.GAME_MATCH_NOT_ACTIVE
+            );
+        }
         return match;
     }
 
-    private ActiveMatchModel requireActiveSetupMatch(String profileId, GameModes mode) {
-        return activeMatchRepository.findAllUnfinishedForProfileOrderByCreatedAtDesc(profileId, MatchStatus.FINISHED)
-                .stream()
-                .filter(match -> match.getGameMode() == mode)
-                .findFirst()
-                .orElseThrow(() -> new ApiBusinessException(
-                        HttpStatus.NOT_FOUND,
-                    ErrorCodes.GAME_MATCH_NOT_FOUND,
-                    MessageKeys.GAME_MATCH_NOT_FOUND
-                ));
+    private MatchEngine.ApplyGuessResult applyGuessSafe(
+            ActiveMatchModel match,
+            MatchPlayerSide side,
+            PokemonModel guessed,
+            Map<Integer, PokemonModel> pokemonByDex
+    ) {
+        try {
+            return MatchEngine.applyGuess(match, side, guessed, pokemonByDex);
+        } catch (IllegalStateException ex) {
+            throw new ApiBusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    ErrorCodes.GAME_MATCH_INVALID_ACTION,
+                    ex.getMessage()
+            );
+        }
+    }
+
+    private BotMatchGuessFeedbackDto toFeedback(
+            MatchEngine.ApplyGuessResult result,
+            Map<Integer, PokemonModel> pokemonByDex
+    ) {
+        PokemonModel guessed = pokemonByDex.get(result.guess().getGuessedPokedexNumber());
+        String name = guessed != null ? guessed.getName() : String.valueOf(result.guess().getGuessedPokedexNumber());
+        return BotMatchGuessFeedbackDto.from(result.guess(), name, result.outcome(), result.message());
+    }
+
+    private PokemonModel requirePokemon(int pokedexNumber) {
+        PokemonModel pokemon = nationalPokedexCatalog.speciesByDex().get(pokedexNumber);
+        if (pokemon == null) {
+            throw new ApiBusinessException(
+                    HttpStatus.NOT_FOUND,
+                    ErrorCodes.POKEMON_SPECIES_NOT_FOUND,
+                    MessageKeys.POKEMON_SPECIES_NOT_FOUND
+            );
+        }
+        return pokemon;
+    }
+
+    private void ensureNotAlreadyGuessed(ActiveMatchModel match, MatchPlayerSide side, int pokedexNumber) {
+        boolean already = List.copyOf(match.getGuesses()).stream()
+                .anyMatch(g -> g.getPlayerSide() == side && g.getGuessedPokedexNumber() == pokedexNumber);
+        if (already) {
+            throw new ApiBusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    ErrorCodes.GAME_GUESS_ALREADY_USED,
+                    MessageKeys.GAME_GUESS_ALREADY_USED
+            );
+        }
+    }
+
+    private static PokemonModel pickUnusedGuess(
+            ActiveMatchModel match,
+            MatchPlayerSide side,
+            List<PokemonModel> pool
+    ) {
+        Set<Integer> used = match.getGuesses().stream()
+                .filter(g -> g.getPlayerSide() == side)
+                .map(ActiveMatchGuessModel::getGuessedPokedexNumber)
+                .collect(Collectors.toSet());
+        List<PokemonModel> available = pool.stream()
+                .filter(p -> !used.contains(p.getPokedexNumber()))
+                .toList();
+        if (available.isEmpty()) {
+            return null;
+        }
+        return available.get(ThreadLocalRandom.current().nextInt(available.size()));
+    }
+
+    private Map<Integer, PokemonModel> loadPokemonByDex() {
+        return nationalPokedexCatalog.speciesByDex();
     }
 
     private void clearStaleBotMatches(String profileId) {
-        activeMatchRepository.findAllActiveByProfileIdAndGameModeOrderByCreatedAtDesc(
-                profileId,
-                GameModes.BOT,
-                MatchStatus.FINISHED
-        ).forEach(match -> activeMatchRemovalService.deleteByMatchId(match.getId()));
+        // Inclui FINISHED órfãs (ex.: /finish falhou depois do /guess) — senão o
+        // cliente reabre sessionStorage duma partida que já não existe no servidor.
+        activeMatchRepository.findAllByProfileIdAndGameMode(profileId, GameModes.BOT)
+                .forEach(match -> activeMatchRemovalService.deleteByMatchId(match.getId()));
     }
 }

@@ -20,6 +20,7 @@ import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Entity
 @Table(name = "TB_ACTIVE_MATCH_GUESSES")
@@ -64,6 +65,11 @@ public class ActiveMatchGuessModel {
 
     @PrePersist
     public void onCreate() {
+        // Garante id no objecto Java antes do flush/DTO (GeneratedValue por vezes só
+        // materializa na row e o feedback do /guess saía com id=null).
+        if (id == null || id.isBlank()) {
+            id = UUID.randomUUID().toString();
+        }
         if (createdAt == null) {
             createdAt = LocalDateTime.now();
         }

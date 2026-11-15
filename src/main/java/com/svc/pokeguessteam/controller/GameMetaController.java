@@ -1,7 +1,9 @@
 package com.svc.pokeguessteam.controller;
 
+import com.svc.pokeguessteam.config.AppSecurityLabProperties;
 import com.svc.pokeguessteam.model.enums.GameModes;
 import com.svc.pokeguessteam.service.GameHistoryService;
+import com.svc.pokeguessteam.service.NationalPokedexCatalog;
 import com.svc.pokeguessteam.service.PokedexService;
 import com.svc.pokeguessteam.service.ProfileService;
 import com.svc.pokeguessteam.util.GameConstants;
@@ -23,12 +25,24 @@ import java.util.Map;
 @RequestMapping("/api/meta")
 public class GameMetaController {
 
+    private final NationalPokedexCatalog nationalPokedexCatalog;
+    private final AppSecurityLabProperties securityLabProperties;
+
+    public GameMetaController(
+            NationalPokedexCatalog nationalPokedexCatalog,
+            AppSecurityLabProperties securityLabProperties
+    ) {
+        this.nationalPokedexCatalog = nationalPokedexCatalog;
+        this.securityLabProperties = securityLabProperties;
+    }
+
     @GetMapping
     public ResponseEntity<Map<String, Object>> meta() {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("name", "PokeTeamGuess");
         body.put("summary", "Dedução estratégica: duas equipes secretas de 6 Pokémon; vence quem descobrir o time adversário primeiro, "
                 + "com pistas por tipagem, geração, cor, altura e peso.");
+        body.put("pokedexVersion", nationalPokedexCatalog.pokedexVersion());
         body.put("pokedexDefaultPageSize", PokedexService.DEFAULT_PAGE_SIZE);
         body.put("pokedexMaxPageSize", PokedexService.MAX_PAGE_SIZE);
         body.put("pokemonInventoryDefaultPageSize", ProfileService.PokemonPcConstants.DEFAULT_PAGE_SIZE);
@@ -84,12 +98,25 @@ public class GameMetaController {
         ));
         body.put("evolutionRewards", PokemonEvolutionRewards.meta());
         body.put("gacha", PokeballGachaRules.meta());
+        body.put("securityLab", Map.of(
+                "enabled", securityLabProperties.isEnabled(),
+                "temporaryDeployNotice", securityLabProperties.isTemporaryDeployNotice(),
+                "requiresLabProfile", true
+        ));
         body.put("activeMatchApi", Map.of(
                 "botValidateTeam", "/api/game/bot/match/team",
                 "botFinish", "/api/game/bot/match/finish",
                 "localSetup", "/api/game/local/match/setup",
                 "localFinish", "/api/game/local/match/finish",
                 "friend", "/api/game/friend/match"
+        ));
+        body.put("teamCommitment", Map.of(
+                "protocol", List.of("commit", "play", "open"),
+                "payload", "v1|<dex,...>|<nonceHex>",
+                "publicCommitment", "SHA-256(payload)",
+                "serverMac", "HMAC-SHA256(serverKey, pgt.team-commit.v1|C)",
+                "sealedOpening", "AES-256-GCM(payload)",
+                "nonceBytes", 32
         ));
         return ResponseEntity.ok(body);
     }

@@ -14,13 +14,13 @@ import java.util.Optional;
 public interface ActiveMatchRepository extends JpaRepository<ActiveMatchModel, String> {
 
     @EntityGraph(type = EntityGraph.EntityGraphType.LOAD, attributePaths = {
-            "userPlayer", "botPlayer",
+            "players",
             "guesses", "profile", "profile.user", "guestProfile", "guestProfile.user"
     })
     Optional<ActiveMatchModel> findByIdAndProfile_Id(String id, String profileId);
 
     @EntityGraph(type = EntityGraph.EntityGraphType.LOAD, attributePaths = {
-            "userPlayer", "botPlayer",
+            "players",
             "guesses", "profile", "profile.user", "guestProfile", "guestProfile.user"
     })
     @Query("""
@@ -37,7 +37,7 @@ public interface ActiveMatchRepository extends JpaRepository<ActiveMatchModel, S
     );
 
     @EntityGraph(type = EntityGraph.EntityGraphType.LOAD, attributePaths = {
-            "userPlayer", "botPlayer",
+            "players",
             "guesses", "profile", "profile.user", "guestProfile", "guestProfile.user"
     })
     @Query("""
@@ -52,7 +52,7 @@ public interface ActiveMatchRepository extends JpaRepository<ActiveMatchModel, S
     );
 
     @EntityGraph(type = EntityGraph.EntityGraphType.LOAD, attributePaths = {
-            "userPlayer", "botPlayer",
+            "players",
             "guesses", "profile", "profile.user", "guestProfile", "guestProfile.user"
     })
     Optional<ActiveMatchModel> findByJoinCodeAndGameMode(String joinCode, GameModes gameMode);
@@ -60,14 +60,29 @@ public interface ActiveMatchRepository extends JpaRepository<ActiveMatchModel, S
     List<ActiveMatchModel> findByProfile_IdAndStatusNot(String profileId, MatchStatus status);
 
     @EntityGraph(type = EntityGraph.EntityGraphType.LOAD, attributePaths = {
-            "userPlayer", "botPlayer",
+            "players",
+            "guesses", "profile", "profile.user", "guestProfile", "guestProfile.user"
+    })
+    @Query("""
+            SELECT m FROM ActiveMatchModel m
+            WHERE m.profile.id = :profileId
+              AND m.gameMode = :gameMode
+            ORDER BY m.createdAt DESC
+            """)
+    List<ActiveMatchModel> findAllByProfileIdAndGameMode(
+            @Param("profileId") String profileId,
+            @Param("gameMode") GameModes gameMode
+    );
+
+    @EntityGraph(type = EntityGraph.EntityGraphType.LOAD, attributePaths = {
+            "players",
             "guesses", "profile", "profile.user", "guestProfile", "guestProfile.user"
     })
     @Query("SELECT m FROM ActiveMatchModel m WHERE m.id = :matchId")
     Optional<ActiveMatchModel> findDetailedById(@Param("matchId") String matchId);
 
     @EntityGraph(type = EntityGraph.EntityGraphType.LOAD, attributePaths = {
-            "userPlayer", "botPlayer",
+            "players",
             "guesses", "profile", "profile.user", "guestProfile", "guestProfile.user"
     })
     @Query("""
