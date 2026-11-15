@@ -4,6 +4,9 @@ public record FriendMatchParticipantDto(
         String userId,
         String username,
         boolean teamReady,
-        int timeoutPenalties
+        int timeoutPenalties,
+        boolean hasCustomAvatar,
+        Integer favoritePokedexNumber,
+        long avatarVersion
 ) {
 }

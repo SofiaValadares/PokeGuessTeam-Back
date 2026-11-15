@@ -92,10 +92,16 @@ public class SecurityLabController {
     public ResponseEntity<byte[]> downloadSample(@PathVariable String id) {
         securityLabService.assertLabEnabled();
         var sample = com.svc.pokeguessteam.securitylab.StegoSampleImages.load(id);
+        MediaType mediaType;
+        try {
+            mediaType = MediaType.parseMediaType(sample.contentType());
+        } catch (Exception e) {
+            mediaType = MediaType.IMAGE_PNG;
+        }
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + sample.filename() + "\"")
-                .contentType(MediaType.IMAGE_PNG)
-                .body(sample.pngBytes());
+                .contentType(mediaType)
+                .body(sample.bytes());
     }
 
     @PostMapping("/attacks/brute-force")
