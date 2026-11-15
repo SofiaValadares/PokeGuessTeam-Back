@@ -38,7 +38,15 @@ public final class SecurityLabDtos {
     public record StegoExtractResponse(String message) {
     }
 
-    public record AttackRequest(String plaintext, String seed, Integer searchableBits) {
+    public record AttackRequest(
+            String plaintext,
+            String seed,
+            Integer searchableBits,
+            Long maxSearchDurationMs,
+            Integer differentialBitPosition,
+            Integer differentialBitCount,
+            Integer sampleCount
+    ) {
     }
 
     public record BruteForceResponse(
@@ -46,6 +54,13 @@ public final class SecurityLabDtos {
             long attempted,
             boolean found,
             long elapsedMs,
+            boolean timeLimited,
+            double attemptsPerSecond,
+            double expectedSecondsAtObservedRate,
+            double worstCaseSecondsAtObservedRate,
+            double expectedSecondsAtPowerfulRate,
+            double worstCaseSecondsAtPowerfulRate,
+            String powerfulMachineAssessment,
             String viability,
             String recoveredSeedHint
     ) {
@@ -54,6 +69,8 @@ public final class SecurityLabDtos {
     public record DifferentialResponse(
             String originalCipherBase64,
             String flippedCipherBase64,
+            List<Integer> flippedBitPositions,
+            int flippedBitCount,
             int changedBits,
             int totalBitsCompared,
             double avalanchePercent,
@@ -61,11 +78,20 @@ public final class SecurityLabDtos {
     ) {
     }
 
+    public record DifferentialSamplesRequest(String plaintext, String seed, Integer sampleCount) {
+    }
+
+    public record DifferentialSamplesResponse(List<DifferentialResponse> samples) {
+    }
+
     public record StatisticalResponse(
+            int sampleCount,
             int sampleBytes,
             Map<String, Integer> topFrequencies,
             double chiSquare,
             double uniformExpected,
+            double pValue,
+            boolean sufficientSample,
             boolean looksUniform,
             String analysis
     ) {

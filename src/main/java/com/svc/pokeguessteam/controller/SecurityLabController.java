@@ -120,6 +120,16 @@ public class SecurityLabController {
         return ResponseEntity.ok(securityLabService.differential(currentUserService.requireUserId(session), body));
     }
 
+    @PostMapping("/attacks/differential/samples")
+    public ResponseEntity<SecurityLabDtos.DifferentialSamplesResponse> differentialSamples(
+            HttpSession session,
+            @RequestBody SecurityLabDtos.DifferentialSamplesRequest body
+    ) {
+        return ResponseEntity.ok(
+                securityLabService.differentialSamples(currentUserService.requireUserId(session), body)
+        );
+    }
+
     @PostMapping("/attacks/statistical")
     public ResponseEntity<SecurityLabDtos.StatisticalResponse> statistical(
             HttpSession session,

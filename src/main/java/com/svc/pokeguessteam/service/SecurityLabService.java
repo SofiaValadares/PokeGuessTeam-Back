@@ -154,13 +154,26 @@ public class SecurityLabService {
         var r = attackLabService.bruteForce(
                 req.plaintext() == null ? "poke" : req.plaintext(),
                 req.seed(),
-                req.searchableBits() == null ? 12 : req.searchableBits()
+                req.searchableBits() == null ? 12 : req.searchableBits(),
+                req.maxSearchDurationMs()
         );
         persist(userId, SecurityLabEventType.ATTACK_BRUTE, "Ataque força bruta lab",
                 "{\"attempted\":" + r.attempted() + ",\"found\":" + r.found() + "}",
                 (double) r.attempted());
         return new SecurityLabDtos.BruteForceResponse(
-                r.keySpaceBits(), r.attempted(), r.found(), r.elapsedMs(), r.viability(), r.recoveredSeedHint()
+                r.keySpaceBits(),
+                r.attempted(),
+                r.found(),
+                r.elapsedMs(),
+                r.timeLimited(),
+                r.attemptsPerSecond(),
+                r.expectedSecondsAtObservedRate(),
+                r.worstCaseSecondsAtObservedRate(),
+                r.expectedSecondsAtPowerfulRate(),
+                r.worstCaseSecondsAtPowerfulRate(),
+                r.powerfulMachineAssessment(),
+                r.viability(),
+                r.recoveredSeedHint()
         );
     }
 
@@ -169,16 +182,53 @@ public class SecurityLabService {
         assertLabEnabled();
         var r = attackLabService.differential(
                 req.plaintext() == null || req.plaintext().isBlank() ? "Pikachu" : req.plaintext(),
-                req.seed()
+                req.seed(),
+                req.differentialBitPosition() == null ? 1 : req.differentialBitPosition(),
+                req.differentialBitCount() == null ? 1 : req.differentialBitCount()
         );
         persist(userId, SecurityLabEventType.ATTACK_DIFFERENTIAL,
-                "Ataque diferencial — avalanche " + r.avalanchePercent() + "%",
-                "{\"avalanchePercent\":" + r.avalanchePercent() + "}",
+                "Ataque diferencial — " + r.flippedBitCount() + " bit(s), avalanche "
+                        + r.avalanchePercent() + "%",
+                "{\"flippedBitPositions\":" + r.flippedBitPositions()
+                        + ",\"flippedBitCount\":" + r.flippedBitCount()
+                        + ",\"avalanchePercent\":" + r.avalanchePercent() + "}",
                 r.avalanchePercent());
         return new SecurityLabDtos.DifferentialResponse(
-                r.originalCipherBase64(), r.flippedCipherBase64(), r.changedBits(),
+                r.originalCipherBase64(), r.flippedCipherBase64(), r.flippedBitPositions(), r.flippedBitCount(),
+                r.changedBits(),
                 r.totalBitsCompared(), r.avalanchePercent(), r.strongAvalanche()
         );
+    }
+
+    @Transactional
+    public SecurityLabDtos.DifferentialSamplesResponse differentialSamples(
+            String userId,
+            SecurityLabDtos.DifferentialSamplesRequest req
+    ) {
+        assertLabEnabled();
+        List<CryptoAttackLabService.DifferentialResult> results = attackLabService.differentialSamples(
+                req.plaintext() == null || req.plaintext().isBlank() ? "Pikachu" : req.plaintext(),
+                req.seed(),
+                req.sampleCount() == null ? 1 : req.sampleCount()
+        );
+        List<SecurityLabDtos.DifferentialResponse> samples = results.stream()
+                .map(r -> new SecurityLabDtos.DifferentialResponse(
+                        r.originalCipherBase64(), r.flippedCipherBase64(), r.flippedBitPositions(),
+                        r.flippedBitCount(), r.changedBits(), r.totalBitsCompared(),
+                        r.avalanchePercent(), r.strongAvalanche()
+                ))
+                .toList();
+        double averageAvalanche = results.stream()
+                .mapToDouble(CryptoAttackLabService.DifferentialResult::avalanchePercent)
+                .average()
+                .orElse(0);
+        persist(userId, SecurityLabEventType.ATTACK_DIFFERENTIAL,
+                "Ataque diferencial — " + samples.size() + " amostras bit-a-bit, avalanche média "
+                        + Math.round(averageAvalanche * 100.0) / 100.0 + "%",
+                "{\"sampleCount\":" + samples.size()
+                        + ",\"averageAvalanchePercent\":" + averageAvalanche + "}",
+                averageAvalanche);
+        return new SecurityLabDtos.DifferentialSamplesResponse(samples);
     }
 
     @Transactional
@@ -188,15 +238,20 @@ public class SecurityLabService {
                 req.plaintext() == null || req.plaintext().isBlank()
                         ? "The quick brown fox jumps over the lazy pokemon trainer 0123456789"
                         : req.plaintext(),
-                req.seed()
+                req.seed(),
+                req.sampleCount() == null ? 100 : req.sampleCount()
         );
         persist(userId, SecurityLabEventType.ATTACK_STATISTICAL,
-                "Ataque estatístico — chi²=" + r.chiSquare(),
-                "{\"chiSquare\":" + r.chiSquare() + ",\"uniform\":" + r.looksUniform() + "}",
+                "Ataque estatístico — " + r.sampleCount() + " amostras, chi²=" + r.chiSquare()
+                        + ", p=" + r.pValue(),
+                "{\"sampleCount\":" + r.sampleCount() + ",\"sampleBytes\":" + r.sampleBytes()
+                        + ",\"chiSquare\":" + r.chiSquare() + ",\"pValue\":" + r.pValue()
+                        + ",\"sufficientSample\":" + r.sufficientSample()
+                        + ",\"noSignificantDeviation\":" + r.looksUniform() + "}",
                 r.chiSquare());
         return new SecurityLabDtos.StatisticalResponse(
-                r.sampleBytes(), r.topFrequencies(), r.chiSquare(),
-                r.uniformExpected(), r.looksUniform(), r.analysis()
+                r.sampleCount(), r.sampleBytes(), r.topFrequencies(), r.chiSquare(),
+                r.uniformExpected(), r.pValue(), r.sufficientSample(), r.looksUniform(), r.analysis()
         );
     }
 
@@ -251,7 +306,7 @@ public class SecurityLabService {
         long brute = totals.getOrDefault(SecurityLabEventType.ATTACK_BRUTE.name(), 0L);
         long stat = totals.getOrDefault(SecurityLabEventType.ATTACK_STATISTICAL.name(), 0L);
         long anomalies = totals.getOrDefault(SecurityLabEventType.ANOMALY.name(), 0L);
-        return "Cipher didático lab: chave dinâmica + XOR/S-box/P-box/blocos. "
+        return "Cipher didático lab: chave dinâmica + XOR e 4 rodadas de S-box/ShiftRows/MixColumns/subchave. "
                 + "Força bruta só é eficaz em espaço reduzido; chave de 256 bits é inviável. "
                 + "Avalanche (diferencial) e qui-quadrado (estatístico) medem difusão/confusão. "
                 + "AES-GCM do jogo permanece a camada forte. "

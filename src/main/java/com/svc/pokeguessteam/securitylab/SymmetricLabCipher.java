@@ -11,7 +11,8 @@ import java.util.Base64;
 import java.util.HexFormat;
 
 /**
- * Cipher didático (Unidade 2): chave dinâmica + XOR + substituição + permutação em blocos.
+ * Cipher didático (Unidade 2): XOR + quatro rodadas de substituição e difusão em blocos.
+ * A estrutura inspira uma rede de substituição-permutação, mas não é AES nem cifra segura.
  * Não substitui AES-GCM de produção.
  */
 @Component
@@ -19,6 +20,7 @@ public class SymmetricLabCipher {
 
     public static final int BLOCK_SIZE = 16;
     public static final int KEY_BYTES = 32;
+    private static final int DIFFUSION_ROUNDS = 4;
 
     private final SecureRandom secureRandom = new SecureRandom();
 
@@ -66,7 +68,7 @@ public class SymmetricLabCipher {
                 Base64.getEncoder().encodeToString(cipher),
                 km,
                 cipher.length / BLOCK_SIZE,
-                "XOR -> Substituição(S-box) -> Permutação(P-box) / blocos de 16"
+                "XOR -> 4 rodadas de S-box/ShiftRows/MixColumns/subchave / blocos de 16 (didático)"
         );
     }
 
@@ -78,7 +80,7 @@ public class SymmetricLabCipher {
     public byte[] encryptBytes(byte[] plain, byte[] key) {
         byte[] padded = pkcs7Pad(plain);
         byte[] sbox = buildSBox(key);
-        int[] pbox = buildPBox(key);
+        byte[][] roundKeys = buildRoundKeys(key);
         byte[] keystream = expandKeystream(key, padded.length);
         byte[] out = new byte[padded.length];
 
@@ -87,10 +89,12 @@ public class SymmetricLabCipher {
             for (int i = 0; i < BLOCK_SIZE; i++) {
                 block[i] ^= keystream[offset + i];
             }
-            for (int i = 0; i < BLOCK_SIZE; i++) {
-                block[i] = sbox[block[i] & 0xFF];
+            for (int round = 0; round < DIFFUSION_ROUNDS; round++) {
+                substituteBytes(block, sbox);
+                block = shiftRows(block, false);
+                mixColumns(block, false);
+                xorRoundKey(block, roundKeys[round]);
             }
-            block = applyPerm(block, pbox);
             System.arraycopy(block, 0, out, offset, BLOCK_SIZE);
         }
         return out;
@@ -102,16 +106,17 @@ public class SymmetricLabCipher {
         }
         byte[] sbox = buildSBox(key);
         byte[] invSbox = invertSBox(sbox);
-        int[] pbox = buildPBox(key);
-        int[] invPbox = invertPBox(pbox);
+        byte[][] roundKeys = buildRoundKeys(key);
         byte[] keystream = expandKeystream(key, cipher.length);
         byte[] out = new byte[cipher.length];
 
         for (int offset = 0; offset < cipher.length; offset += BLOCK_SIZE) {
             byte[] block = Arrays.copyOfRange(cipher, offset, offset + BLOCK_SIZE);
-            block = applyPerm(block, invPbox);
-            for (int i = 0; i < BLOCK_SIZE; i++) {
-                block[i] = invSbox[block[i] & 0xFF];
+            for (int round = DIFFUSION_ROUNDS - 1; round >= 0; round--) {
+                xorRoundKey(block, roundKeys[round]);
+                mixColumns(block, true);
+                block = shiftRows(block, true);
+                substituteBytes(block, invSbox);
             }
             for (int i = 0; i < BLOCK_SIZE; i++) {
                 block[i] ^= keystream[offset + i];
@@ -121,13 +126,84 @@ public class SymmetricLabCipher {
         return pkcs7Unpad(out);
     }
 
-    /** out[i] = in[perm[i]] */
-    private static byte[] applyPerm(byte[] in, int[] perm) {
-        byte[] out = new byte[in.length];
-        for (int i = 0; i < in.length; i++) {
-            out[i] = in[perm[i]];
+    private static void substituteBytes(byte[] state, byte[] sbox) {
+        for (int i = 0; i < state.length; i++) {
+            state[i] = sbox[state[i] & 0xFF];
         }
-        return out;
+    }
+
+    /** Rotaciona cada linha do estado 4x4; o sentido inverso desfaz a transformação. */
+    private static byte[] shiftRows(byte[] state, boolean inverse) {
+        byte[] shifted = new byte[BLOCK_SIZE];
+        for (int row = 0; row < 4; row++) {
+            for (int column = 0; column < 4; column++) {
+                int sourceColumn = inverse
+                        ? (column - row + 4) % 4
+                        : (column + row) % 4;
+                shifted[row + 4 * column] = state[row + 4 * sourceColumn];
+            }
+        }
+        return shifted;
+    }
+
+    /** Mistura os quatro bytes de cada coluna sobre GF(2^8), como etapa didática de difusão. */
+    private static void mixColumns(byte[] state, boolean inverse) {
+        for (int column = 0; column < 4; column++) {
+            int offset = column * 4;
+            int a0 = state[offset] & 0xFF;
+            int a1 = state[offset + 1] & 0xFF;
+            int a2 = state[offset + 2] & 0xFF;
+            int a3 = state[offset + 3] & 0xFF;
+
+            if (inverse) {
+                state[offset] = (byte) (gfMultiply(a0, 14) ^ gfMultiply(a1, 11)
+                        ^ gfMultiply(a2, 13) ^ gfMultiply(a3, 9));
+                state[offset + 1] = (byte) (gfMultiply(a0, 9) ^ gfMultiply(a1, 14)
+                        ^ gfMultiply(a2, 11) ^ gfMultiply(a3, 13));
+                state[offset + 2] = (byte) (gfMultiply(a0, 13) ^ gfMultiply(a1, 9)
+                        ^ gfMultiply(a2, 14) ^ gfMultiply(a3, 11));
+                state[offset + 3] = (byte) (gfMultiply(a0, 11) ^ gfMultiply(a1, 13)
+                        ^ gfMultiply(a2, 9) ^ gfMultiply(a3, 14));
+            } else {
+                state[offset] = (byte) (gfMultiply(a0, 2) ^ gfMultiply(a1, 3) ^ a2 ^ a3);
+                state[offset + 1] = (byte) (a0 ^ gfMultiply(a1, 2) ^ gfMultiply(a2, 3) ^ a3);
+                state[offset + 2] = (byte) (a0 ^ a1 ^ gfMultiply(a2, 2) ^ gfMultiply(a3, 3));
+                state[offset + 3] = (byte) (gfMultiply(a0, 3) ^ a1 ^ a2 ^ gfMultiply(a3, 2));
+            }
+        }
+    }
+
+    private static int gfMultiply(int value, int factor) {
+        int product = 0;
+        int multiplicand = value;
+        int multiplier = factor;
+        for (int bit = 0; bit < 8; bit++) {
+            if ((multiplier & 1) != 0) product ^= multiplicand;
+            boolean highBit = (multiplicand & 0x80) != 0;
+            multiplicand = (multiplicand << 1) & 0xFF;
+            if (highBit) multiplicand ^= 0x1B;
+            multiplier >>>= 1;
+        }
+        return product & 0xFF;
+    }
+
+    private static void xorRoundKey(byte[] state, byte[] roundKey) {
+        for (int i = 0; i < BLOCK_SIZE; i++) {
+            state[i] ^= roundKey[i];
+        }
+    }
+
+    private static byte[][] buildRoundKeys(byte[] key) {
+        byte[][] roundKeys = new byte[DIFFUSION_ROUNDS][BLOCK_SIZE];
+        byte[] domain = "lab-diffusion-round".getBytes(StandardCharsets.US_ASCII);
+        for (int round = 0; round < DIFFUSION_ROUNDS; round++) {
+            ByteBuffer material = ByteBuffer.allocate(key.length + domain.length + Integer.BYTES)
+                    .put(key)
+                    .put(domain)
+                    .putInt(round);
+            roundKeys[round] = Arrays.copyOf(sha256(material.array()), BLOCK_SIZE);
+        }
+        return roundKeys;
     }
 
     private static byte[] pkcs7Pad(byte[] input) {
@@ -171,29 +247,6 @@ public class SymmetricLabCipher {
         byte[] inv = new byte[256];
         for (int i = 0; i < 256; i++) {
             inv[sbox[i] & 0xFF] = (byte) i;
-        }
-        return inv;
-    }
-
-    private static int[] buildPBox(byte[] key) {
-        int[] box = new int[BLOCK_SIZE];
-        for (int i = 0; i < BLOCK_SIZE; i++) box[i] = i;
-        // Fisher–Yates
-        for (int i = BLOCK_SIZE - 1; i > 0; i--) {
-            int j = (key[i % key.length] & 0xFF) % (i + 1);
-            // misturar com mais bytes da chave
-            j = (j + (key[(i * 3) % key.length] & 0xFF)) % (i + 1);
-            int t = box[i];
-            box[i] = box[j];
-            box[j] = t;
-        }
-        return box;
-    }
-
-    private static int[] invertPBox(int[] pbox) {
-        int[] inv = new int[pbox.length];
-        for (int i = 0; i < pbox.length; i++) {
-            inv[pbox[i]] = i;
         }
         return inv;
     }
