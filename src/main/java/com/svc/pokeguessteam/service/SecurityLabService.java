@@ -162,6 +162,8 @@ public class SecurityLabService {
                 (double) r.attempted());
         return new SecurityLabDtos.BruteForceResponse(
                 r.keySpaceBits(),
+                r.ciphertextBase64(),
+                r.nonceBase64(),
                 r.attempted(),
                 r.found(),
                 r.elapsedMs(),
@@ -194,7 +196,8 @@ public class SecurityLabService {
                         + ",\"avalanchePercent\":" + r.avalanchePercent() + "}",
                 r.avalanchePercent());
         return new SecurityLabDtos.DifferentialResponse(
-                r.originalCipherBase64(), r.flippedCipherBase64(), r.flippedBitPositions(), r.flippedBitCount(),
+                r.originalCipherBase64(), r.flippedCipherBase64(), r.nonceBase64(),
+                r.flippedBitPositions(), r.flippedBitCount(),
                 r.changedBits(),
                 r.totalBitsCompared(), r.avalanchePercent(), r.strongAvalanche()
         );
@@ -213,7 +216,7 @@ public class SecurityLabService {
         );
         List<SecurityLabDtos.DifferentialResponse> samples = results.stream()
                 .map(r -> new SecurityLabDtos.DifferentialResponse(
-                        r.originalCipherBase64(), r.flippedCipherBase64(), r.flippedBitPositions(),
+                        r.originalCipherBase64(), r.flippedCipherBase64(), r.nonceBase64(), r.flippedBitPositions(),
                         r.flippedBitCount(), r.changedBits(), r.totalBitsCompared(),
                         r.avalanchePercent(), r.strongAvalanche()
                 ))
@@ -250,7 +253,12 @@ public class SecurityLabService {
                         + ",\"noSignificantDeviation\":" + r.looksUniform() + "}",
                 r.chiSquare());
         return new SecurityLabDtos.StatisticalResponse(
-                r.sampleCount(), r.sampleBytes(), r.topFrequencies(), r.chiSquare(),
+                r.sampleCount(), r.sampleBytes(),
+                r.ciphertexts().stream()
+                        .map(sample -> new SecurityLabDtos.CiphertextSample(
+                                sample.ciphertextBase64(), sample.nonceBase64()))
+                        .toList(),
+                r.topFrequencies(), r.chiSquare(),
                 r.uniformExpected(), r.pValue(), r.sufficientSample(), r.looksUniform(), r.analysis()
         );
     }

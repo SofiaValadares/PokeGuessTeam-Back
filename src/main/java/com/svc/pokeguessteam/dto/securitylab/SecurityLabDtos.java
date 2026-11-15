@@ -51,6 +51,8 @@ public final class SecurityLabDtos {
 
     public record BruteForceResponse(
             long keySpaceBits,
+            String ciphertextBase64,
+            String nonceBase64,
             long attempted,
             boolean found,
             long elapsedMs,
@@ -69,6 +71,7 @@ public final class SecurityLabDtos {
     public record DifferentialResponse(
             String originalCipherBase64,
             String flippedCipherBase64,
+            String nonceBase64,
             List<Integer> flippedBitPositions,
             int flippedBitCount,
             int changedBits,
@@ -84,9 +87,13 @@ public final class SecurityLabDtos {
     public record DifferentialSamplesResponse(List<DifferentialResponse> samples) {
     }
 
+    public record CiphertextSample(String ciphertextBase64, String nonceBase64) {
+    }
+
     public record StatisticalResponse(
             int sampleCount,
             int sampleBytes,
+            List<CiphertextSample> ciphertexts,
             Map<String, Integer> topFrequencies,
             double chiSquare,
             double uniformExpected,

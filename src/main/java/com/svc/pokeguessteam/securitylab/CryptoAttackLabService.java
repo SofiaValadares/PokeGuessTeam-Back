@@ -44,6 +44,8 @@ public class CryptoAttackLabService {
 
     public record BruteForceResult(
             long keySpaceBits,
+            String ciphertextBase64,
+            String nonceBase64,
             long attempted,
             boolean found,
             long elapsedMs,
@@ -62,6 +64,7 @@ public class CryptoAttackLabService {
     public record DifferentialResult(
             String originalCipherBase64,
             String flippedCipherBase64,
+            String nonceBase64,
             List<Integer> flippedBitPositions,
             int flippedBitCount,
             int changedBits,
@@ -77,6 +80,7 @@ public class CryptoAttackLabService {
     public record StatisticalResult(
             int sampleCount,
             int sampleBytes,
+            List<CiphertextSample> ciphertexts,
             Map<String, Integer> topFrequencies,
             double chiSquare,
             double uniformExpected,
@@ -85,6 +89,9 @@ public class CryptoAttackLabService {
             boolean looksUniform,
             String analysis
     ) {
+    }
+
+    public record CiphertextSample(String ciphertextBase64, String nonceBase64) {
     }
 
     public BruteForceResult bruteForce(String plaintext, String ignoredSeed, int searchableBits) {
@@ -159,6 +166,8 @@ public class CryptoAttackLabService {
         }
         return new BruteForceResult(
                 bits,
+                encrypted.ciphertextBase64(),
+                encrypted.keyMaterial().nonceBase64(),
                 attempted,
                 found,
                 elapsedMs,
@@ -245,6 +254,7 @@ public class CryptoAttackLabService {
         return new DifferentialResult(
                 java.util.Base64.getEncoder().encodeToString(c1),
                 java.util.Base64.getEncoder().encodeToString(c2),
+                km.nonceBase64(),
                 flippedBitPositions,
                 flippedBitCount,
                 changed,
@@ -294,6 +304,7 @@ public class CryptoAttackLabService {
             results.add(new DifferentialResult(
                     originalCipherBase64,
                     java.util.Base64.getEncoder().encodeToString(modifiedCipher),
+                    keyMaterial.nonceBase64(),
                     List.of(bitPosition),
                     1,
                     changedBits,
@@ -368,8 +379,13 @@ public class CryptoAttackLabService {
         int sampleCount = Math.min(100, Math.max(1, requestedSampleCount));
         String samplePlaintext = plaintext == null ? "" : plaintext;
         ByteArrayOutputStream combinedCiphertexts = new ByteArrayOutputStream();
+        List<CiphertextSample> ciphertexts = new ArrayList<>(sampleCount);
         for (int sample = 0; sample < sampleCount; sample++) {
             var encryptedSample = cipher.encrypt(samplePlaintext, seed);
+            ciphertexts.add(new CiphertextSample(
+                    encryptedSample.ciphertextBase64(),
+                    encryptedSample.keyMaterial().nonceBase64()
+            ));
             combinedCiphertexts.writeBytes(
                     java.util.Base64.getDecoder().decode(encryptedSample.ciphertextBase64())
             );
@@ -405,6 +421,7 @@ public class CryptoAttackLabService {
         return new StatisticalResult(
                 sampleCount,
                 data.length,
+                List.copyOf(ciphertexts),
                 top,
                 Math.round(chi * 100.0) / 100.0,
                 Math.round(expected * 1000.0) / 1000.0,
