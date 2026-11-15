@@ -290,6 +290,7 @@ public class FriendMatchService {
 
         saveMatch(match);
         GameHistoryEntryDto history = finalizeIfFinished(match, null);
+        publishFinishedIfNeeded(match, history);
 
         List<BotMatchGuessFeedbackDto> feedbacks = List.of(toFeedback(result, pokemonByDex));
         FriendMatchStateDto state = toStateDto(match, profile, history, null);
@@ -341,6 +342,7 @@ public class FriendMatchService {
 
         saveMatch(match);
         GameHistoryEntryDto history = finalizeIfFinished(match, null);
+        publishFinishedIfNeeded(match, history);
 
         List<BotMatchGuessFeedbackDto> feedbacks = List.of(toFeedback(result, pokemonByDex));
         FriendMatchStateDto state = toStateDto(match, profile, history, null);
@@ -354,7 +356,7 @@ public class FriendMatchService {
         return new FriendMatchActionResponse(state, feedbacks, reward);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public Optional<FriendMatchStateDto> findActiveMatch(String userId) {
         ProfileModel profile = profileService.ensureProfileWithStarters(userId);
         return friendMatchStore.findActiveForProfile(profile.getId())
@@ -362,6 +364,13 @@ public class FriendMatchService {
                     GameHistoryEntryDto history = null;
                     if (match.getStatus() == MatchStatus.FINISHED) {
                         history = friendMatchStore.findFinishedHistory(match.getId()).orElse(null);
+                        if (history == null) {
+                            MatchPlayerSide surrenderSide = match.getWinner() != null
+                                    ? match.getOpponentSide(match.getWinner())
+                                    : null;
+                            history = finalizeIfFinished(match, surrenderSide);
+                            publishFinishedIfNeeded(match, history);
+                        }
                     }
                     return toStateDto(match, profile, history);
                 });
@@ -406,6 +415,7 @@ public class FriendMatchService {
         saveMatch(match);
 
         GameHistoryEntryDto history = finalizeIfFinished(match, side);
+        publishFinishedIfNeeded(match, history);
         FriendMatchStateDto surrendererView = toStateDto(match, profile, history, side);
 
         MatchRewardDto reward = completeIfFinished(match, side, userId);
@@ -434,7 +444,21 @@ public class FriendMatchService {
                 return;
             }
             if (match.getStatus() == MatchStatus.ACTIVE) {
-                surrender(userId);
+                try {
+                    surrender(userId);
+                } catch (RuntimeException ex) {
+                    // Desistir a qualquer momento: se o finalize do commitment falhar,
+                    // ainda tenta gravar histórico e limpa a partida (XSS lab / leave).
+                    MatchPlayerSide side = resolveSide(match, profile);
+                    MatchEngine.finishBySurrender(match, side);
+                    try {
+                        finalizeIfFinished(match, side);
+                    } catch (RuntimeException ignored) {
+                        // commitment irrecuperável — remove na mesma
+                    }
+                    friendMatchStore.remove(match.getId());
+                    activeMatchConstraintService.clearStaleClientSideMatches(profile.getId());
+                }
                 return;
             }
             if (match.getStatus() == MatchStatus.FINISHED) {
@@ -450,20 +474,27 @@ public class FriendMatchService {
         if (match.getStatus() != MatchStatus.FINISHED) {
             return null;
         }
-        teamCommitmentService.verifyOpening(
-                match.getHostPlayer(),
-                new TeamOpeningDto(match.getHostPlayer().getTeam(), teamCommitmentService.nonceOf(match.getHostPlayer()))
-        );
-        teamCommitmentService.verifyOpening(
-                match.getOpponentPlayer(),
-                new TeamOpeningDto(
-                        match.getOpponentPlayer().getTeam(),
-                        teamCommitmentService.nonceOf(match.getOpponentPlayer())
-                )
-        );
+        GameHistoryEntryDto existing = friendMatchStore.findFinishedHistory(match.getId()).orElse(null);
+        if (existing != null) {
+            return existing;
+        }
+        // Abre o payload selado (AES) em vez de re-comparar getTeam() — evita
+        // GAME_TEAM_COMMITMENT_INVALID se a lista em memória divergir da ordem selada.
+        try {
+            teamCommitmentService.openSealed(match.getHostPlayer());
+            teamCommitmentService.openSealed(match.getOpponentPlayer());
+        } catch (RuntimeException ignored) {
+            // Commitment irrecuperável (lab XSS / edge): histórico usa o time em memória.
+        }
         GameHistoryEntryDto history = gameHistoryService.saveFriendGameFromActiveMatch(match, surrenderSide);
         friendMatchStore.rememberFinishedHistory(match.getId(), history);
         return history;
+    }
+
+    private void publishFinishedIfNeeded(ActiveMatchModel match, GameHistoryEntryDto history) {
+        if (match.getStatus() == MatchStatus.FINISHED && history != null) {
+            pushRealtime(match, history);
+        }
     }
 
     private MatchRewardDto completeIfFinished(
@@ -657,7 +688,10 @@ public class FriendMatchService {
 
     private ActiveMatchModel saveMatch(ActiveMatchModel match) {
         friendMatchStore.save(match);
-        pushRealtime(match, null);
+        // Não publicar FINISHED sem historyEntry — o cliente fica preso em "A guardar resultado…".
+        if (match.getStatus() != MatchStatus.FINISHED) {
+            pushRealtime(match, null);
+        }
         return match;
     }
 

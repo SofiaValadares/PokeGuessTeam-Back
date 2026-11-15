@@ -2,7 +2,6 @@ package com.svc.pokeguessteam.model.user;
 
 import com.svc.pokeguessteam.model.enums.AvatarMode;
 import com.svc.pokeguessteam.model.pokemon.PokemonModel;
-import jakarta.persistence.Basic;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -13,13 +12,14 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.Lob;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import org.hibernate.annotations.ColumnDefault;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -74,9 +74,9 @@ public class ProfileModel {
     @ColumnDefault("'POKEMON'")
     private AvatarMode avatarMode = AvatarMode.POKEMON;
 
-    @Lob
-    @Basic(fetch = FetchType.LAZY)
-    @Column(name = "AVATAR_CUSTOM_BYTES")
+    /** BYTEA — evitar @Lob/OID no PostgreSQL (falha com open-in-view=false). */
+    @JdbcTypeCode(SqlTypes.BINARY)
+    @Column(name = "AVATAR_CUSTOM_BYTES", columnDefinition = "BYTEA")
     private byte[] avatarCustomBytes;
 
     @Column(name = "AVATAR_CONTENT_TYPE", length = 64)

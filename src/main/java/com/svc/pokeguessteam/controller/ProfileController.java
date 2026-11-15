@@ -18,6 +18,7 @@ import jakarta.servlet.http.HttpSession;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -55,6 +56,7 @@ public class ProfileController {
     }
 
     @GetMapping("/me")
+    @Transactional(readOnly = true)
     public ResponseEntity<Map<String, Object>> me(HttpSession session) {
         String userId = currentUserService.requireUserId(session);
         ProfileModel profile = profileService.ensureProfileWithStarters(userId);
@@ -69,8 +71,17 @@ public class ProfileController {
             body.put("favoritePokemonName", null);
         }
         body.put("avatarMode", profile.getAvatarMode().name());
-        body.put("hasCustomAvatar", profile.getAvatarCustomBytes() != null && profile.getAvatarCustomBytes().length > 0);
-        body.put("avatarUrl", "/api/profile/avatar/" + userId);
+        boolean hasCustom =
+                profile.getAvatarMode() == com.svc.pokeguessteam.model.enums.AvatarMode.CUSTOM
+                        && profile.getAvatarCustomBytes() != null
+                        && profile.getAvatarCustomBytes().length > 0;
+        long avatarVersion = com.svc.pokeguessteam.service.ProfileService.avatarContentVersion(
+                profile.getAvatarCustomBytes());
+        body.put("hasCustomAvatar", hasCustom);
+        body.put("avatarVersion", avatarVersion);
+        body.put("avatarUrl", hasCustom
+                ? "/api/profile/avatar/" + userId + "?v=" + avatarVersion
+                : null);
         body.put("registeredPokedexCount", userPokedexService.countRegistered(profile.getId()));
         return ResponseEntity.ok(body);
     }
@@ -104,10 +115,14 @@ public class ProfileController {
     @GetMapping("/avatar/{userId}")
     public ResponseEntity<byte[]> getAvatar(@PathVariable String userId) {
         return profileService.findCustomAvatar(userId)
-                .map(entry -> ResponseEntity.ok()
-                        .header(org.springframework.http.HttpHeaders.CACHE_CONTROL, "private, max-age=60")
-                        .contentType(org.springframework.http.MediaType.parseMediaType(entry.getKey()))
-                        .body(entry.getValue()))
+                .map(entry -> {
+                    long version = com.svc.pokeguessteam.service.ProfileService.avatarContentVersion(entry.getValue());
+                    return ResponseEntity.ok()
+                            .header(org.springframework.http.HttpHeaders.CACHE_CONTROL, "private, no-cache, must-revalidate")
+                            .header(org.springframework.http.HttpHeaders.ETAG, "\"" + version + "\"")
+                            .contentType(org.springframework.http.MediaType.parseMediaType(entry.getKey()))
+                            .body(entry.getValue());
+                })
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 

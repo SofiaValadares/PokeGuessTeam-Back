@@ -62,7 +62,33 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .headers(headers -> {
                     headers.contentTypeOptions(Customizer.withDefaults());
-                    headers.frameOptions(frame -> frame.deny());
+                    /*
+                     * Avatar SVG e samples do lab são embutidos em <object> same-origin.
+                     * frame-ancestors 'none' / X-Frame-Options: DENY bloqueiam isso e geram
+                     * "Framing … violates … frame-ancestors 'none'" no DevTools.
+                     * Mantemos CSP estrito no resto da API; nestes paths permitimos embed +
+                     * script inline (superfície didática Unidade 2).
+                     */
+                    headers.frameOptions(frame -> frame.disable());
+                    headers.addHeaderWriter((request, response) -> {
+                        String uri = request.getRequestURI() == null ? "" : request.getRequestURI();
+                        boolean embeddableSvg = uri.contains("/api/profile/avatar/")
+                                || uri.contains("/api/dev/security-lab/samples/");
+                        if (embeddableSvg) {
+                            // connect-src 'self' é obrigatório: senão fetch() no SVG → TypeError Failed to fetch
+                            response.setHeader(
+                                    "Content-Security-Policy",
+                                    "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; "
+                                            + "img-src data: blob:; connect-src 'self'; frame-ancestors 'self'"
+                            );
+                        } else {
+                            response.setHeader(
+                                    "Content-Security-Policy",
+                                    "default-src 'none'; frame-ancestors 'none'"
+                            );
+                            response.setHeader("X-Frame-Options", "DENY");
+                        }
+                    });
                     headers.httpStrictTransportSecurity(hsts -> hsts
                             .includeSubDomains(true)
                             .preload(true)
@@ -73,9 +99,6 @@ public class SecurityConfig {
                     ));
                     headers.permissionsPolicy(policy -> policy.policy(
                             "camera=(), microphone=(), geolocation=()"
-                    ));
-                    headers.contentSecurityPolicy(csp -> csp.policyDirectives(
-                            "default-src 'none'; frame-ancestors 'none'"
                     ));
                 })
 

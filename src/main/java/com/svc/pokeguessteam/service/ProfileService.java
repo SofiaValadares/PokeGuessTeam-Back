@@ -140,7 +140,9 @@ public class ProfileService {
         return profileRepository.save(profile);
     }
 
-    private static final int MAX_AVATAR_BYTES = 512 * 1024;
+    private static final int MAX_AVATAR_BYTES = 1024 * 1024;
+    /** SVG com raster em base64 cresce ~33%+. */
+    private static final int MAX_STORED_AVATAR_BYTES = 1536 * 1024;
     private static final int MAX_STEGO_MESSAGE_CHARS = 500;
 
     @Transactional
@@ -150,7 +152,7 @@ public class ProfileService {
 
     /**
      * Upload de avatar. Se {@code hiddenMessage} não for vazio, embute a mensagem via LSB
-     * e grava o PNG resultante (esteganografia no fluxo de perfil do jogador).
+     * (só em raster) e grava tudo como SVG.
      */
     @Transactional
     public ProfileModel uploadCustomAvatar(
@@ -162,77 +164,184 @@ public class ProfileService {
         if (bytes == null || bytes.length == 0) {
             throw new ApiBusinessException(
                     HttpStatus.BAD_REQUEST,
-                    ErrorCodes.VALIDATION_FAILED,
-                    MessageKeys.VALIDATION_SUMMARY
+                    ErrorCodes.PROFILE_AVATAR_UNSUPPORTED_TYPE,
+                    MessageKeys.PROFILE_AVATAR_UNSUPPORTED_TYPE
             );
         }
         if (bytes.length > MAX_AVATAR_BYTES) {
             throw new ApiBusinessException(
                     HttpStatus.BAD_REQUEST,
-                    ErrorCodes.VALIDATION_FAILED,
-                    MessageKeys.VALIDATION_SUMMARY
-            );
-        }
-        String ct = contentType == null ? "image/png" : contentType.toLowerCase();
-        if (!ct.startsWith("image/")) {
-            throw new ApiBusinessException(
-                    HttpStatus.BAD_REQUEST,
-                    ErrorCodes.VALIDATION_FAILED,
-                    MessageKeys.VALIDATION_SUMMARY
+                    ErrorCodes.PROFILE_AVATAR_TOO_LARGE,
+                    MessageKeys.PROFILE_AVATAR_TOO_LARGE
             );
         }
 
-        byte[] toStore = bytes;
-        String storeCt = ct;
+        String sniffed = sniffImageContentType(bytes);
+        String declared = contentType == null ? "" : contentType.toLowerCase().split(";")[0].trim();
+        String ct = sniffed != null
+                ? sniffed
+                : (declared.startsWith("image/") ? declared : null);
+        if (ct == null) {
+            throw new ApiBusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    ErrorCodes.PROFILE_AVATAR_UNSUPPORTED_TYPE,
+                    MessageKeys.PROFILE_AVATAR_UNSUPPORTED_TYPE
+            );
+        }
+
+        /*
+         * Unidade 2 (intencional, por agora): avatares guardam-se como SVG sem sanitizar.
+         * - Upload SVG → bytes crus (superfície XSS se embutido de forma insegura).
+         * - Upload raster → opcional LSB, depois wrap em SVG com <image href="data:...">.
+         */
+        byte[] toStore;
         String message = hiddenMessage == null ? "" : hiddenMessage.trim();
-        if (!message.isEmpty()) {
-            if (message.length() > MAX_STEGO_MESSAGE_CHARS) {
-                throw new ApiBusinessException(
-                        HttpStatus.BAD_REQUEST,
-                        ErrorCodes.PROFILE_STEGO_MESSAGE_TOO_LONG,
-                        MessageKeys.PROFILE_STEGO_MESSAGE_TOO_LONG
-                );
-            }
-            try {
-                var embedded = steganographyService.embedBytes(bytes, message);
-                toStore = java.util.Base64.getDecoder().decode(embedded.imageBase64Png());
-                if (toStore.length > MAX_AVATAR_BYTES) {
-                    throw new ApiBusinessException(
-                            HttpStatus.BAD_REQUEST,
-                            ErrorCodes.VALIDATION_FAILED,
-                            MessageKeys.VALIDATION_SUMMARY
-                    );
-                }
-                storeCt = "image/png";
-                persistStegoEvent(
-                        userId,
-                        SecurityLabEventType.STEGO_EMBED,
-                        "Avatar: mensagem oculta (LSB)",
-                        "{\"usedBits\":" + embedded.usedBits()
-                                + ",\"capacityBits\":" + embedded.capacityBits()
-                                + ",\"source\":\"profile-avatar\"}",
-                        (double) embedded.usedBits()
-                );
-            } catch (ApiBusinessException e) {
-                throw e;
-            } catch (IllegalArgumentException e) {
+        boolean svgUpload = isSvgPayload(ct, bytes);
+
+        if (svgUpload) {
+            if (!message.isEmpty()) {
                 throw new ApiBusinessException(
                         HttpStatus.BAD_REQUEST,
                         ErrorCodes.PROFILE_STEGO_EMBED_FAILED,
                         MessageKeys.PROFILE_STEGO_EMBED_FAILED
                 );
             }
+            toStore = bytes;
+        } else {
+            byte[] raster = bytes;
+            String rasterCt = ct;
+            if (!message.isEmpty()) {
+                if (message.length() > MAX_STEGO_MESSAGE_CHARS) {
+                    throw new ApiBusinessException(
+                            HttpStatus.BAD_REQUEST,
+                            ErrorCodes.PROFILE_STEGO_MESSAGE_TOO_LONG,
+                            MessageKeys.PROFILE_STEGO_MESSAGE_TOO_LONG
+                    );
+                }
+                try {
+                    var embedded = steganographyService.embedBytes(bytes, message);
+                    raster = java.util.Base64.getDecoder().decode(embedded.imageBase64Png());
+                    if (raster.length > MAX_AVATAR_BYTES) {
+                        throw new ApiBusinessException(
+                                HttpStatus.BAD_REQUEST,
+                                ErrorCodes.PROFILE_AVATAR_TOO_LARGE,
+                                MessageKeys.PROFILE_AVATAR_TOO_LARGE
+                        );
+                    }
+                    rasterCt = "image/png";
+                    persistStegoEvent(
+                            userId,
+                            SecurityLabEventType.STEGO_EMBED,
+                            "Avatar: mensagem oculta (LSB)",
+                            "{\"usedBits\":" + embedded.usedBits()
+                                    + ",\"capacityBits\":" + embedded.capacityBits()
+                                    + ",\"source\":\"profile-avatar\"}",
+                            (double) embedded.usedBits()
+                    );
+                } catch (ApiBusinessException e) {
+                    throw e;
+                } catch (IllegalArgumentException e) {
+                    throw new ApiBusinessException(
+                            HttpStatus.BAD_REQUEST,
+                            ErrorCodes.PROFILE_STEGO_EMBED_FAILED,
+                            MessageKeys.PROFILE_STEGO_EMBED_FAILED
+                    );
+                }
+            }
+            toStore = wrapRasterAsSvg(raster, rasterCt);
+        }
+
+        if (toStore.length > MAX_STORED_AVATAR_BYTES) {
+            throw new ApiBusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    ErrorCodes.PROFILE_AVATAR_TOO_LARGE,
+                    MessageKeys.PROFILE_AVATAR_TOO_LARGE
+            );
         }
 
         ProfileModel profile = ensureProfileWithStarters(userId);
         profile.setAvatarCustomBytes(toStore);
-        profile.setAvatarContentType(storeCt);
+        profile.setAvatarContentType("image/svg+xml");
         profile.setAvatarMode(com.svc.pokeguessteam.model.enums.AvatarMode.CUSTOM);
         return profileRepository.save(profile);
     }
 
+    /** Detecta PNG/JPEG/WebP/GIF/SVG pelos magic bytes (ignora Content-Type mentiroso). */
+    static String sniffImageContentType(byte[] bytes) {
+        if (bytes == null || bytes.length < 12) {
+            if (bytes != null && isSvgPayload("", bytes)) {
+                return "image/svg+xml";
+            }
+            return null;
+        }
+        // PNG
+        if (bytes[0] == (byte) 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47) {
+            return "image/png";
+        }
+        // JPEG
+        if (bytes[0] == (byte) 0xFF && bytes[1] == (byte) 0xD8 && bytes[2] == (byte) 0xFF) {
+            return "image/jpeg";
+        }
+        // GIF
+        if (bytes[0] == 'G' && bytes[1] == 'I' && bytes[2] == 'F' && bytes[3] == '8') {
+            return "image/gif";
+        }
+        // WebP: RIFF....WEBP
+        if (bytes[0] == 'R' && bytes[1] == 'I' && bytes[2] == 'F' && bytes[3] == 'F'
+                && bytes[8] == 'W' && bytes[9] == 'E' && bytes[10] == 'B' && bytes[11] == 'P') {
+            return "image/webp";
+        }
+        if (isSvgPayload("", bytes)) {
+            return "image/svg+xml";
+        }
+        return null;
+    }
+
+    static boolean isSvgPayload(String contentType, byte[] bytes) {
+        if (contentType != null && contentType.contains("svg")) {
+            return true;
+        }
+        if (bytes == null || bytes.length < 4) {
+            return false;
+        }
+        String head = new String(bytes, 0, Math.min(bytes.length, 256), java.nio.charset.StandardCharsets.UTF_8)
+                .stripLeading()
+                .toLowerCase();
+        return head.startsWith("<?xml") || head.startsWith("<svg");
+    }
+
+    /**
+     * Converte raster → SVG com a imagem embutida (tudo fica SVG no armazenamento).
+     */
+    static byte[] wrapRasterAsSvg(byte[] rasterBytes, String contentType) {
+        int width = 128;
+        int height = 128;
+        try {
+            java.awt.image.BufferedImage img =
+                    javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(rasterBytes));
+            if (img != null) {
+                width = Math.max(1, img.getWidth());
+                height = Math.max(1, img.getHeight());
+            }
+        } catch (Exception ignored) {
+            // dimensões default
+        }
+        String mime = (contentType == null || contentType.isBlank()) ? "image/png" : contentType;
+        if (!mime.startsWith("image/") || mime.contains("svg")) {
+            mime = "image/png";
+        }
+        String b64 = java.util.Base64.getEncoder().encodeToString(rasterBytes);
+        String svg = """
+                <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="%d" height="%d" viewBox="0 0 %d %d">
+                  <image width="%d" height="%d" href="data:%s;base64,%s"/>
+                </svg>
+                """.formatted(width, height, width, height, width, height, mime, b64);
+        return svg.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    }
+
     /**
      * Extrai mensagem LSB do avatar custom do próprio utilizador.
+     * Se o avatar estiver em SVG (wrap), a LSB está no raster embutido em {@code data:...;base64}.
      */
     @Transactional
     public String extractHiddenMessageFromAvatar(String userId) {
@@ -247,7 +356,8 @@ public class ProfileService {
             );
         }
         try {
-            String msg = steganographyService.extractBytes(profile.getAvatarCustomBytes());
+            byte[] payload = unwrapAvatarRasterBytes(profile.getAvatarCustomBytes());
+            String msg = steganographyService.extractBytes(payload);
             persistStegoEvent(
                     userId,
                     SecurityLabEventType.STEGO_EXTRACT,
@@ -270,6 +380,44 @@ public class ProfileService {
                     MessageKeys.PROFILE_STEGO_EXTRACT_FAILED
             );
         }
+    }
+
+    /** Fingerprint leve do conteúdo do avatar — para cache-bust no cliente. */
+    public static long avatarContentVersion(byte[] bytes) {
+        if (bytes == null || bytes.length == 0) {
+            return 0L;
+        }
+        int h = bytes.length;
+        h = 31 * h + (bytes[0] & 0xff);
+        h = 31 * h + (bytes[bytes.length / 2] & 0xff);
+        h = 31 * h + (bytes[bytes.length - 1] & 0xff);
+        int step = Math.max(1, bytes.length / 8);
+        for (int i = step; i < bytes.length; i += step) {
+            h = 31 * h + (bytes[i] & 0xff);
+        }
+        return Integer.toUnsignedLong(h);
+    }
+
+    /**
+     * Devolve bytes raster para estego: se for SVG com {@code data:image/...;base64,...}, descodifica;
+     * senão devolve os bytes originais (PNG antigo em BD, etc.).
+     */
+    static byte[] unwrapAvatarRasterBytes(byte[] stored) {
+        if (stored == null || stored.length == 0) {
+            throw new IllegalArgumentException("Avatar vazio");
+        }
+        if (!isSvgPayload("image/svg+xml", stored) && !isSvgPayload("", stored)) {
+            return stored;
+        }
+        String svg = new String(stored, java.nio.charset.StandardCharsets.UTF_8);
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("data:image/[a-zA-Z0-9.+-]+;base64,([A-Za-z0-9+/=\\s]+)", java.util.regex.Pattern.CASE_INSENSITIVE)
+                .matcher(svg);
+        if (!m.find()) {
+            throw new IllegalArgumentException("SVG sem imagem embutida para estego");
+        }
+        String b64 = m.group(1).replaceAll("\\s+", "");
+        return java.util.Base64.getDecoder().decode(b64);
     }
 
     private void persistStegoEvent(

@@ -104,18 +104,30 @@ public record FriendMatchStateDto(
             int teamSize,
             int timeoutPenalties
     ) {
+        Integer favorite = profile.getFavoritePokemon() != null
+                ? profile.getFavoritePokemon().getPokedexNumber()
+                : null;
+        boolean hasCustomAvatar =
+                profile.getAvatarMode() == com.svc.pokeguessteam.model.enums.AvatarMode.CUSTOM
+                        && profile.getAvatarCustomBytes() != null
+                        && profile.getAvatarCustomBytes().length > 0;
+        long avatarVersion = com.svc.pokeguessteam.service.ProfileService.avatarContentVersion(
+                profile.getAvatarCustomBytes());
         return new FriendMatchParticipantDto(
                 profile.getUser().getIdUser(),
                 profile.getUser().getUsername(),
                 teamSize >= GameConstants.TEAM_SIZE,
-                timeoutPenalties
+                timeoutPenalties,
+                hasCustomAvatar,
+                favorite,
+                avatarVersion
         );
     }
 
     private static FriendMatchParticipantDto guestParticipant(ActiveMatchModel match) {
         ProfileModel guest = match.getGuestProfile();
         if (guest == null) {
-            return new FriendMatchParticipantDto(null, null, false, 0);
+            return new FriendMatchParticipantDto(null, null, false, 0, false, null, 0L);
         }
         return participant(guest, match.getOpponentPlayer().getTeam().size(), match.getOpponentPlayer().getTurnTimeoutPenalties());
     }
