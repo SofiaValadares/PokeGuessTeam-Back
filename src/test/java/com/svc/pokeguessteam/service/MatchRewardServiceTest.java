@@ -14,14 +14,18 @@ class MatchRewardServiceTest {
     @Test
     void cancelledMatchCompletesWithoutGrantingRewards() {
         ProfileService profileService = mock(ProfileService.class);
-        MatchRewardService service = new MatchRewardService(profileService, new FriendMatchStore());
+        MatchRewardService service = new MatchRewardService(
+                profileService,
+                new FriendMatchStore(),
+                mock(BonusEventService.class)
+        );
         ActiveMatchModel match = new ActiveMatchModel();
         match.setId("cancelled-match");
         match.setGameMode(GameModes.FRIEND);
 
         MatchRewardDto reward = service.completeCancelledMatch(match);
 
-        assertEquals(new MatchRewardDto(0, 0, 0), reward);
+        assertEquals(MatchRewardDto.empty(), reward);
         verifyNoInteractions(profileService);
     }
 }

@@ -13,6 +13,9 @@ public record GameHistoryEntryDto(
         GameModes gameMode,
         LocalDateTime playedAt,
         String opponentName,
+        int anomalyScore,
+        String anomalyReasons,
+        String anomalyAnalysisStatus,
         List<GameHistoryPlayerDto> players
 ) {
     public static GameHistoryEntryDto from(HistoryGameModel game) {
@@ -25,6 +28,9 @@ public record GameHistoryEntryDto(
                 game.getGameMode(),
                 game.getPlayedAt(),
                 game.getOpponentName(),
+                game.getAnomalyScore(),
+                game.getAnomalyReasons(),
+                game.getAnomalyAnalysisStatus(),
                 players
         );
     }

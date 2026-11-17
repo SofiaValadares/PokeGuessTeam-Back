@@ -103,7 +103,7 @@ public class MatchRewardService {
         if (match.getGameMode() != GameModes.FRIEND) {
             throw new IllegalStateException("Partida ativa inesperada: " + match.getGameMode());
         }
-        return friendMatchStore.completeOnce(match.getId(), MatchRewardService::emptyReward);
+        return friendMatchStore.completeOnce(match.getId(), MatchRewardDto::empty);
     }
 
     private record GrantedFriendRewards(MatchRewardDto hostReward, MatchRewardDto guestReward) {

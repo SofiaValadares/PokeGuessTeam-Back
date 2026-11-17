@@ -125,7 +125,7 @@ public class GameHistoryService {
         HistoryGameModel game = new HistoryGameModel();
         game.setGameMode(match.getGameMode() != null ? match.getGameMode() : GameModes.FRIEND);
         game.setAnomalyScore(anomaly.score());
-        game.setAnomalyReasons(String.join(",", anomaly.reasons()));
+        game.setAnomalyReasons(anomaly.reasons().isEmpty() ? null : String.join("\n", anomaly.reasons()));
         game.setAnomalyAnalysisStatus(anomalyDetected ? "ANOMALY_DETECTED" : anomaly.status());
         addProfilePlayer(
             game,
